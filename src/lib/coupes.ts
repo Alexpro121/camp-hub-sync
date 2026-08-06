@@ -26,16 +26,15 @@ export function coupeOf(seat: number): number {
   return Math.ceil(seat / SEATS_PER_COUPE);
 }
 
-const EMPTY_MARKERS = /^(\.{2,}|-{1,}|—|ss|сс|вільно|free)$/i;
+const EMPTY_MARKERS = /^(\.{1,}|-{1,}|—|ss|сс|вільно|free)$/i;
 
-/** Split "Кундик Сергій - Львів" into the name and the boarding city. */
+/** Split "Кундик Сергій - Львів" into the name and the boarding city (first dash wins). */
 function splitCity(rest: string): { name: string; city: string | null } {
-  const m = rest.match(/^(.*?)\s*[-–—]\s*([^-–—]+)$/);
-  if (!m) return { name: rest.trim(), city: null };
-  const name = m[1].trim();
-  const city = m[2].trim();
-  // A trailing fragment is a city only when it looks like one (no 3-word full name)
-  if (!name || city.split(/\s+/).length > 3) return { name: rest.trim(), city: null };
+  const parts = rest.split(/\s*[-–—]\s*/);
+  if (parts.length < 2) return { name: rest.trim(), city: null };
+  const name = parts[0].trim();
+  const city = parts.slice(1).join('-').trim();
+  if (!name || !city) return { name: rest.trim(), city: null };
   return { name, city };
 }
 
@@ -61,7 +60,8 @@ export function parseCoupesDeterministic(text: string, defaultTeam = 0): CoupePa
       continue;
     }
 
-    const m = line.match(/^(\d{1,3})\s*[.)\-–]?\s*(.+)$/);
+    // Only strictly numbered seat lines: "12. Name - City". Headers are ignored.
+    const m = line.match(/^(\d{1,3})\s*[.)]\s*(.*)$/);
     if (!m) { skipped++; continue; }
 
     const seat = parseInt(m[1], 10);
@@ -106,6 +106,9 @@ export function groupByCoupe<T extends { coupe_number: number; seat_number?: num
 }
 
 export interface RosterChild { id: string; full_name: string; team_number: number }
+
+/** Alias matching the spec name. */
+export const parseTrainCoupesText = (rawText: string) => parseCoupesDeterministic(rawText).passengers;
 
 /** Match parsed passengers against the camp roster without altering any name. */
 export function verifyAgainstRoster(passengers: CoupePassenger[], roster: RosterChild[]): CoupePassenger[] {

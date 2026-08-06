@@ -64,23 +64,8 @@ const CoupeImport = () => {
     if (!text.trim()) { toast.error('Встав текст розселення'); return; }
     setParsing(true);
     try {
-      let parsed = parseCoupesDeterministic(text);
-      let src: 'local' | 'ai' = 'local';
-
-      // Only fall back to AI when the deterministic pass clearly failed.
-      if (parsed.passengers.length < 2) {
-        const { data } = await supabase.functions.invoke('parse-coupes-ai', { body: { text } });
-        const list = (data as any)?.passengers as CoupePassenger[] | undefined;
-        if (list?.length) {
-          parsed = {
-            passengers: list.map((p) => ({ ...p, coupe_number: coupeOf(p.seat_number) })),
-            teams: [],
-            source: 'ai',
-            skipped: 0,
-          };
-          src = 'ai';
-        }
-      }
+      const parsed = parseCoupesDeterministic(text);
+      const src: 'local' | 'ai' = 'local';
 
       if (!parsed.passengers.length) { toast.error('Не вдалося розпізнати жодного пасажира'); return; }
 
