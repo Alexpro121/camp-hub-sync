@@ -12,9 +12,9 @@ type Listener = (m: IslandMessage) => void;
 
 const listeners = new Set<Listener>();
 
-export function onIslandMessage(fn: Listener) {
+export function onIslandMessage(fn: Listener): () => void {
   listeners.add(fn);
-  return () => listeners.delete(fn);
+  return () => { listeners.delete(fn); };
 }
 
 export function pushIsland(text: string, tone: IslandTone = 'info', meta?: string, ttl = 5000) {
