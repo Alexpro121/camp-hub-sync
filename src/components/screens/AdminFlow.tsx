@@ -383,8 +383,6 @@ const DataTab = () => {
   };
   useEffect(() => { load(); }, []);
 
-  const wipe = async () => {
-
   const loadPasswords = async () => {
     setPwLoading(true);
     const { data, error } = await supabase.functions.invoke('staff-login', {
@@ -394,6 +392,8 @@ const DataTab = () => {
     if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
     setPasswords(data.passwords);
   };
+
+  const wipe = async () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
