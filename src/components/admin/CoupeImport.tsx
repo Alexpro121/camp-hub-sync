@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift } from '@/types/app';
 import {
-  coupeOf, groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
+  groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
@@ -168,9 +168,7 @@ const CoupeImport = () => {
       {rows && (
         <>
           <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-2">
-            <Badge variant="secondary" className="text-[10px]">
-              {source === 'ai' ? 'Розібрано ШІ (Groq)' : 'Розібрано детермінованим парсером'}
-            </Badge>
+            <Badge variant="secondary" className="text-[10px]">Розібрано детермінованим парсером</Badge>
             <p className="text-sm flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-success shrink-0" strokeWidth={1.75} />
               Знайдено в базі списку табору: {matched.length} з {rows.length}
