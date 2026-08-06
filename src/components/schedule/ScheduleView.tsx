@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
 import { catMeta, fromMinutes, sentenceCase, toMinutes } from '@/lib/scheduleCategories';
+import { useEventReminders, type ReminderEvent } from '@/hooks/useEventReminders';
 
 /** Fallback duration when the source table has no end time. */
 const DEFAULT_DURATION = 60;
 
-interface Props { myTeam?: number | null; }
+interface Props {
+  myTeam?: number | null;
+  /** Child mode: only the own team's schedule is visible and reminders fire. */
+  lockTeam?: boolean;
+}
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -30,12 +35,13 @@ const prettyDate = (iso: string) => {
 const slotsOf = (i: ScheduleItem): ScheduleSubSlot[] =>
   Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time) : [];
 
-const ScheduleView = ({ myTeam = null }: Props) => {
+const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const [filterTeam, setFilterTeam] = useState<number | null>(myTeam ?? null);
+  const team = lockTeam ? myTeam ?? null : filterTeam;
   const [now, setNow] = useState(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -81,15 +87,15 @@ const ScheduleView = ({ myTeam = null }: Props) => {
   const daySchedule = schedules.find((s) => s.date === activeDay);
   const dayItems = useMemo(() => {
     let list = items.filter((i) => i.schedule_id === daySchedule?.id);
-    if (filterTeam != null) {
+    if (team != null) {
       list = list.filter((i) =>
         !i.target_teams?.length ||
-        i.target_teams.includes(filterTeam) ||
-        slotsOf(i).some((s) => s.teams?.includes(filterTeam)),
+        i.target_teams.includes(team) ||
+        slotsOf(i).some((s) => s.teams?.includes(team)),
       );
     }
     return list.sort((a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index);
-  }, [items, daySchedule?.id, filterTeam]);
+  }, [items, daySchedule?.id, team]);
 
   const isToday = daySchedule?.date === todayISO();
 
@@ -120,6 +126,34 @@ const ScheduleView = ({ myTeam = null }: Props) => {
     ...laidOut.map((l) => (l.top ?? 0) + l.height + 24),
   );
   const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  /* ---- local reminders: 5 min before + at start (today, own team only) ---- */
+  const todaySchedule = schedules.find((s) => s.date === todayISO());
+  const reminderEvents = useMemo<ReminderEvent[]>(() => {
+    if (!lockTeam || !todaySchedule) return [];
+    return items
+      .filter((i) => i.schedule_id === todaySchedule.id)
+      .filter((i) => team == null || !i.target_teams?.length || i.target_teams.includes(team) || slotsOf(i).some((s) => s.teams?.includes(team)))
+      .map((i) => {
+        const slot = team != null ? slotsOf(i).find((s) => s.teams?.includes(team)) : undefined;
+        const startMin = toMinutes(slot?.time ?? i.time_start);
+        if (startMin == null) return null;
+        return { id: i.id, title: sentenceCase(i.title), startMin, timeLabel: fromMinutes(startMin) };
+      })
+      .filter(Boolean) as ReminderEvent[];
+  }, [items, todaySchedule?.id, team, lockTeam]);
+
+  useEventReminders(reminderEvents, lockTeam && reminderEvents.length > 0, todayISO());
+
+  /** Next upcoming event of today for the summary strip. */
+  const nextUp = useMemo(() => {
+    if (!isToday) return null;
+    const upcoming = laidOut
+      .map((l) => ({ l, s: toMinutes(l.item.time_start) }))
+      .filter((x) => x.s != null && (x.s as number) > nowMin)
+      .sort((a, b) => (a.s as number) - (b.s as number))[0];
+    return upcoming ? { item: upcoming.l.item, inMin: (upcoming.s as number) - nowMin, range: upcoming.l.range } : null;
+  }, [laidOut, nowMin, isToday]);
 
   const currentId = useMemo(() => {
     if (!isToday) return null;
@@ -190,6 +224,13 @@ const ScheduleView = ({ myTeam = null }: Props) => {
           </button>
         </div>
 
+        {lockTeam ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-surface-1 px-2.5 py-1.5">
+            <Users className="w-3.5 h-3.5 text-primary" strokeWidth={1.75} />
+            <p className="text-[11px] font-medium">Розклад твоєї команди {myTeam != null ? `№${myTeam}` : ''}</p>
+            <Bell className="w-3.5 h-3.5 text-muted-foreground ml-auto" strokeWidth={1.75} />
+          </div>
+        ) : (
         <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-0.5">
           <button
             onClick={() => setFilterTeam(null)}
@@ -215,7 +256,21 @@ const ScheduleView = ({ myTeam = null }: Props) => {
             >{t}</button>
           ))}
         </div>
+        )}
       </Card>
+
+      {nextUp && (
+        <Card className="flex items-center gap-2.5 p-2.5 bg-card/80 backdrop-blur-md border-border/40">
+          <Bell className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Далі</p>
+            <p className="text-sm font-semibold truncate">{sentenceCase(nextUp.item.title)}</p>
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-primary shrink-0">
+            {nextUp.inMin < 60 ? `через ${nextUp.inMin} хв` : nextUp.range?.split(' ')[0]}
+          </span>
+        </Card>
+      )}
 
       {dayItems.length === 0 && (
         <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Подій немає</p></Card>
@@ -236,31 +291,43 @@ const ScheduleView = ({ myTeam = null }: Props) => {
 
             {isToday && nowMin >= DAY_START && nowMin <= DAY_END && (
               <div className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-1000" style={{ top: (nowMin - DAY_START) * PX_PER_MIN }}>
-                <div className="flex items-center gap-1.5" style={{ marginLeft: GUTTER - 40 }}>
-                  <span className="text-[9px] font-medium uppercase tracking-wide text-destructive tabular-nums">Зараз</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                  <div className="flex-1 h-px bg-destructive/70" />
+                <div className="flex items-center gap-1.5" style={{ marginLeft: GUTTER - 46 }}>
+                  <span className="rounded-md bg-destructive px-1.5 py-[1px] text-[9px] font-semibold tabular-nums text-destructive-foreground shadow-sm">
+                    {fromMinutes(nowMin)}
+                  </span>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-destructive/60 animate-ping" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-destructive/70 to-destructive/10" />
                 </div>
               </div>
             )}
 
-            {laidOut.map(({ item: i, top, height, range }) => {
+            {laidOut.map(({ item: i, top, height, range, endMin }) => {
               if (top == null) return null;
               const meta = catMeta(i.category);
               const Icon = meta.icon;
               const slots = slotsOf(i);
               const isNow = i.id === currentId;
-              const mySlot = filterTeam != null ? slots.find((s) => s.teams?.includes(filterTeam)) : undefined;
+              const startMin = toMinutes(i.time_start) ?? 0;
+              const progress = isNow && endMin ? Math.min(100, Math.max(0, ((nowMin - startMin) / Math.max(1, endMin - startMin)) * 100)) : 0;
+              const past = isToday && endMin != null && nowMin >= endMin;
+              const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
               return (
                 <div key={i.id} className="absolute right-1 z-10" style={{ top, left: GUTTER, minHeight: height }}>
                   <div
-                    className={`rounded-xl border bg-card/80 backdrop-blur-md p-2.5 h-full transition-smooth ${
-                      isNow ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/40'
-                    }`}
+                    className={`relative overflow-hidden rounded-xl border bg-card/80 backdrop-blur-md p-2.5 h-full transition-smooth ${
+                      isNow ? 'border-primary/60 ring-1 ring-primary/30 shadow-lg' : 'border-border/40'
+                    } ${past ? 'opacity-55' : ''}`}
                     style={{
                       borderLeft: `4px solid hsl(var(--cat-${meta.token}) / 0.8)`,
+                      backgroundImage: `linear-gradient(100deg, hsl(var(--cat-${meta.token}) / 0.10), transparent 55%)`,
                     }}
                   >
+                    {isNow && (
+                      <div className="absolute bottom-0 left-0 h-[2px] bg-primary/70 transition-all duration-1000" style={{ width: `${progress}%` }} />
+                    )}
                     <div className="flex items-center gap-1.5">
                       <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} style={{ color: `hsl(var(--cat-${meta.token}))` }} />
                       <p className="text-xs font-semibold tabular-nums tracking-tight">{range}</p>
@@ -292,7 +359,7 @@ const ScheduleView = ({ myTeam = null }: Props) => {
                     {!slots.length && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {i.target_teams?.length ? i.target_teams.map((t) => (
-                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${t === filterTeam ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
+                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${t === team ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
                             <Users className="w-2.5 h-2.5 mr-0.5" strokeWidth={1.75} />{t}
                           </Badge>
                         )) : (
