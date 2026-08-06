@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   FileSpreadsheet, AlertTriangle, Coins, AlertCircle, Megaphone, Siren, Sparkles, Utensils, X,
+  Clock, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicIsland, type BroadcastColor } from '@/context/DynamicIslandContext';
@@ -28,7 +29,7 @@ const BroadcastIcon = ({ color }: { color: BroadcastColor }) => {
 };
 
 const DynamicIsland = () => {
-  const { state, payload, hide } = useDynamicIsland();
+  const { state, payload, expanded, hide, toggleExpanded, pauseAutoHide, resumeAutoHide } = useDynamicIsland();
   const [contentIn, setContentIn] = useState(false);
 
   // Stagger: geometry expands first, content fades in after ~140ms
@@ -37,7 +38,7 @@ const DynamicIsland = () => {
     if (state === 'HIDDEN') return;
     const t = setTimeout(() => setContentIn(true), 140);
     return () => clearTimeout(t);
-  }, [state, payload]);
+  }, [state, payload, expanded]);
 
   const shape = (() => {
     switch (state) {
@@ -53,6 +54,10 @@ const DynamicIsland = () => {
         return 'w-[320px] max-w-[92vw] h-[68px] rounded-[24px] border-rose-500/40 shadow-[0_12px_30px_rgba(244,63,94,0.25)]';
       case 'BROADCAST':
         return `w-[350px] max-w-[92vw] min-h-[96px] rounded-[28px] ${BROADCAST_THEME[payload.color ?? 'red']}`;
+      case 'EVENT_ALERT':
+        return expanded
+          ? 'w-[360px] max-w-[94vw] min-h-[110px] rounded-[28px] bg-black/95 border-amber-500/30 shadow-[0_16px_40px_rgba(245,158,11,0.25)]'
+          : 'w-[290px] max-w-[92vw] h-[40px] rounded-full border-amber-500/30 shadow-[0_10px_25px_rgba(245,158,11,0.2)]';
       default:
         return 'w-3.5 h-3.5 rounded-full border-transparent opacity-0 scale-0 shadow-none';
     }
@@ -60,11 +65,21 @@ const DynamicIsland = () => {
 
   const color = payload.color ?? 'red';
   const p = payload.progress ?? 0;
+  const teamsLabel = payload.myTeams?.length
+    ? `(Команд${payload.myTeams.length > 1 ? 'и' : 'а'} ${payload.myTeams.join(' і ')})`
+    : '';
 
   return (
     <div className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none safe-top top-0">
       <div
-        onClick={() => state !== 'HIDDEN' && state !== 'EXCEL_IMPORT' && state !== 'LOADING_ONLY' && hide()}
+        onMouseEnter={() => state !== 'HIDDEN' && pauseAutoHide()}
+        onMouseLeave={() => state !== 'HIDDEN' && !expanded && resumeAutoHide()}
+        onTouchStart={() => state !== 'HIDDEN' && pauseAutoHide()}
+        onClick={() => {
+          if (state === 'HIDDEN' || state === 'EXCEL_IMPORT' || state === 'LOADING_ONLY') return;
+          if (state === 'EVENT_ALERT') toggleExpanded();
+          else hide();
+        }}
         className={`${BASE} ${shape} ${state === 'HIDDEN' ? '' : 'opacity-100 scale-100 pointer-events-auto cursor-pointer'}`}
       >
         <div
@@ -168,6 +183,56 @@ const DynamicIsland = () => {
               <div className="text-xs font-medium pt-1.5 leading-relaxed text-white/95 break-words">
                 {payload.message}
               </div>
+            </div>
+          )}
+
+          {state === 'EVENT_ALERT' && !expanded && (
+            <div className="w-full flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <Utensils className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="font-semibold text-white truncate">
+                  {payload.phase === 'pre' ? 'Скоро' : 'Зараз'}: {payload.eventTitle}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="font-mono text-[11px] text-amber-300 tabular-nums">
+                  {payload.myTime ?? payload.range}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-white/50" />
+              </div>
+            </div>
+          )}
+
+          {state === 'EVENT_ALERT' && expanded && (
+            <div className="w-full h-full flex flex-col gap-2 py-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[9px] font-bold tracking-[0.18em] text-amber-400/80 uppercase">
+                    {payload.phase === 'pre' ? 'За 5 хвилин' : 'Починається'}
+                  </div>
+                  <div className="text-sm font-semibold text-white break-words leading-snug">
+                    {payload.eventTitle}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); hide(); }}
+                  className="p-1 hover:bg-white/10 rounded-full transition text-white/60 hover:text-white shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 font-mono text-xl font-semibold tabular-nums text-white">
+                <Clock className="w-4 h-4 text-white/50" />
+                {payload.range}
+              </div>
+
+              {payload.myTime && (
+                <div className="rounded-xl bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 text-[11px] text-amber-200">
+                  Твій час: <span className="font-mono font-semibold">{payload.myTime}</span>
+                  {teamsLabel && <span className="text-amber-300/70"> {teamsLabel}</span>}
+                </div>
+              )}
             </div>
           )}
         </div>

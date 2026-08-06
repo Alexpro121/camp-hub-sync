@@ -12,6 +12,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ScheduleView from '@/components/schedule/ScheduleView';
+import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 
 interface Props { onBack: () => void; }
 
@@ -31,6 +32,9 @@ const ChildFlow = ({ onBack }: Props) => {
   const [showAllFields, setShowAllFields] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
+
+  // App-wide schedule alerts: the island pops on any screen once logged in.
+  useScheduleNotifier(child?.team_number ?? null, !!child);
 
   // Realtime updates for the logged-in child
   useEffect(() => {
