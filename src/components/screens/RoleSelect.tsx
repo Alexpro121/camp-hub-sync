@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Baby, ShieldCheck, Sparkles } from 'lucide-react';
+import { Baby, ShieldCheck, Mic2 } from 'lucide-react';
 import type { Screen } from '@/pages/Index';
 
 interface Props {
@@ -13,7 +13,7 @@ const RoleSelect = ({ onSelect }: Props) => {
       <div className="w-full max-w-md animate-slide-up">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <Mic2 className="w-3.5 h-3.5 text-primary" />
             <span className="text-xs font-semibold tracking-wider uppercase text-primary">Help_Супровід</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight mb-3 leading-none">
@@ -22,11 +22,11 @@ const RoleSelect = ({ onSelect }: Props) => {
           <p className="text-muted-foreground text-sm mb-5">Система управління командами табору</p>
 
           <div className="relative inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-gradient-card border border-primary/30 shadow-glow shine overflow-hidden">
-            <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+            <Mic2 className="w-3.5 h-3.5 text-primary animate-pulse" />
             <span className="text-sm font-bold italic tracking-wide text-gradient-primary" style={{ fontFamily: "'Inter', serif" }}>
               Specially for Iron Squad
             </span>
-            <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
+            <Mic2 className="w-3.5 h-3.5 text-primary animate-pulse" />
           </div>
         </div>
 

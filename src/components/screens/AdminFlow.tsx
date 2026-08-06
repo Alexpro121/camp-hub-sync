@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Sparkles, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2 } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,7 +48,7 @@ const AdminFlow = ({ onBack }: Props) => {
           <TabsList className="grid grid-cols-5 h-[54px] w-full p-1">
             <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Calendar className="w-[18px] h-[18px]" /> <span>Зміни</span></TabsTrigger>
             <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none"><CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span></TabsTrigger>
-            <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Sparkles className="w-[18px] h-[18px]" /> <span>Таланти</span></TabsTrigger>
+            <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span></TabsTrigger>
             <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[11px] leading-none"><BarChart3 className="w-[18px] h-[18px]" /> <span>Статистика</span></TabsTrigger>
             <TabsTrigger value="data" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Database className="w-[18px] h-[18px]" /> <span>База</span></TabsTrigger>
           </TabsList>
@@ -333,7 +333,7 @@ const ShiftsTab = () => {
 
           <Button onClick={analyze} disabled={creating || analyzing} className="w-full h-12 font-bold uppercase">
             {creating || analyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : (file || sheetUrl.trim())
-              ? <><Sparkles className="w-4 h-4 mr-2" /> Аналізувати таблицю</>
+              ? <><Mic2 className="w-4 h-4 mr-2" /> Аналізувати таблицю</>
               : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
           </Button>
         </div>

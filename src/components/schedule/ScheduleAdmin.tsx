@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Sparkles, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, Minus, ArrowLeftRight, AlertTriangle } from 'lucide-react';
+import { Trash2, Mic2, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, Minus, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
@@ -233,7 +233,7 @@ const ScheduleAdmin = () => {
           className="text-sm font-mono"
         />
         <Button onClick={recognize} disabled={parsing} className="w-full h-11 font-bold uppercase">
-          {parsing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> ШІ аналізує…</> : <><Sparkles className="w-4 h-4 mr-2" /> Розпізнати розклад</>}
+          {parsing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> ШІ аналізує…</> : <><Mic2 className="w-4 h-4 mr-2" /> Розпізнати розклад</>}
         </Button>
       </Card>
 
@@ -243,7 +243,7 @@ const ScheduleAdmin = () => {
             <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
               source === 'ai' ? 'bg-success/15 text-success border-success/40' : 'bg-warning/15 text-warning border-warning/40'
             }`}>
-              {source === 'ai' ? <Sparkles className="w-3.5 h-3.5" /> : <Cpu className="w-3.5 h-3.5" />}
+              {source === 'ai' ? <Mic2 className="w-3.5 h-3.5" /> : <Cpu className="w-3.5 h-3.5" />}
               {source === 'ai' ? 'Розпізнано за допомогою ШІ Groq (LPU)' : 'Розпізнано локальним аналізатором (Резерв)'}
             </div>
           )}
