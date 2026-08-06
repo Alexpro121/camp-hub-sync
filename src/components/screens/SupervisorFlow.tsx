@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import IronBank from '@/components/supervisor/IronBank';
 import { exportToExcel } from '@/lib/excel';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
+import ScheduleView from '@/components/schedule/ScheduleView';
+import TalentTeamView from '@/components/talent/TalentTeamView';
 
 interface Props {
   onBack: () => void;
@@ -210,9 +212,15 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-3">
         <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
-          <TabsList className="grid w-full grid-cols-3 h-[54px] p-1">
+          <TabsList className="grid w-full grid-cols-5 h-[54px] p-1">
             <TabsTrigger value="teams" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <Users className="w-[18px] h-[18px]" /> <span>Команди</span>
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none">
+              <CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span>
+            </TabsTrigger>
+            <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none">
+              <Sparkles className="w-[18px] h-[18px]" /> <span>Таланти</span>
             </TabsTrigger>
             <TabsTrigger value="transfers" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <ArrowLeftRight className="w-[18px] h-[18px]" /> <span>Трансфери</span>
@@ -230,6 +238,12 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
         <TabsContent value="teams" className="mt-3 animate-fade-in">
           <TeamsView myTeam={authedTeam} />
+        </TabsContent>
+        <TabsContent value="schedule" className="mt-3 animate-fade-in">
+          <ScheduleView myTeam={authedTeam} />
+        </TabsContent>
+        <TabsContent value="talent" className="mt-3 animate-fade-in">
+          <TalentTeamView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="transfers" className="mt-3 animate-fade-in">
           <TransfersView myTeam={authedTeam} />
