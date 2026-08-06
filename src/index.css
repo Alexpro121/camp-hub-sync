@@ -54,6 +54,20 @@
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(22 95% 55%), hsl(14 100% 60%));
+
+    /* Schedule categories */
+    --cat-meal: 25 95% 58%;
+    --cat-sports: 145 65% 45%;
+    --cat-event: 272 72% 62%;
+    --cat-transfer: 212 90% 58%;
+    --cat-gathering: 190 80% 48%;
+    --cat-general: 215 20% 60%;
+    --gradient-meal: linear-gradient(135deg, hsl(32 96% 58%), hsl(18 92% 55%));
+    --gradient-sports: linear-gradient(135deg, hsl(152 68% 44%), hsl(130 62% 40%));
+    --gradient-event: linear-gradient(135deg, hsl(278 75% 62%), hsl(250 75% 60%));
+    --gradient-transfer: linear-gradient(135deg, hsl(212 92% 58%), hsl(196 88% 50%));
+    --gradient-gathering: linear-gradient(135deg, hsl(190 82% 48%), hsl(205 80% 50%));
+    --gradient-general: linear-gradient(135deg, hsl(215 25% 45%), hsl(220 25% 35%));
     --gradient-navy: linear-gradient(135deg, hsl(222 47% 9%), hsl(222 50% 14%));
     --gradient-card: linear-gradient(160deg, hsl(222 45% 13%), hsl(222 42% 11%));
     --gradient-hero: radial-gradient(ellipse at top, hsl(22 95% 55% / 0.15), transparent 60%), linear-gradient(180deg, hsl(222 47% 9%), hsl(222 50% 7%));

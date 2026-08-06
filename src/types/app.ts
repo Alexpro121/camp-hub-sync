@@ -80,6 +80,11 @@ export interface Schedule {
   updated_at: string;
 }
 
+export interface ScheduleSubSlot {
+  time: string;
+  teams: number[];
+}
+
 export interface ScheduleItem {
   id: string;
   schedule_id: string;
@@ -89,6 +94,9 @@ export interface ScheduleItem {
   description: string | null;
   target_teams: number[];
   order_index: number;
+  category?: string | null;
+  has_sub_slots?: boolean | null;
+  sub_slots?: ScheduleSubSlot[] | null;
 }
 
 export type TalentStatus = 'draft' | 'collecting' | 'generated' | 'finished';

@@ -66,6 +66,14 @@ export default {
           2: "hsl(var(--surface-2))",
           3: "hsl(var(--surface-3))",
         },
+        cat: {
+          meal: "hsl(var(--cat-meal))",
+          sports: "hsl(var(--cat-sports))",
+          event: "hsl(var(--cat-event))",
+          transfer: "hsl(var(--cat-transfer))",
+          gathering: "hsl(var(--cat-gathering))",
+          general: "hsl(var(--cat-general))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
