@@ -65,6 +65,9 @@ export function parseTrainCoupesLocal(rawText: string): ParsedPassenger[] {
 const TEAM_REGEX = /^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})/i;
 const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
 
+/** Cities that may appear on their own line right under a passenger. */
+const CITY_LINES = ['львів', 'івано-франківськ', 'київ', 'тернопіль', 'рівне', 'луцьк', 'хмельницький', 'ужгород'];
+
 /** Split "ПІБ - Місто" at the FIRST dash, keeping hyphenated city names intact. */
 function splitNameCity(line: string): { name: string; boardingCity: string | null } {
   const m = line.match(/^(.*?)\s*[-–—]\s*(.+)$/u);
