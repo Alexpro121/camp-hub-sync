@@ -9,7 +9,10 @@ export function useNetworkStatus() {
   const [queue, setQueue] = useState<QueuedAction[]>([]);
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => onQueueChange((q, s) => { setQueue(q); setSyncing(s); }), []);
+  useEffect(() => {
+    const off = onQueueChange((q, s) => { setQueue(q); setSyncing(s); });
+    return () => { off(); };
+  }, []);
 
   useEffect(() => {
     const sync = async () => {
