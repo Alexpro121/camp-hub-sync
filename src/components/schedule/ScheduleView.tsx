@@ -236,56 +236,54 @@ const ScheduleView = ({ myTeam = null }: Props) => {
 
             {isToday && nowMin >= DAY_START && nowMin <= DAY_END && (
               <div className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-1000" style={{ top: (nowMin - DAY_START) * PX_PER_MIN }}>
-                <div className="flex items-center gap-1" style={{ marginLeft: GUTTER - 14 }}>
-                  <span className="w-2.5 h-2.5 rounded-full bg-destructive animate-pulse shadow-glow" />
-                  <div className="flex-1 h-px bg-destructive" />
+                <div className="flex items-center gap-1.5" style={{ marginLeft: GUTTER - 40 }}>
+                  <span className="text-[9px] font-medium uppercase tracking-wide text-destructive tabular-nums">Зараз</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
+                  <div className="flex-1 h-px bg-destructive/70" />
                 </div>
               </div>
             )}
 
-            {laidOut.map(({ item: i, top, height }) => {
+            {laidOut.map(({ item: i, top, height, range }) => {
               if (top == null) return null;
               const meta = catMeta(i.category);
+              const Icon = meta.icon;
               const slots = slotsOf(i);
               const isNow = i.id === currentId;
               const mySlot = filterTeam != null ? slots.find((s) => s.teams?.includes(filterTeam)) : undefined;
               return (
                 <div key={i.id} className="absolute right-1 z-10" style={{ top, left: GUTTER, minHeight: height }}>
                   <div
-                    className={`rounded-xl border p-2.5 h-full animate-fade-in transition-smooth ${
-                      isNow ? 'border-primary shadow-glow animate-pulse-glow' : 'border-border/40'
+                    className={`rounded-xl border bg-card/80 backdrop-blur-md p-2.5 h-full transition-smooth ${
+                      isNow ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/40'
                     }`}
                     style={{
-                      background: `linear-gradient(135deg, hsl(var(--cat-${meta.token}) / 0.18), hsl(var(--surface-2)))`,
-                      borderLeft: `3px solid hsl(var(--cat-${meta.token}))`,
+                      borderLeft: `4px solid hsl(var(--cat-${meta.token}) / 0.8)`,
                     }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{meta.emoji}</span>
-                      <p className="text-xs font-black tabular-nums">
-                        {i.time_start}{i.time_end ? ` – ${i.time_end}` : ''}
-                      </p>
+                      <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} style={{ color: `hsl(var(--cat-${meta.token}))` }} />
+                      <p className="text-xs font-semibold tabular-nums tracking-tight">{range}</p>
                       {isNow && (
-                        <Badge className="text-[9px] px-1.5 py-0 h-4 bg-primary/25 text-primary border border-primary/40 ml-auto">
-                          <Clock className="w-2.5 h-2.5 mr-0.5" />зараз
+                        <Badge className="text-[9px] px-1.5 py-0 h-4 font-medium bg-primary/10 text-primary border border-primary/30 ml-auto">
+                          Зараз
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm font-bold break-words mt-0.5">{i.title}</p>
+                    <p className="text-sm font-semibold break-words mt-0.5">{sentenceCase(i.title)}</p>
                     {i.description && <p className="text-[11px] text-muted-foreground break-words">{i.description}</p>}
 
                     {mySlot && (
-                      <div className="mt-1.5 rounded-lg bg-gradient-primary text-primary-foreground px-2 py-1.5 text-[11px] font-bold flex items-center gap-1.5 animate-scale-in">
-                        <Sparkles className="w-3 h-3 shrink-0" />
-                        Твій захід: {mySlot.time} (Команди {mySlot.teams.join(' і ')})
+                      <div className="mt-1.5 inline-flex items-center rounded-md bg-primary/10 border border-primary/30 text-primary px-2.5 py-1 text-xs font-medium tabular-nums">
+                        Твій час: {mySlot.time} (Команди {mySlot.teams.join(' і ')})
                       </div>
                     )}
 
                     {slots.length > 0 && !mySlot && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {slots.map((s, k) => (
-                          <span key={k} className="text-[10px] font-bold tabular-nums rounded-md bg-background/40 border border-border/50 px-1.5 py-0.5">
-                            {s.time} → {s.teams.map((t) => `К${t}`).join(', ')}
+                          <span key={k} className="text-[10px] font-medium tabular-nums rounded-md bg-muted/50 border border-border/50 px-1.5 py-0.5 text-muted-foreground">
+                            {s.time} · {s.teams.map((t) => `К${t}`).join(', ')}
                           </span>
                         ))}
                       </div>
@@ -294,11 +292,11 @@ const ScheduleView = ({ myTeam = null }: Props) => {
                     {!slots.length && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {i.target_teams?.length ? i.target_teams.map((t) => (
-                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border ${t === filterTeam ? 'bg-primary/25 text-primary border-primary/40' : 'bg-secondary text-muted-foreground border-border'}`}>
-                            <Users className="w-2.5 h-2.5 mr-0.5" />{t}
+                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${t === filterTeam ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
+                            <Users className="w-2.5 h-2.5 mr-0.5" strokeWidth={1.75} />{t}
                           </Badge>
                         )) : (
-                          <Badge className="text-[9px] px-1.5 py-0 h-4 bg-secondary text-muted-foreground border-border">Для всіх</Badge>
+                          <Badge className="text-[9px] px-1.5 py-0 h-4 font-medium bg-muted/50 text-muted-foreground border border-border/50">Для всіх</Badge>
                         )}
                       </div>
                     )}
