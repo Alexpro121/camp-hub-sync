@@ -19,6 +19,7 @@ import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
 import CoupeManager from '@/components/coupes/CoupeManager';
+import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
 
 interface Props {
   onBack: () => void;
@@ -250,7 +251,10 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TalentTeamView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
-          <CoupeManager myTeam={authedTeam} />
+          <div className="space-y-3">
+            <TrainPublishStatus />
+            <CoupeManager myTeam={authedTeam} />
+          </div>
         </TabsContent>
         <TabsContent value="transfers" className="mt-3 animate-fade-in">
           <TransfersView myTeam={authedTeam} />
