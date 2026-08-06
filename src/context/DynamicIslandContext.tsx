@@ -11,7 +11,8 @@ export type IslandState =
   | 'OFFLINE'
   | 'SUCCESS_TOAST'
   | 'ERROR_TOAST'
-  | 'BROADCAST';
+  | 'BROADCAST'
+  | 'EVENT_ALERT';
 
 export type BroadcastColor = 'red' | 'green' | 'purple' | 'orange';
 
@@ -25,21 +26,43 @@ export interface IslandPayload {
   color?: BroadcastColor;
   message?: string;
   author?: string;
+  /** EVENT_ALERT */
+  eventTitle?: string;
+  range?: string;
+  myTime?: string | null;
+  myTeams?: number[] | null;
+  phase?: 'pre' | 'start';
+}
+
+export interface EventAlert {
+  eventTitle: string;
+  range: string;
+  myTime?: string | null;
+  myTeams?: number[] | null;
+  phase?: 'pre' | 'start';
 }
 
 interface IslandApi {
   state: IslandState;
   payload: IslandPayload;
+  expanded: boolean;
   showLoader: () => void;
   showExcelProgress: (progress: number, fileName?: string) => void;
   showOffline: (queuedActionsCount: number) => void;
   showSuccess: (title: string, subtitle?: string) => void;
   showError: (title: string, subtitle?: string, errorDetails?: string) => void;
   showBroadcast: (color: BroadcastColor, message: string, author: string) => void;
+  showEventAlert: (alert: EventAlert) => void;
+  toggleExpanded: () => void;
+  pauseAutoHide: () => void;
+  resumeAutoHide: () => void;
   hide: () => void;
 }
 
 const Ctx = createContext<IslandApi | null>(null);
+
+/** Every notification collapses on its own after 6 seconds of no interaction. */
+const AUTO_HIDE_MS = 6000;
 
 const TONE_TO_COLOR: Record<string, BroadcastColor> = {
   danger: 'red',
@@ -52,7 +75,9 @@ const TONE_TO_COLOR: Record<string, BroadcastColor> = {
 export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => {
   const [state, setState] = useState<IslandState>('HIDDEN');
   const [payload, setPayload] = useState<IslandPayload>({});
+  const [expanded, setExpanded] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoHideMs = useRef<number | null>(null);
   const haptics = useHaptics();
   const { online, pending } = useNetworkStatus();
 
@@ -60,12 +85,32 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
 
   const set = useCallback((next: IslandState, p: IslandPayload = {}, autoHide?: number) => {
     clearTimer();
+    setExpanded(false);
     setState(next);
     setPayload(p);
-    if (autoHide) timer.current = setTimeout(() => setState('HIDDEN'), autoHide);
+    autoHideMs.current = autoHide ?? null;
+    if (autoHide) timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, autoHide);
   }, []);
 
-  const hide = useCallback(() => { clearTimer(); setState('HIDDEN'); }, []);
+  const hide = useCallback(() => { clearTimer(); setExpanded(false); setState('HIDDEN'); }, []);
+
+  /** Interaction pauses the countdown so the text can be read calmly. */
+  const pauseAutoHide = useCallback(() => { clearTimer(); }, []);
+  const resumeAutoHide = useCallback(() => {
+    clearTimer();
+    if (autoHideMs.current) {
+      timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, autoHideMs.current);
+    }
+  }, []);
+  const toggleExpanded = useCallback(() => {
+    setExpanded((v) => {
+      const next = !v;
+      if (next) clearTimer();
+      else resumeAutoHide();
+      return next;
+    });
+  }, [resumeAutoHide]);
+
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {
     set('EXCEL_IMPORT', { progress: Math.max(0, Math.min(100, Math.round(progress))), fileName });
@@ -73,15 +118,19 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const showOffline = useCallback((queued: number) => set('OFFLINE', { queued }), [set]);
   const showSuccess = useCallback((title: string, subtitle?: string) => {
     haptics.notification('success');
-    set('SUCCESS_TOAST', { title, subtitle }, 4500);
+    set('SUCCESS_TOAST', { title, subtitle }, AUTO_HIDE_MS);
   }, [set, haptics]);
   const showError = useCallback((title: string, subtitle?: string, errorDetails?: string) => {
     haptics.notification('error');
-    set('ERROR_TOAST', { title, subtitle, errorDetails }, 7000);
+    set('ERROR_TOAST', { title, subtitle, errorDetails }, AUTO_HIDE_MS);
   }, [set, haptics]);
   const showBroadcast = useCallback((color: BroadcastColor, message: string, author: string) => {
     haptics.impact('heavy');
-    set('BROADCAST', { color, message, author }, 9000);
+    set('BROADCAST', { color, message, author }, AUTO_HIDE_MS);
+  }, [set, haptics]);
+  const showEventAlert = useCallback((alert: EventAlert) => {
+    haptics.notification('warning');
+    set('EVENT_ALERT', { ...alert }, AUTO_HIDE_MS);
   }, [set, haptics]);
 
   // 1. Network detector — offline persists, online shows a short toast
@@ -118,8 +167,10 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   }, [showError, showSuccess]);
 
   const value = useMemo<IslandApi>(() => ({
-    state, payload, showLoader, showExcelProgress, showOffline, showSuccess, showError, showBroadcast, hide,
-  }), [state, payload, showLoader, showExcelProgress, showOffline, showSuccess, showError, showBroadcast, hide]);
+    state, payload, expanded, showLoader, showExcelProgress, showOffline, showSuccess, showError,
+    showBroadcast, showEventAlert, toggleExpanded, pauseAutoHide, resumeAutoHide, hide,
+  }), [state, payload, expanded, showLoader, showExcelProgress, showOffline, showSuccess, showError,
+    showBroadcast, showEventAlert, toggleExpanded, pauseAutoHide, resumeAutoHide, hide]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };
