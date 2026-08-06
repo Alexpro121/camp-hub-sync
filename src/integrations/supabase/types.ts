@@ -392,6 +392,60 @@ export type Database = {
           },
         ]
       }
+      train_coupes: {
+        Row: {
+          boarding_city: string | null
+          child_id: string | null
+          coupe_number: number
+          created_at: string
+          id: string
+          is_staff: boolean
+          passenger_name: string
+          seat_number: number | null
+          shift_id: string | null
+          team_number: number
+        }
+        Insert: {
+          boarding_city?: string | null
+          child_id?: string | null
+          coupe_number: number
+          created_at?: string
+          id?: string
+          is_staff?: boolean
+          passenger_name: string
+          seat_number?: number | null
+          shift_id?: string | null
+          team_number: number
+        }
+        Update: {
+          boarding_city?: string | null
+          child_id?: string | null
+          coupe_number?: number
+          created_at?: string
+          id?: string
+          is_staff?: boolean
+          passenger_name?: string
+          seat_number?: number | null
+          shift_id?: string | null
+          team_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "train_coupes_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "train_coupes_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transfers: {
         Row: {
           child_full_name: string
