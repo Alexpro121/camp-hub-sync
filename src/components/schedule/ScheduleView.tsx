@@ -89,6 +89,28 @@ const ScheduleView = ({ myTeam = null }: Props) => {
   }, [items, daySchedule?.id, filterTeam]);
 
   const isToday = daySchedule?.date === todayISO();
+
+  /** Absolute time-based tops, pushed down so cards never overlap each other. */
+  const laidOut = useMemo(() => {
+    let prevBottom = -Infinity;
+    return dayItems.map((i) => {
+      const start = toMinutes(i.time_start);
+      if (start == null) return { item: i, top: null as number | null, height: 0 };
+      const end = toMinutes(i.time_end) ?? start + 30;
+      const slots = slotsOf(i);
+      const minH = slots.length ? 96 + slots.length * 10 : 74;
+      const height = Math.max(minH, (end - start) * PX_PER_MIN);
+      const wanted = (Math.max(start, DAY_START) - DAY_START) * PX_PER_MIN;
+      const top = Math.max(wanted, prevBottom + 8);
+      prevBottom = top + height;
+      return { item: i, top, height };
+    });
+  }, [dayItems]);
+
+  const canvasHeight = Math.max(
+    (DAY_END - DAY_START) * PX_PER_MIN + 24,
+    ...laidOut.map((l) => (l.top ?? 0) + l.height + 24),
+  );
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
   const currentId = useMemo(() => {
@@ -195,7 +217,7 @@ const ScheduleView = ({ myTeam = null }: Props) => {
       {/* Timeline */}
       {dayItems.length > 0 && (
         <div ref={scrollRef} className="relative max-h-[65vh] overflow-y-auto scrollbar-thin rounded-2xl border border-border/40 bg-surface-1/60 p-2">
-          <div className="relative" style={{ height: (DAY_END - DAY_START) * PX_PER_MIN + 24 }}>
+          <div className="relative" style={{ height: canvasHeight }}>
             {hours.map((h) => (
               <div key={h} className="absolute left-0 right-0 flex items-start gap-2" style={{ top: (h - DAY_START) * PX_PER_MIN }}>
                 <span className="w-[44px] shrink-0 text-[10px] tabular-nums text-muted-foreground -mt-1.5 text-right">
@@ -214,17 +236,12 @@ const ScheduleView = ({ myTeam = null }: Props) => {
               </div>
             )}
 
-            {dayItems.map((i) => {
-              const start = toMinutes(i.time_start);
-              if (start == null) return null;
-              const end = toMinutes(i.time_end) ?? start + 30;
+            {laidOut.map(({ item: i, top, height }) => {
+              if (top == null) return null;
               const meta = catMeta(i.category);
               const slots = slotsOf(i);
               const isNow = i.id === currentId;
               const mySlot = filterTeam != null ? slots.find((s) => s.teams?.includes(filterTeam)) : undefined;
-              const top = (Math.max(start, DAY_START) - DAY_START) * PX_PER_MIN;
-              const minH = slots.length ? 96 : 62;
-              const height = Math.max(minH, (end - start) * PX_PER_MIN);
               return (
                 <div key={i.id} className="absolute right-1 z-10" style={{ top, left: GUTTER, minHeight: height }}>
                   <div
