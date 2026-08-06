@@ -246,6 +246,16 @@ const ScheduleAdmin = () => {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[150px] text-xs" />
           </div>
 
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Зсув усього дня</span>
+            <Button size="sm" variant="secondary" className="h-8 px-2 text-xs ml-auto" onClick={() => shiftAll(-15)}>
+              <Minus className="w-3 h-3 mr-1" />15 хв
+            </Button>
+            <Button size="sm" variant="secondary" className="h-8 px-2 text-xs" onClick={() => shiftAll(15)}>
+              <Plus className="w-3 h-3 mr-1" />15 хв
+            </Button>
+          </div>
+
           <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
             {draft.map((it, i) => (
               <div key={i} className="rounded-xl border border-border/50 bg-surface-1 p-3 space-y-2 transition-colors hover:border-primary/40">
@@ -260,7 +270,7 @@ const ScheduleAdmin = () => {
                 <Select value={it.category} onValueChange={(v) => patch(i, { category: v as ScheduleCategory })}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
+                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.emoji} {c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <div className="space-y-1.5">
@@ -283,6 +293,68 @@ const ScheduleAdmin = () => {
                     })}
                   </div>
                 </div>
+
+                <div className="rounded-lg border border-border/50 bg-surface-2/60 p-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] uppercase tracking-wider font-bold">Почергові слоти</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-[10px] ml-auto"
+                      onClick={() => patch(i, {
+                        has_sub_slots: true,
+                        sub_slots: [...it.sub_slots, { time: it.time_start ?? '', teams: [] }],
+                      })}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Слот
+                    </Button>
+                  </div>
+                  {it.sub_slots.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground">Без почергових слотів — подія для всіх одночасно.</p>
+                  )}
+                  {it.sub_slots.map((s, si) => (
+                    <div key={si} className="rounded-lg bg-surface-1 border border-border/40 p-2 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={s.time}
+                          onChange={(e) => patchSlot(i, si, { time: e.target.value })}
+                          placeholder="16:45"
+                          className="h-8 w-[76px] text-xs tabular-nums"
+                        />
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Поміняти команди з наступним слотом" onClick={() => swapSlots(i, si)}>
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 ml-auto"
+                          onClick={() => {
+                            const next = it.sub_slots.filter((_, k) => k !== si);
+                            patch(i, { sub_slots: next, has_sub_slots: next.length > 0 });
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {TEAMS.map((t) => {
+                          const on = s.teams.includes(t);
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => toggleSlotTeam(i, si, t)}
+                              className={`h-7 w-7 rounded-md text-[11px] font-bold border transition-all active:scale-95 ${
+                                on ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'
+                              }`}
+                            >{t}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -301,6 +373,22 @@ const ScheduleAdmin = () => {
           </div>
         </Card>
       )}
+
+      {aiError && !errorOpen && (
+        <button
+          onClick={() => setErrorOpen(true)}
+          className="w-full flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs font-medium text-warning"
+        >
+          <AlertTriangle className="w-3.5 h-3.5" /> Показати деталі помилки ШІ ({aiError.code})
+        </button>
+      )}
+
+      <AIErrorDialog
+        open={errorOpen}
+        onOpenChange={setErrorOpen}
+        info={aiError}
+        onFallback={() => { if (!draft) { if (!applyLocal('manual')) setDraft([emptyRow()]); } }}
+      />
 
       <div className="space-y-2">
         <h3 className="font-bold uppercase text-sm tracking-wide px-1">Збережені розклади</h3>
