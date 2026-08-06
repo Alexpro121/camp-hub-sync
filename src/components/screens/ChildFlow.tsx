@@ -192,6 +192,8 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
+            <ChildCoupeCard childId={child.id} />
+
             <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
               <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">
                 Дані
