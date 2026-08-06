@@ -10,6 +10,7 @@ export interface Shift {
   team_offset: number;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 }
 
 export interface Child {
@@ -55,5 +56,70 @@ export interface UploadedFile {
   filename: string;
   shift_id: string | null;
   rows_count: number;
+  created_at: string;
+}
+
+export interface IronTransaction {
+  id: string;
+  child_id: string;
+  supervisor_user_id: string | null;
+  performed_by: string | null;
+  amount_change: number;
+  balance_after: number | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface Schedule {
+  id: string;
+  shift_id: string | null;
+  date: string;
+  raw_text: string | null;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleItem {
+  id: string;
+  schedule_id: string;
+  time_start: string | null;
+  time_end: string | null;
+  title: string;
+  description: string | null;
+  target_teams: number[];
+  order_index: number;
+}
+
+export type TalentStatus = 'draft' | 'collecting' | 'generated' | 'finished';
+
+export interface TalentEvent {
+  id: string;
+  shift_id: string | null;
+  title: string;
+  status: TalentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TalentEntry {
+  id: string;
+  event_id: string;
+  team_number: number;
+  title: string;
+  description: string | null;
+  break_needed_after: number;
+  order_index: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface Broadcast {
+  id: string;
+  message: string;
+  color: string;
+  target_teams: number[];
+  sent_by: string | null;
+  expires_at: string | null;
   created_at: string;
 }

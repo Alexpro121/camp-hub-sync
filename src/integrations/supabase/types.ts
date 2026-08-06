@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      broadcasts: {
+        Row: {
+          color: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          message: string
+          sent_by: string | null
+          target_teams: Json
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          message: string
+          sent_by?: string | null
+          target_teams?: Json
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          message?: string
+          sent_by?: string | null
+          target_teams?: Json
+        }
+        Relationships: []
+      }
       children: {
         Row: {
           created_at: string
@@ -79,6 +109,47 @@ export type Database = {
           },
         ]
       }
+      iron_dollar_transactions: {
+        Row: {
+          amount_change: number
+          balance_after: number | null
+          child_id: string
+          created_at: string
+          id: string
+          performed_by: string | null
+          reason: string | null
+          supervisor_user_id: string | null
+        }
+        Insert: {
+          amount_change: number
+          balance_after?: number | null
+          child_id: string
+          created_at?: string
+          id?: string
+          performed_by?: string | null
+          reason?: string | null
+          supervisor_user_id?: string | null
+        }
+        Update: {
+          amount_change?: number
+          balance_after?: number | null
+          child_id?: string
+          created_at?: string
+          id?: string
+          performed_by?: string | null
+          reason?: string | null
+          supervisor_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iron_dollar_transactions_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -106,9 +177,95 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          order_index: number
+          schedule_id: string
+          target_teams: Json
+          time_end: string | null
+          time_start: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          order_index?: number
+          schedule_id: string
+          target_teams?: Json
+          time_end?: string | null
+          time_start?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          order_index?: number
+          schedule_id?: string
+          target_teams?: Json
+          time_end?: string | null
+          time_start?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_items_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedules: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          is_published: boolean
+          raw_text: string | null
+          shift_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          is_published?: boolean
+          raw_text?: string | null
+          shift_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          is_published?: boolean
+          raw_text?: string | null
+          shift_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shifts: {
         Row: {
           created_at: string
+          deleted_at: string | null
           end_date: string
           id: string
           is_active: boolean
@@ -120,6 +277,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           end_date: string
           id?: string
           is_active?: boolean
@@ -131,6 +289,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           end_date?: string
           id?: string
           is_active?: boolean
@@ -141,6 +300,88 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      talent_entries: {
+        Row: {
+          break_needed_after: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_id: string
+          id: string
+          order_index: number
+          team_number: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          break_needed_after?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_id: string
+          id?: string
+          order_index?: number
+          team_number: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          break_needed_after?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_id?: string
+          id?: string
+          order_index?: number
+          team_number?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_entries_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "talent_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_events: {
+        Row: {
+          created_at: string
+          id: string
+          shift_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          shift_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          shift_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_events_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transfers: {
         Row: {
