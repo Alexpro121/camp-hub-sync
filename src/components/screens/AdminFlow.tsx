@@ -373,6 +373,8 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
+  const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
+  const [pwLoading, setPwLoading] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -382,6 +384,16 @@ const DataTab = () => {
   useEffect(() => { load(); }, []);
 
   const wipe = async () => {
+
+  const loadPasswords = async () => {
+    setPwLoading(true);
+    const { data, error } = await supabase.functions.invoke('staff-login', {
+      body: { action: 'list_team_passwords' },
+    });
+    setPwLoading(false);
+    if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
+    setPasswords(data.passwords);
+  };
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
