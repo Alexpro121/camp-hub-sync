@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Sparkles, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,8 @@ import { parseExcelFile } from '@/lib/excel';
 import { shiftStatus } from '@/lib/shift';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
+import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
+import TalentAdmin from '@/components/talent/TalentAdmin';
 
 interface Props { onBack: () => void; }
 
