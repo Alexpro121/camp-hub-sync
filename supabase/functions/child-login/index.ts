@@ -1,0 +1,144 @@
+import { admin, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+
+/* ---------- name matching (mirrors src/lib/normalize.ts) ---------- */
+function normalizeName(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.toLowerCase().replace(/ё/g, 'е').replace(/[''`ʼ]/g, "'").replace(/\s+/g, ' ').trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const m = a.length, n = b.length;
+  let prev: number[] = Array.from({ length: n + 1 });
+  let curr: number[] = Array.from({ length: n + 1 });
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+function tokenSetSimilarity(a: string, b: string): number {
+  const at = normalizeName(a).split(' ').filter(Boolean).sort();
+  const bt = normalizeName(b).split(' ').filter(Boolean).sort();
+  if (!at.length || !bt.length) return 0;
+  const ja = at.join(' '), jb = bt.join(' ');
+  const maxLen = Math.max(ja.length, jb.length);
+  if (!maxLen) return 0;
+  return 1 - levenshtein(ja, jb) / maxLen;
+}
+
+function tokenCoverage(query: string, target: string): number {
+  const qt = normalizeName(query).split(' ').filter(Boolean);
+  const tt = normalizeName(target).split(' ').filter(Boolean);
+  if (!qt.length || !tt.length) return 0;
+  let matched = 0;
+  for (const q of qt) {
+    let best = 0;
+    for (const t of tt) {
+      const ml = Math.max(q.length, t.length);
+      const sim = ml ? 1 - levenshtein(q, t) / ml : 0;
+      if (sim > best) best = sim;
+    }
+    if (best >= 0.7) matched++;
+  }
+  return matched / qt.length;
+}
+
+interface Row { id: string; full_name: string; team_number: number; team_name: string | null }
+
+function score(query: string, name: string): number {
+  const q = normalizeName(query);
+  const target = normalizeName(name);
+  if (!q || !target) return 0;
+  if (target === q) return 1;
+  let s = 0;
+  if (target.includes(q) || q.includes(target)) s = 0.9;
+  s = Math.max(s, tokenSetSimilarity(query, name));
+  s = Math.max(s, tokenCoverage(query, name) * 0.85);
+  return s;
+}
+
+/* ---------- active shift selection (mirrors src/lib/shift.ts) ---------- */
+function pickActiveShift(shifts: any[]): any | null {
+  if (!shifts.length) return null;
+  const t = new Date().toISOString().slice(0, 10);
+  const current = shifts.find((s) => s.start_date <= t && t <= s.end_date);
+  if (current) return current;
+  const upcoming = shifts.filter((s) => s.start_date > t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+  if (upcoming) return upcoming;
+  return shifts.slice().sort((a, b) => b.end_date.localeCompare(a.end_date))[0] ?? null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const action = body?.action === 'claim' ? 'claim' : 'search';
+    const svc = admin();
+
+    const { data: shifts } = await svc.from('shifts').select('*').order('start_date', { ascending: false });
+    const active = pickActiveShift(shifts || []);
+
+    if (action === 'search') {
+      const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
+      const teamRaw = String(body?.team ?? '').replace(/[^\d]/g, '');
+      const team = teamRaw ? parseInt(teamRaw, 10) : 0;
+      if (!fullName || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
+
+      let q = svc.from('children').select('id, full_name, team_number, team_name');
+      if (active?.id) q = q.eq('shift_id', active.id);
+      const { data, error } = await q;
+      if (error) return json({ error: 'search_failed' }, 500);
+
+      const pool = (data || []) as Row[];
+
+      const exactInTeam = team
+        ? pool.find((c) => c.team_number === team && normalizeName(c.full_name) === normalizeName(fullName))
+        : null;
+      const exact = exactInTeam || pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
+      if (exact) return json({ exact: { id: exact.id, full_name: exact.full_name, team_number: exact.team_number, team_name: exact.team_name } });
+
+      const scored = pool
+        .map((item) => ({ item, s: score(fullName, item.full_name) + (team && item.team_number === team ? 0.05 : 0) }))
+        .filter((x) => x.s >= 0.5)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 6)
+        .map(({ item, s }) => ({
+          id: item.id,
+          full_name: item.full_name,
+          team_number: item.team_number,
+          team_name: item.team_name,
+          score: Math.min(1, s),
+        }));
+
+      return json({ suggestions: scored });
+    }
+
+    // claim
+    const childId = typeof body?.childId === 'string' ? body.childId : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(childId)) {
+      return json({ error: 'invalid_child' }, 400);
+    }
+
+    let cq = svc.from('children').select('id, shift_id').eq('id', childId);
+    if (active?.id) cq = cq.eq('shift_id', active.id);
+    const { data: child } = await cq.maybeSingle();
+    if (!child) return json({ error: 'child_not_found' }, 404);
+
+    await svc.from('children').update({ has_logged_in: true }).eq('id', childId);
+    const session = await issueSession(`child-${childId}@ironhelp.local`, 'child', { child_id: childId });
+    return json({ session });
+  } catch (_e) {
+    return json({ error: 'login_failed' }, 500);
+  }
+});
