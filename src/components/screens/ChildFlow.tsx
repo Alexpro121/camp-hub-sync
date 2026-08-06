@@ -45,7 +45,7 @@ const ChildFlow = ({ onBack }: Props) => {
     return () => { supabase.removeChannel(channel); };
   }, [child?.id]);
 
-  const loginAs = async (candidate: { id: string; full_name: string }) => {
+  const loginAs = async (candidate: { id: string }) => {
     setLoading(true);
     try {
       // The backend verifies the record, issues a scoped session and marks the login.
@@ -112,14 +112,7 @@ const ChildFlow = ({ onBack }: Props) => {
         return;
       }
 
-      const hits = (data?.suggestions || []) as Array<Candidate & { score: number }>;
-      if (!hits.length) {
-        toast.error('Нікого схожого не знайдено. Перевір ПІБ.');
-        return;
-      }
-
-      setSuggestions(hits.map((h) => ({ item: h, score: h.score })));
-      toast.message('Знайшли схожі варіанти — обери себе');
+      toast.error('Не знайдено. Перевір ПІБ та номер команди.');
     } catch (e: any) {
       toast.error(e.message || 'Помилка входу');
     } finally {
