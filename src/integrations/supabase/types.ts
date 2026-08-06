@@ -404,6 +404,7 @@ export type Database = {
           seat_number: number | null
           shift_id: string | null
           team_number: number
+          updated_at: string
         }
         Insert: {
           boarding_city?: string | null
@@ -416,6 +417,7 @@ export type Database = {
           seat_number?: number | null
           shift_id?: string | null
           team_number: number
+          updated_at?: string
         }
         Update: {
           boarding_city?: string | null
@@ -428,6 +430,7 @@ export type Database = {
           seat_number?: number | null
           shift_id?: string | null
           team_number?: number
+          updated_at?: string
         }
         Relationships: [
           {
