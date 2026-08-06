@@ -179,11 +179,14 @@ export type Database = {
       }
       schedule_items: {
         Row: {
+          category: string
           created_at: string
           description: string | null
+          has_sub_slots: boolean
           id: string
           order_index: number
           schedule_id: string
+          sub_slots: Json
           target_teams: Json
           time_end: string | null
           time_start: string | null
@@ -191,11 +194,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string | null
+          has_sub_slots?: boolean
           id?: string
           order_index?: number
           schedule_id: string
+          sub_slots?: Json
           target_teams?: Json
           time_end?: string | null
           time_start?: string | null
@@ -203,11 +209,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string | null
+          has_sub_slots?: boolean
           id?: string
           order_index?: number
           schedule_id?: string
+          sub_slots?: Json
           target_teams?: Json
           time_end?: string | null
           time_start?: string | null

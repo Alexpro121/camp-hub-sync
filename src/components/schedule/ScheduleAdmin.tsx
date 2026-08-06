@@ -6,11 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Sparkles, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu } from 'lucide-react';
+import { Trash2, Sparkles, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, Minus, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
 import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCategory } from '@/lib/schedule-parser-fallback';
+import { CATEGORY_LIST, catMeta, shiftTime } from '@/lib/scheduleCategories';
+import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
 import { pushIsland } from '@/lib/islandBus';
 import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
@@ -18,17 +20,11 @@ import { pickActiveShift } from '@/lib/shift';
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-const CATEGORIES: Array<{ value: ScheduleCategory; label: string }> = [
-  { value: 'general', label: 'Загальне' },
-  { value: 'meal', label: 'Харчування' },
-  { value: 'sports', label: 'Спорт' },
-  { value: 'gathering', label: 'Збір' },
-  { value: 'entertainment', label: 'Розвага' },
-  { value: 'transfer', label: 'Переїзд' },
-];
+const CATEGORIES = CATEGORY_LIST;
 
 const emptyRow = (): AiScheduleItem => ({
-  time_start: null, time_end: null, title: '', description: null, target_teams: [], category: 'general',
+  time_start: null, time_end: null, title: '', description: null, target_teams: [],
+  category: 'general', has_sub_slots: false, sub_slots: [],
 });
 
 const ScheduleAdmin = () => {
@@ -39,6 +35,8 @@ const ScheduleAdmin = () => {
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existing, setExisting] = useState<Array<Schedule & { items: ScheduleItem[] }>>([]);
+  const [aiError, setAiError] = useState<AiErrorInfo | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
 
   const load = async () => {
     const { data: sch } = await supabase.from('schedules').select('*').order('date');
@@ -72,6 +70,16 @@ const ScheduleAdmin = () => {
     try {
       const { data, error } = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText: raw } });
       const items = (data?.items ?? []) as Array<AiScheduleItem & { date?: string | null }>;
+      if (error || data?.error || data?.source !== 'ai' || !items.length) {
+        const info: AiErrorInfo = {
+          ...(data?.error ?? {}),
+          reason: data?.reason ?? (error ? 'invoke_error' : 'empty_result'),
+          code: data?.error?.code ?? (error ? 'EDGE_INVOKE_ERROR' : 'EMPTY_RESULT'),
+          message: data?.error?.message ?? error?.message ?? 'ШІ не повернув подій',
+        };
+        setAiError(info);
+        setErrorOpen(true);
+      }
       if (error || data?.source !== 'ai' || !items.length) {
         applyLocal(data?.reason);
         return;
@@ -83,6 +91,8 @@ const ScheduleAdmin = () => {
         description: null,
         target_teams: Array.isArray(it.target_teams) ? it.target_teams : [],
         category: it.category ?? detectCategory(it.title),
+        has_sub_slots: Boolean(it.has_sub_slots && it.sub_slots?.length),
+        sub_slots: Array.isArray(it.sub_slots) ? it.sub_slots : [],
       }));
       const ddmm = items.find((i) => i.date)?.date ?? null;
       if (ddmm && /^\d{1,2}[.\/]\d{1,2}$/.test(ddmm)) {
@@ -95,7 +105,9 @@ const ScheduleAdmin = () => {
       setDraft(mapped);
       setSource('ai');
       pushIsland(`ШІ розпізнав ${mapped.length} подій`, 'success');
-    } catch {
+    } catch (e: any) {
+      setAiError({ code: 'CLIENT_EXCEPTION', status: 0, reason: 'offline', message: e?.message ?? 'offline', raw: '' });
+      setErrorOpen(true);
       applyLocal('offline');
     } finally {
       setParsing(false);
@@ -111,6 +123,43 @@ const ScheduleAdmin = () => {
       const has = it.target_teams.includes(team);
       return { ...it, target_teams: has ? it.target_teams.filter((t) => t !== team) : [...it.target_teams, team].sort((a, b) => a - b) };
     }) ?? prev);
+
+  const patchSlot = (idx: number, si: number, values: Partial<{ time: string; teams: number[] }>) =>
+    setDraft((prev) => prev?.map((it, i) => (i === idx
+      ? { ...it, sub_slots: it.sub_slots.map((s, k) => (k === si ? { ...s, ...values } : s)) }
+      : it)) ?? prev);
+
+  const toggleSlotTeam = (idx: number, si: number, team: number) =>
+    setDraft((prev) => prev?.map((it, i) => {
+      if (i !== idx) return it;
+      return {
+        ...it,
+        sub_slots: it.sub_slots.map((s, k) => {
+          if (k !== si) return s;
+          const has = s.teams.includes(team);
+          return { ...s, teams: has ? s.teams.filter((t) => t !== team) : [...s.teams, team].sort((a, b) => a - b) };
+        }),
+      };
+    }) ?? prev);
+
+  const swapSlots = (idx: number, si: number) =>
+    setDraft((prev) => prev?.map((it, i) => {
+      if (i !== idx || si + 1 >= it.sub_slots.length) return it;
+      const slots = [...it.sub_slots];
+      const a = slots[si];
+      const b = slots[si + 1];
+      slots[si] = { ...a, teams: b.teams };
+      slots[si + 1] = { ...b, teams: a.teams };
+      return { ...it, sub_slots: slots };
+    }) ?? prev);
+
+  const shiftAll = (delta: number) =>
+    setDraft((prev) => prev?.map((it) => ({
+      ...it,
+      time_start: shiftTime(it.time_start, delta),
+      time_end: shiftTime(it.time_end, delta),
+      sub_slots: it.sub_slots.map((s) => ({ ...s, time: shiftTime(s.time, delta) ?? s.time })),
+    })) ?? prev);
 
   const publish = async (isPublished: boolean) => {
     if (!draft?.length) return;
@@ -134,6 +183,9 @@ const ScheduleAdmin = () => {
         description: it.description,
         target_teams: it.target_teams,
         order_index: i,
+        category: it.category,
+        has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
+        sub_slots: it.sub_slots as unknown as any,
       }));
       const { error: itErr } = await supabase.from('schedule_items').insert(rows);
       if (itErr) throw itErr;
@@ -194,6 +246,16 @@ const ScheduleAdmin = () => {
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[150px] text-xs" />
           </div>
 
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Зсув усього дня</span>
+            <Button size="sm" variant="secondary" className="h-8 px-2 text-xs ml-auto" onClick={() => shiftAll(-15)}>
+              <Minus className="w-3 h-3 mr-1" />15 хв
+            </Button>
+            <Button size="sm" variant="secondary" className="h-8 px-2 text-xs" onClick={() => shiftAll(15)}>
+              <Plus className="w-3 h-3 mr-1" />15 хв
+            </Button>
+          </div>
+
           <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
             {draft.map((it, i) => (
               <div key={i} className="rounded-xl border border-border/50 bg-surface-1 p-3 space-y-2 transition-colors hover:border-primary/40">
@@ -208,7 +270,7 @@ const ScheduleAdmin = () => {
                 <Select value={it.category} onValueChange={(v) => patch(i, { category: v as ScheduleCategory })}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
+                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.emoji} {c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <div className="space-y-1.5">
@@ -231,6 +293,68 @@ const ScheduleAdmin = () => {
                     })}
                   </div>
                 </div>
+
+                <div className="rounded-lg border border-border/50 bg-surface-2/60 p-2.5 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-[10px] uppercase tracking-wider font-bold">Почергові слоти</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-[10px] ml-auto"
+                      onClick={() => patch(i, {
+                        has_sub_slots: true,
+                        sub_slots: [...it.sub_slots, { time: it.time_start ?? '', teams: [] }],
+                      })}
+                    >
+                      <Plus className="w-3 h-3 mr-1" /> Слот
+                    </Button>
+                  </div>
+                  {it.sub_slots.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground">Без почергових слотів — подія для всіх одночасно.</p>
+                  )}
+                  {it.sub_slots.map((s, si) => (
+                    <div key={si} className="rounded-lg bg-surface-1 border border-border/40 p-2 space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          value={s.time}
+                          onChange={(e) => patchSlot(i, si, { time: e.target.value })}
+                          placeholder="16:45"
+                          className="h-8 w-[76px] text-xs tabular-nums"
+                        />
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Поміняти команди з наступним слотом" onClick={() => swapSlots(i, si)}>
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 ml-auto"
+                          onClick={() => {
+                            const next = it.sub_slots.filter((_, k) => k !== si);
+                            patch(i, { sub_slots: next, has_sub_slots: next.length > 0 });
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {TEAMS.map((t) => {
+                          const on = s.teams.includes(t);
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => toggleSlotTeam(i, si, t)}
+                              className={`h-7 w-7 rounded-md text-[11px] font-bold border transition-all active:scale-95 ${
+                                on ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'
+                              }`}
+                            >{t}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -249,6 +373,22 @@ const ScheduleAdmin = () => {
           </div>
         </Card>
       )}
+
+      {aiError && !errorOpen && (
+        <button
+          onClick={() => setErrorOpen(true)}
+          className="w-full flex items-center gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs font-medium text-warning"
+        >
+          <AlertTriangle className="w-3.5 h-3.5" /> Показати деталі помилки ШІ ({aiError.code})
+        </button>
+      )}
+
+      <AIErrorDialog
+        open={errorOpen}
+        onOpenChange={setErrorOpen}
+        info={aiError}
+        onFallback={() => { if (!draft) { if (!applyLocal('manual')) setDraft([emptyRow()]); } }}
+      />
 
       <div className="space-y-2">
         <h3 className="font-bold uppercase text-sm tracking-wide px-1">Збережені розклади</h3>

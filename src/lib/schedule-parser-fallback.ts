@@ -2,8 +2,15 @@ import { parseScheduleText, extractDate, extractTeams, type ParsedScheduleItem }
 
 export type ScheduleCategory = 'sports' | 'meal' | 'gathering' | 'entertainment' | 'transfer' | 'general';
 
+export interface SubSlot {
+  time: string;
+  teams: number[];
+}
+
 export interface AiScheduleItem extends ParsedScheduleItem {
   category: ScheduleCategory;
+  has_sub_slots: boolean;
+  sub_slots: SubSlot[];
 }
 
 export const TIME_RE = /(\d{1,2}:\d{2})\s*(?:-\s*(\d{1,2}:\d{2}))?/;
@@ -22,13 +29,52 @@ export function detectCategory(text: string): ScheduleCategory {
   return 'general';
 }
 
+const toMin = (t?: string | null) => {
+  if (!t) return null;
+  const [h, m] = t.split(':').map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+};
+
+/** A line like "16:45 - 3 і 4 команда" carries teams but no real activity name. */
+const isTeamOnly = (title: string, description: string | null, teams: number[]) => {
+  if (!teams.length) return false;
+  const text = `${title} ${description ?? ''}`
+    .toLowerCase()
+    .replace(/команд\w*/g, '')
+    .replace(/[\d\s,.:;–—-]|\bі\b|\bта\b|\bй\b/g, '')
+    .trim();
+  return text.length <= 2;
+};
+
+/** Groups staggered team lines under the preceding main event (meal, fair, shower…). */
+export function groupSubSlots(items: AiScheduleItem[]): AiScheduleItem[] {
+  const out: AiScheduleItem[] = [];
+  for (const it of items) {
+    const parent = out[out.length - 1];
+    const start = toMin(it.time_start);
+    const pStart = toMin(parent?.time_start ?? null);
+    const pEnd = toMin(parent?.time_end ?? null);
+    const fits =
+      parent && start != null && pStart != null && pEnd != null && start >= pStart && start <= pEnd;
+    if (fits && isTeamOnly(it.title, it.description, it.target_teams)) {
+      parent.has_sub_slots = true;
+      parent.sub_slots = [...parent.sub_slots, { time: it.time_start as string, teams: it.target_teams }];
+      continue;
+    }
+    out.push(it);
+  }
+  return out;
+}
+
 /** Local regex fallback: never throws, always returns something usable. */
 export function fallbackParse(raw: string): { items: AiScheduleItem[]; date: string | null } {
-  const items = parseScheduleText(raw).map((it) => ({
+  const parsed = parseScheduleText(raw).map<AiScheduleItem>((it) => ({
     ...it,
     category: detectCategory(`${it.title} ${it.description ?? ''}`),
+    has_sub_slots: false,
+    sub_slots: [],
   }));
-  return { items, date: extractDate(raw) };
+  return { items: groupSubSlots(parsed), date: extractDate(raw) };
 }
 
 export { extractTeams };

@@ -17,7 +17,9 @@ OUTPUT FORMAT REQUIREMENTS:
     "time_end": "HH:MM" string or null,
     "title": "Clean event title without team numbers or time",
     "target_teams": [number array of team numbers, e.g., [1, 2], or empty array [] if for all teams],
-    "category": "sports" | "meal" | "gathering" | "entertainment" | "transfer" | "general"
+    "category": "sports" | "meal" | "gathering" | "entertainment" | "transfer" | "general",
+    "has_sub_slots": boolean,
+    "sub_slots": [ { "time": "HH:MM", "teams": [1, 2] } ]
   }
 
 PARSING RULES:
@@ -25,9 +27,28 @@ PARSING RULES:
 2. If no teams are mentioned for a time slot, target_teams MUST be [] (means event is for ALL teams).
 3. If time range is given like "09:00-10:00", time_start = "09:00", time_end = "10:00".
 4. If single time is given like "07:45", time_start = "07:45", time_end = null.
-5. Clean the title: remove times, remove team prefixes, summarize concisely in Ukrainian.`;
+5. Clean the title: remove times, remove team prefixes, summarize concisely in Ukrainian.
+
+STAGGERED EVENTS (CRITICAL):
+6. Camp schedules often list a general event (сніданок, обід, вечеря, полуденок, ярмарок, душ) with a time RANGE,
+   followed by lines that contain ONLY a time and team numbers, e.g.:
+     "16:30-17:30 - вечеря
+      16:30 - 1 і 2 команда
+      16:45 - 3 і 4 команда
+      17:00 - 5 і 6 команда"
+   These following lines are NOT separate events. They are staggered slots INSIDE the main event.
+7. In that case emit ONE event object for the main event with:
+   has_sub_slots: true, target_teams: [], time_start/time_end covering the whole range,
+   and sub_slots: [{ "time": "16:30", "teams": [1,2] }, { "time": "16:45", "teams": [3,4] }, ...].
+8. Ordinary events without staggered team lines MUST have has_sub_slots: false and sub_slots: [].
+9. A line that has its own meaningful activity name (e.g. "9:00 - 1 і 2 команда - скеледром") is a NORMAL
+   separate event with target_teams: [1,2], NOT a sub_slot.`;
 
 const TIME = /^\d{1,2}:\d{2}$/;
+const SubSlotSchema = z.object({
+  time: z.string().regex(TIME),
+  teams: z.array(z.number()).default([]),
+});
 const ItemSchema = z.object({
   date: z.string().nullable().optional(),
   time_start: z.string().regex(TIME).nullable().optional(),
@@ -35,6 +56,8 @@ const ItemSchema = z.object({
   title: z.string().min(1),
   target_teams: z.array(z.number()).default([]),
   category: z.enum(['sports', 'meal', 'gathering', 'entertainment', 'transfer', 'general']).default('general'),
+  has_sub_slots: z.boolean().default(false),
+  sub_slots: z.array(SubSlotSchema).default([]),
 });
 const ArraySchema = z.array(ItemSchema).min(1);
 
@@ -87,19 +110,56 @@ Deno.serve(async (req) => {
         }),
       });
       if (!res.ok) {
-        await res.text();
-        return json({ source: 'fallback', reason: `nvidia_${res.status}`, items: [] }, 200);
+        const bodyText = await res.text();
+        let providerMessage = '';
+        try { providerMessage = JSON.parse(bodyText)?.error?.message ?? JSON.parse(bodyText)?.detail ?? ''; } catch { /* raw */ }
+        return json({
+          source: 'fallback',
+          reason: `nvidia_${res.status}`,
+          items: [],
+          error: {
+            code: `NVIDIA_HTTP_${res.status}`,
+            status: res.status,
+            model: MODEL,
+            message: providerMessage || res.statusText || 'NVIDIA API error',
+            raw: bodyText.slice(0, 300),
+          },
+        }, 200);
       }
       const payload = await res.json();
       const content: string = payload?.choices?.[0]?.message?.content ?? '';
       let candidate: unknown;
       try {
         candidate = JSON.parse(extractArray(content));
-      } catch {
-        return json({ source: 'fallback', reason: 'invalid_json', items: [] }, 200);
+      } catch (e) {
+        return json({
+          source: 'fallback',
+          reason: 'invalid_json',
+          items: [],
+          error: {
+            code: 'JSON_SYNTAX_ERROR',
+            status: 200,
+            model: MODEL,
+            message: (e as Error)?.message ?? 'Model returned non-JSON output',
+            raw: content.slice(0, 300),
+          },
+        }, 200);
       }
       const validated = ArraySchema.safeParse(candidate);
-      if (!validated.success) return json({ source: 'fallback', reason: 'schema_mismatch', items: [] }, 200);
+      if (!validated.success) {
+        return json({
+          source: 'fallback',
+          reason: 'schema_mismatch',
+          items: [],
+          error: {
+            code: 'SCHEMA_MISMATCH',
+            status: 200,
+            model: MODEL,
+            message: JSON.stringify(validated.error.issues.slice(0, 5)).slice(0, 300),
+            raw: content.slice(0, 300),
+          },
+        }, 200);
+      }
 
       const items = validated.data.map((it) => ({
         date: it.date ?? null,
@@ -108,15 +168,36 @@ Deno.serve(async (req) => {
         title: it.title.trim(),
         target_teams: it.target_teams.filter((n) => Number.isFinite(n) && n > 0 && n < 100),
         category: it.category,
+        has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
+        sub_slots: it.sub_slots.map((s) => ({
+          time: s.time,
+          teams: s.teams.filter((n) => Number.isFinite(n) && n > 0 && n < 100),
+        })),
       }));
       return json({ source: 'ai', items }, 200);
     } catch (e) {
-      const reason = (e as Error)?.name === 'AbortError' ? 'timeout' : 'network_error';
-      return json({ source: 'fallback', reason, items: [] }, 200);
+      const aborted = (e as Error)?.name === 'AbortError';
+      return json({
+        source: 'fallback',
+        reason: aborted ? 'timeout' : 'network_error',
+        items: [],
+        error: {
+          code: aborted ? 'TIMEOUT_10S' : 'NETWORK_ERROR',
+          status: 0,
+          model: MODEL,
+          message: (e as Error)?.message ?? 'Unknown network error',
+          raw: '',
+        },
+      }, 200);
     } finally {
       clearTimeout(timer);
     }
-  } catch {
-    return json({ source: 'fallback', reason: 'unexpected', items: [] }, 200);
+  } catch (e) {
+    return json({
+      source: 'fallback',
+      reason: 'unexpected',
+      items: [],
+      error: { code: 'UNEXPECTED', status: 500, model: MODEL, message: (e as Error)?.message ?? 'unexpected', raw: '' },
+    }, 200);
   }
 });
