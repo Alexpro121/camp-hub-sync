@@ -66,8 +66,8 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
     if (!text.trim()) { toast.error('Встав текст розселення'); return; }
     setParsing(true);
     try {
-      // 1. Smart Regex first
-      const parsed = parseCoupesDeterministic(text);
+      // 1. Smart Regex, then sequential positional parser
+      const parsed = parseCoupes(text);
       let list = parsed.passengers;
       let src: 'local' | 'ai' = 'local';
 
