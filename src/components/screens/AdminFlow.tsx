@@ -420,6 +420,7 @@ const DataTab = () => {
             <Trash2 className="w-4 h-4 mr-2" /> Очистити всю базу
           </Button>
         </AlertDialogTrigger>
+
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Видалити всі дані?</AlertDialogTitle>
