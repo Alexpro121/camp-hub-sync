@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift } from '@/types/app';
 import {
-  groupByCoupe, parseCoupes, verifyAgainstRoster,
+  groupByTeamThenCoupe, parseCoupes, verifyAgainstRoster,
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
@@ -137,7 +137,9 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
 
   const matched = rows?.filter((r) => r.matched) ?? [];
   const unmatched = rows?.filter((r) => !r.matched) ?? [];
-  const coupes = rows ? groupByCoupe(rows.map((r) => ({ ...r, passenger_name: r.name, is_staff: !r.matched }))) : [];
+  const teamGroups = rows
+    ? groupByTeamThenCoupe(rows.map((r) => ({ ...r, passenger_name: r.name, is_staff: !r.matched })))
+    : [];
 
   return (
     <div className="space-y-3">
@@ -217,8 +219,15 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
             </Button>
           </Card>
 
-          {coupes.map((c) => (
-            <CoupeCard key={c.coupe_number} coupeNumber={c.coupe_number} passengers={c.passengers as any} />
+          {teamGroups.map((g) => (
+            <div key={g.team_number} className="space-y-2">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-1">
+                Команда №{g.team_number} · {g.total} пасажирів
+              </p>
+              {g.coupes.map((c) => (
+                <CoupeCard key={`${g.team_number}-${c.coupe_number}`} coupeNumber={c.coupe_number} passengers={c.passengers as any} />
+              ))}
+            </div>
           ))}
         </>
       )}
