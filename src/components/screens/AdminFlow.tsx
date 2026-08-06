@@ -19,6 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
 import TalentAdmin from '@/components/talent/TalentAdmin';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 interface Props { onBack: () => void; }
 
@@ -80,6 +81,7 @@ const ShiftsTab = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [sourceLabel, setSourceLabel] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const island = useDynamicIsland();
 
   const load = async () => {
     const { data } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
@@ -125,13 +127,18 @@ const ShiftsTab = () => {
     if (!file && !sheetUrl.trim()) { await createOnly(); return; }
     if (sheetUrl.trim() && !parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
     setAnalyzing(true);
+    island.showExcelProgress(15, file ? file.name : 'Google Sheets');
     try {
       const res = file ? await analyzeFile(file) : await analyzeSheetUrl(sheetUrl);
-      if (!res.rows.length) { toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
+      island.showExcelProgress(70, file ? file.name : 'Google Sheets');
+      if (!res.rows.length) { island.hide(); toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
       setSourceLabel(file ? file.name : sheetUrl.trim());
       setPreview(res);
       setPreviewOpen(true);
+      island.showExcelProgress(100, file ? file.name : 'Google Sheets');
+      setTimeout(() => island.hide(), 700);
     } catch (err: any) {
+      island.showError('Помилка імпорту', err.message || 'Не вдалося зчитати таблицю', String(err?.stack || err?.message || err));
       toast.error(err.message || 'Не вдалося зчитати таблицю');
     } finally {
       setAnalyzing(false);
@@ -161,6 +168,7 @@ const ShiftsTab = () => {
   const confirmImport = async () => {
     if (!preview) return;
     setCreating(true);
+    island.showExcelProgress(20, sourceLabel || 'Google Sheets');
     try {
       const { data: shift, error: shErr } = await supabase.from('shifts').insert({
         name, shift_type: type, start_date: start, end_date: end,
@@ -170,6 +178,7 @@ const ShiftsTab = () => {
 
       const valid = preview.rows.filter(r => r.full_name && r.team_number);
       const dbRows = valid.map(r => toDbRow(r, shift.id));
+      island.showExcelProgress(45, sourceLabel || 'Google Sheets');
 
       // Dedup by shift_id + team_number + normalized name against what's already stored
       const { data: existing } = await supabase
@@ -178,6 +187,7 @@ const ShiftsTab = () => {
       (existing || []).forEach((c: any) => map.set(`${c.team_number}|${(c.full_name || '').toLowerCase().trim()}`, c.id));
 
       const toInsert: any[] = [];
+      let processed = 0;
       for (const r of dbRows) {
         const id = map.get(`${r.team_number}|${r.full_name.toLowerCase().trim()}`);
         if (id) {
@@ -188,6 +198,8 @@ const ShiftsTab = () => {
         } else {
           toInsert.push(r);
         }
+        processed++;
+        island.showExcelProgress(45 + Math.round((processed / Math.max(1, dbRows.length)) * 45), sourceLabel || 'Google Sheets');
       }
       if (toInsert.length) {
         const { error: insErr } = await supabase.from('children').insert(toInsert);
@@ -200,11 +212,14 @@ const ShiftsTab = () => {
         rows_count: valid.length,
       });
 
-      toast.success(`✅ Зміну створено · імпортовано ${valid.length} дітей`);
+      island.showExcelProgress(100, sourceLabel || 'Google Sheets');
+      island.showSuccess('Зміну успішно імпортовано!', `${valid.length} дітей додано`);
+      toast.success(`Зміну створено · імпортовано ${valid.length} дітей`);
       setPreviewOpen(false);
       reset();
       load();
     } catch (err: any) {
+      island.showError('Помилка імпорту', err.message || 'Спробуйте ще раз', String(err?.stack || err?.message || err));
       toast.error(err.message || 'Помилка');
     } finally {
       setCreating(false);

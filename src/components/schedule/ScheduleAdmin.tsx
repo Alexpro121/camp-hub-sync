@@ -14,6 +14,7 @@ import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCatego
 import { CATEGORY_LIST, catMeta, shiftTime } from '@/lib/scheduleCategories';
 import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
 import { pushIsland } from '@/lib/islandBus';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
@@ -28,6 +29,7 @@ const emptyRow = (): AiScheduleItem => ({
 });
 
 const ScheduleAdmin = () => {
+  const island = useDynamicIsland();
   const [raw, setRaw] = useState('');
   const [date, setDate] = useState(todayISO());
   const [draft, setDraft] = useState<AiScheduleItem[] | null>(null);
@@ -66,7 +68,7 @@ const ScheduleAdmin = () => {
     setParsing(true);
     setDraft(null);
     setSource(null);
-    pushIsland('ШІ аналізує розклад…', 'gradient');
+    island.showLoader();
     try {
       const { data, error } = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText: raw } });
       const items = (data?.items ?? []) as Array<AiScheduleItem & { date?: string | null }>;
@@ -84,8 +86,8 @@ const ScheduleAdmin = () => {
           info.reason === 'timeout' ||
           /aborted/i.test(info.message ?? '');
         setAiError(info);
+        island.showError('Помилка ШІ-розпізнавання', 'Натисніть для деталей', `${info.code} · ${info.message}`);
         if (!silent) setErrorOpen(true);
-        else pushIsland('⚠️ Мережева затримка ШІ. Розклад розпізнано резервним алгоритмом. Перевірте дані.', 'warning', undefined, 8000);
       }
       if (error || data?.source !== 'ai' || !items.length) {
         applyLocal(data?.reason);
@@ -111,9 +113,10 @@ const ScheduleAdmin = () => {
       }
       setDraft(mapped);
       setSource('ai');
-      pushIsland(`ШІ розпізнав ${mapped.length} подій`, 'success');
+      island.showSuccess(`ШІ розпізнав ${mapped.length} подій`, 'Groq LPU');
     } catch (e: any) {
       setAiError({ code: 'CLIENT_EXCEPTION', status: 0, reason: 'offline', message: e?.message ?? 'offline', raw: '' });
+      island.showError('Помилка ШІ-розпізнавання', 'Натисніть для деталей', e?.message ?? 'offline');
       setErrorOpen(true);
       applyLocal('offline');
     } finally {

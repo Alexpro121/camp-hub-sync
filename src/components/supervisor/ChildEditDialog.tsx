@@ -9,6 +9,7 @@ import type { Child } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 interface Props {
   child: Child;
@@ -23,6 +24,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   const [iron, setIron] = useState(String(child.iron_dollars));
   const [saving, setSaving] = useState(false);
   const haptics = useHaptics();
+  const island = useDynamicIsland();
 
   // Auto-save with debounce
   useEffect(() => {
@@ -50,7 +52,15 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
     }).eq('id', child.id);
     setSaving(false);
     if (error) { toast.error('Помилка'); return; }
-    toast.success('Збережено');
+    const delta = (parseInt(iron, 10) || 0) - child.iron_dollars;
+    if (delta !== 0) {
+      island.showSuccess(
+        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} Iron Dollars!`,
+        child.full_name,
+      );
+    } else {
+      toast.success('Збережено');
+    }
     onClose();
   };
 
