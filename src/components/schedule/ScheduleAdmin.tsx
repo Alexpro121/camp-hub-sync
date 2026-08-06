@@ -277,7 +277,7 @@ const ScheduleAdmin = () => {
                 <Select value={it.category} onValueChange={(v) => patch(i, { category: v as ScheduleCategory })}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.emoji} {c.label}</SelectItem>)}
+                    {CATEGORIES.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <div className="space-y-1.5">

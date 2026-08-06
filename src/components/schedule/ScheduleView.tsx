@@ -158,7 +158,7 @@ const ScheduleView = ({ myTeam = null }: Props) => {
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 + 1 }, (_, k) => DAY_START + k * 60);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* Day header */}
       <Card className="p-3 bg-gradient-card space-y-3">
         <div className="flex items-center gap-2">
@@ -170,7 +170,7 @@ const ScheduleView = ({ myTeam = null }: Props) => {
             <ChevronLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0 text-center">
-            <p className="text-sm font-black truncate">{activeDay ? prettyDate(activeDay) : '—'}</p>
+            <p className="text-sm font-semibold truncate">{activeDay ? prettyDate(activeDay) : '—'}</p>
             <button
               onClick={() => {
                 const t = schedules.find((s) => s.date === todayISO());
@@ -194,14 +194,14 @@ const ScheduleView = ({ myTeam = null }: Props) => {
           <button
             onClick={() => setFilterTeam(null)}
             className={`shrink-0 h-8 px-3 rounded-lg text-[11px] font-bold border transition-smooth ${
-              filterTeam === null ? 'bg-gradient-primary text-primary-foreground border-primary' : 'bg-surface-1 border-border/50 text-muted-foreground'
+              filterTeam === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-1 border-border/50 text-muted-foreground'
             }`}
           >Всі команди</button>
           {myTeam != null && (
             <button
               onClick={() => setFilterTeam(myTeam)}
               className={`shrink-0 h-8 px-3 rounded-lg text-[11px] font-bold border transition-smooth ${
-                filterTeam === myTeam ? 'bg-gradient-primary text-primary-foreground border-primary' : 'bg-surface-1 border-border/50 text-muted-foreground'
+                filterTeam === myTeam ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-1 border-border/50 text-muted-foreground'
               }`}
             >Моя команда (К{myTeam})</button>
           )}
