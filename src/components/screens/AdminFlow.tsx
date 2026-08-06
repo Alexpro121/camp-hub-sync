@@ -227,7 +227,15 @@ const ShiftsTab = () => {
 
   return (
     <div className="space-y-4">
-      {creating && <FullScreenLoader label={file ? 'Завантаження таблиці' : 'Створення зміни'} />}
+      {creating && <FullScreenLoader label={preview ? 'Імпорт таблиці' : 'Створення зміни'} />}
+      {analyzing && <FullScreenLoader label="ШІ аналізує структуру таблиці…" />}
+      <ImportPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        result={preview}
+        busy={creating}
+        onConfirm={confirmImport}
+      />
       <Card className="p-5 bg-gradient-card space-y-3">
         <h3 className="font-bold uppercase text-sm tracking-wide">Створити зміну і завантажити таблицю</h3>
         <div className="space-y-3">
@@ -259,7 +267,7 @@ const ShiftsTab = () => {
 
           {/* File upload area */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Таблиця дітей (.xlsx / .csv)</Label>
+            <Label className="text-xs">Варіант А · Файл (.xlsx / .xls / .csv)</Label>
             <input
               ref={fileRef}
               type="file"
@@ -305,8 +313,28 @@ const ShiftsTab = () => {
             </p>
           </div>
 
-          <Button onClick={create} disabled={creating} className="w-full h-12 font-bold uppercase">
-            {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
+          {/* Google Sheets URL */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Варіант Б · Посилання на Google Таблицю</Label>
+            <div className="relative">
+              <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={sheetUrl}
+                onChange={e => setSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                className="h-11 pl-9 text-xs"
+                disabled={!!file}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Таблиця має бути відкрита за посиланням («Усі, хто має посилання — Переглядач»). ШІ сам розпізнає колонки навіть з описками.
+            </p>
+          </div>
+
+          <Button onClick={analyze} disabled={creating || analyzing} className="w-full h-12 font-bold uppercase">
+            {creating || analyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : (file || sheetUrl.trim())
+              ? <><Sparkles className="w-4 h-4 mr-2" /> Аналізувати таблицю</>
+              : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
           </Button>
         </div>
       </Card>
