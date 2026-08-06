@@ -54,6 +54,14 @@ function tokenCoverage(query: string, target: string): number {
 
 interface Row { id: string; full_name: string; team_number: number; team_name: string | null }
 
+/** Only reveal the first token plus initials, so the endpoint can't be used to harvest rosters. */
+function maskName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '';
+  const [first, ...rest] = parts;
+  return [first, ...rest.map((p) => `${p[0].toUpperCase()}.`)].join(' ');
+}
+
 function score(query: string, name: string): number {
   const q = normalizeName(query);
   const target = normalizeName(name);
@@ -93,31 +101,34 @@ Deno.serve(async (req) => {
       const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
       const teamRaw = String(body?.team ?? '').replace(/[^\d]/g, '');
       const team = teamRaw ? parseInt(teamRaw, 10) : 0;
-      if (!fullName || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
+      if (!fullName || fullName.length < 6 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
+      // Require at least two name tokens so single fragments cannot be enumerated.
+      if (fullName.split(/\s+/).filter(Boolean).length < 2) return json({ error: 'invalid_name' }, 400);
+      // Require the team number: narrows the searchable pool and blocks roster-wide scraping.
+      if (!team || team < 1 || team > 999) return json({ error: 'invalid_team' }, 400);
 
       let q = svc.from('children').select('id, full_name, team_number, team_name');
       if (active?.id) q = q.eq('shift_id', active.id);
+      q = q.eq('team_number', team);
       const { data, error } = await q;
       if (error) return json({ error: 'search_failed' }, 500);
 
       const pool = (data || []) as Row[];
 
-      const exactInTeam = team
-        ? pool.find((c) => c.team_number === team && normalizeName(c.full_name) === normalizeName(fullName))
-        : null;
-      const exact = exactInTeam || pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
-      if (exact) return json({ exact: { id: exact.id, full_name: exact.full_name, team_number: exact.team_number, team_name: exact.team_name } });
+      const exact = pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
+      if (exact) return json({ exact: { id: exact.id, full_name: maskName(exact.full_name), team_number: exact.team_number } });
 
       const scored = pool
-        .map((item) => ({ item, s: score(fullName, item.full_name) + (team && item.team_number === team ? 0.05 : 0) }))
-        .filter((x) => x.s >= 0.5)
+        .map((item) => ({ item, s: score(fullName, item.full_name) }))
+        // High threshold: only near-certain matches are hinted at.
+        .filter((x) => x.s >= 0.75)
         .sort((a, b) => b.s - a.s)
-        .slice(0, 6)
+        .slice(0, 3)
         .map(({ item, s }) => ({
           id: item.id,
-          full_name: item.full_name,
+          full_name: maskName(item.full_name),
           team_number: item.team_number,
-          team_name: item.team_name,
+          team_name: null,
           score: Math.min(1, s),
         }));
 
