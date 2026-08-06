@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift } from '@/types/app';
 import {
-  coupeOf, groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
+  groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
@@ -64,23 +64,8 @@ const CoupeImport = () => {
     if (!text.trim()) { toast.error('Встав текст розселення'); return; }
     setParsing(true);
     try {
-      let parsed = parseCoupesDeterministic(text);
-      let src: 'local' | 'ai' = 'local';
-
-      // Only fall back to AI when the deterministic pass clearly failed.
-      if (parsed.passengers.length < 2) {
-        const { data } = await supabase.functions.invoke('parse-coupes-ai', { body: { text } });
-        const list = (data as any)?.passengers as CoupePassenger[] | undefined;
-        if (list?.length) {
-          parsed = {
-            passengers: list.map((p) => ({ ...p, coupe_number: coupeOf(p.seat_number) })),
-            teams: [],
-            source: 'ai',
-            skipped: 0,
-          };
-          src = 'ai';
-        }
-      }
+      const parsed = parseCoupesDeterministic(text);
+      const src: 'local' | 'ai' = 'local';
 
       if (!parsed.passengers.length) { toast.error('Не вдалося розпізнати жодного пасажира'); return; }
 
@@ -183,9 +168,7 @@ const CoupeImport = () => {
       {rows && (
         <>
           <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-2">
-            <Badge variant="secondary" className="text-[10px]">
-              {source === 'ai' ? 'Розібрано ШІ (Groq)' : 'Розібрано детермінованим парсером'}
-            </Badge>
+            <Badge variant="secondary" className="text-[10px]">Розібрано детермінованим парсером</Badge>
             <p className="text-sm flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-success shrink-0" strokeWidth={1.75} />
               Знайдено в базі списку табору: {matched.length} з {rows.length}
