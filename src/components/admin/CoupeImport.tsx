@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift } from '@/types/app';
 import {
-  groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
+  groupByCoupe, parseCoupes, verifyAgainstRoster,
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
