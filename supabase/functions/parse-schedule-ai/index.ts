@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
     if (!key) return json({ source: 'fallback', reason: 'no_api_key', items: [] }, 200);
 
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
       const res = await fetch(NVIDIA_URL, {
         method: 'POST',
@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
           model: MODEL,
           temperature: 0.1,
           max_tokens: 2048,
+          stream: false,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: rawText },
@@ -182,7 +183,7 @@ Deno.serve(async (req) => {
         reason: aborted ? 'timeout' : 'network_error',
         items: [],
         error: {
-          code: aborted ? 'TIMEOUT_10S' : 'NETWORK_ERROR',
+          code: aborted ? 'TIMEOUT_15S' : 'NETWORK_ERROR',
           status: 0,
           model: MODEL,
           message: (e as Error)?.message ?? 'Unknown network error',
