@@ -135,166 +135,116 @@ const ChildFlow = ({ onBack }: Props) => {
       : [];
 
     return (
-      <div className="min-h-screen px-4 py-5 max-w-md mx-auto safe-top safe-bottom">
-        <button onClick={handleExit} className="flex items-center gap-2 text-sm text-muted-foreground mb-5 hover:text-foreground transition-smooth">
-          <ArrowLeft className="w-4 h-4" /> Вийти
+      <div className="min-h-screen px-4 py-4 max-w-md mx-auto safe-top safe-bottom">
+        <button
+          onClick={() => { haptics.impact('light'); handleExit(); }}
+          className="flex items-center gap-2 text-sm text-muted-foreground mb-3 hover:text-foreground transition-smooth active:scale-[0.98]"
+        >
+          <ArrowLeft className="w-4 h-4" strokeWidth={1.75} /> Вийти
         </button>
 
-        {/* ID-CARD HEADER (industrial / iron) */}
-        <Card className="relative overflow-hidden p-0 mb-4 bg-gradient-card border-primary/20 animate-scale-in">
-          {/* Industrial top stripe */}
-          <div className="h-1.5 bg-gradient-primary" />
-          {/* Hatched warning corners */}
-          <div
-            aria-hidden
-            className="absolute top-1.5 left-0 right-0 h-2 opacity-30"
-            style={{
-              backgroundImage:
-                'repeating-linear-gradient(45deg, hsl(var(--primary)) 0 8px, transparent 8px 18px)',
-            }}
-          />
-          {/* Subtle gear watermark */}
-          <Cog
-            aria-hidden
-            className="absolute -right-8 -bottom-8 w-48 h-48 text-primary/5"
-            strokeWidth={1}
-          />
-
-          <div className="relative p-5 pt-7">
-            {/* Brand line */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-primary" />
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">
-                  Залізна Зміна
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-muted-foreground">
-                ID·{child.id.slice(0, 6).toUpperCase()}
+        {/* Identity card */}
+        <Card className="p-4 mb-3 bg-card/80 backdrop-blur-md border-border/50">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" strokeWidth={1.75} />
+              <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                Залізна зміна
               </span>
             </div>
+            <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+              ID·{child.id.slice(0, 6).toUpperCase()}
+            </span>
+          </div>
 
-            {/* Avatar + name */}
-            <div className="flex items-center gap-4 mb-5">
-              <div className="relative shrink-0">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-primary flex items-center justify-center shadow-glow">
-                  <User className="w-10 h-10 text-primary-foreground" strokeWidth={2.5} />
-                </div>
-                {child.has_logged_in && (
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-success border-2 border-card flex items-center justify-center">
-                    <Sparkles className="w-3 h-3 text-success-foreground" />
-                  </div>
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center">
+                <User className="w-7 h-7 text-muted-foreground" strokeWidth={1.5} />
+              </div>
+              {child.has_logged_in && (
+                <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-success border-2 border-card flex items-center justify-center">
+                  <Check className="w-2.5 h-2.5 text-success-foreground" strokeWidth={2.5} />
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-semibold leading-tight break-words">{child.full_name}</h1>
+              <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
+                Команда {child.team_number}{child.team_name ? ` · ${child.team_name}` : ''}
+              </p>
+            </div>
+          </div>
+
+          {/* Iron dollars */}
+          <div className="mt-3 flex items-center justify-between rounded-xl border border-border/50 bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Coins className="w-4 h-4 text-primary" strokeWidth={1.75} />
+              <span className="text-xs text-muted-foreground">Айрон-долари</span>
+            </div>
+            <span className="font-mono text-3xl font-semibold tabular-nums leading-none">
+              {child.iron_dollars}
+            </span>
+          </div>
+        </Card>
+
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList className="grid grid-cols-2 w-full h-10 mb-3">
+            <TabsTrigger value="profile" className="text-xs">Профіль</TabsTrigger>
+            <TabsTrigger value="schedule" className="text-xs">Розклад</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-3 mt-0">
+            <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
+              <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">
+                Дані
+              </p>
+              <div className="space-y-3">
+                <InfoRow icon={<Hash className="w-4 h-4" strokeWidth={1.75} />} label="№ в списку" value={child.row_number?.toString() || '—'} />
+                <InfoRow icon={<Users className="w-4 h-4" strokeWidth={1.75} />} label="Команда" value={child.team_name || String(child.team_number)} />
+                <InfoRow icon={<Phone className="w-4 h-4" strokeWidth={1.75} />} label="Телефон" value={child.phone || '—'} />
+                {child.note_from_table && (
+                  <InfoRow icon={<FileText className="w-4 h-4" strokeWidth={1.75} />} label="Примітка" value={child.note_from_table} />
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
-                  Учасник
-                </p>
-                <h1 className="text-xl font-black leading-tight uppercase mt-0.5 break-words">
-                  {child.full_name}
-                </h1>
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <Train className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-bold text-primary">
-                    Команда #{child.team_number}
-                  </span>
-                  {child.team_name && (
-                    <span className="text-xs text-muted-foreground truncate">· {child.team_name}</span>
-                  )}
-                </div>
-              </div>
-            </div>
+            </Card>
 
-            {/* IRON DOLLARS — game widget */}
-            <div className="relative rounded-2xl p-5 bg-background/60 border-2 border-primary/40 shadow-glow overflow-hidden">
-              <div
-                aria-hidden
-                className="absolute inset-0 opacity-20"
-                style={{
-                  backgroundImage:
-                    'repeating-linear-gradient(90deg, transparent 0 22px, hsl(var(--primary) / 0.12) 22px 23px)',
-                }}
-              />
-              <div className="relative flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-primary font-black">
-                    Iron Dollars
-                  </p>
-                  <p className="text-5xl font-black tabular-nums text-gradient-primary leading-none mt-1 drop-shadow-[0_0_18px_hsl(22_95%_55%/0.5)]">
-                    {child.iron_dollars}
-                  </p>
-                </div>
-                <div className="relative shrink-0">
-                  <div className="absolute inset-0 rounded-full bg-primary/30 blur-xl animate-pulse-glow" />
-                  <div className="relative w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center shadow-glow border-2 border-primary-foreground/20">
-                    <Coins className="w-8 h-8 text-primary-foreground" strokeWidth={2.5} />
-                  </div>
-                </div>
-              </div>
-              {/* Bolts */}
-              <div className="absolute top-2 left-2 w-1.5 h-1.5 rounded-full bg-primary/40" />
-              <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary/40" />
-              <div className="absolute bottom-2 left-2 w-1.5 h-1.5 rounded-full bg-primary/40" />
-              <div className="absolute bottom-2 right-2 w-1.5 h-1.5 rounded-full bg-primary/40" />
-            </div>
-          </div>
-        </Card>
-
-        {/* DATA PANEL */}
-        <Card className="p-5 mb-4 bg-gradient-card animate-slide-up">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground">
-              Досьє
-            </span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          <div className="space-y-3">
-            <InfoRow icon={<Hash className="w-4 h-4" />} label="№ в списку" value={child.row_number?.toString() || '—'} />
-            <InfoRow icon={<Users className="w-4 h-4" />} label="Команда" value={child.team_name || `#${child.team_number}`} />
-            <InfoRow icon={<Phone className="w-4 h-4" />} label="Телефон" value={child.phone || '—'} />
-            {child.note_from_table && (
-              <InfoRow icon={<FileText className="w-4 h-4" />} label="Примітка" value={child.note_from_table} />
-            )}
-          </div>
-        </Card>
-
-        {/* ALL RAW FIELDS */}
-        {rawEntries.length > 0 && (
-          <Card className="p-0 mb-4 bg-gradient-card overflow-hidden animate-slide-up">
-            <button
-              onClick={() => setShowAllFields((v) => !v)}
-              className="w-full flex items-center justify-between p-4 hover:bg-surface-1/50 transition-smooth"
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <span className="text-xs font-black uppercase tracking-wider">
-                  Усі поля з таблиці · {rawEntries.length}
-                </span>
-              </div>
-              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-smooth ${showAllFields ? 'rotate-180' : ''}`} />
-            </button>
-            {showAllFields && (
-              <div className="border-t border-border/40 divide-y divide-border/30 max-h-80 overflow-y-auto scrollbar-thin">
-                {rawEntries.map(([k, v]) => (
-                  <div key={k} className="flex items-start gap-3 p-3">
-                    <span className="text-[11px] text-muted-foreground uppercase tracking-wider min-w-[40%] truncate">
-                      {k}
-                    </span>
-                    <span className="text-xs font-medium break-words flex-1">
-                      {String(v)}
+            {rawEntries.length > 0 && (
+              <Card className="p-0 bg-card/80 backdrop-blur-md border-border/50 overflow-hidden">
+                <button
+                  onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
+                  className="w-full flex items-center justify-between p-3.5 hover:bg-muted/40 transition-smooth active:scale-[0.98]"
+                >
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+                    <span className="text-xs font-medium tabular-nums">
+                      Усі поля з таблиці · {rawEntries.length}
                     </span>
                   </div>
-                ))}
-              </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-smooth ${showAllFields ? 'rotate-180' : ''}`} strokeWidth={1.75} />
+                </button>
+                {showAllFields && (
+                  <div className="border-t border-border/40 divide-y divide-border/30 max-h-80 overflow-y-auto scrollbar-thin">
+                    {rawEntries.map(([k, v]) => (
+                      <div key={k} className="flex items-start gap-3 p-3">
+                        <span className="text-[11px] text-muted-foreground min-w-[40%] truncate">{k}</span>
+                        <span className="text-xs break-words flex-1">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             )}
-          </Card>
-        )}
 
-        <p className="text-center text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-          Live · Дані оновлюються в реальному часі
-        </p>
+            <p className="text-center text-[10px] text-muted-foreground/60">
+              Дані оновлюються в реальному часі
+            </p>
+          </TabsContent>
+
+          <TabsContent value="schedule" className="mt-0">
+            <ScheduleView myTeam={child.team_number} />
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }
