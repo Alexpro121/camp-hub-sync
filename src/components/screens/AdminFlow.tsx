@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2 } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -333,7 +333,7 @@ const ShiftsTab = () => {
 
           <Button onClick={analyze} disabled={creating || analyzing} className="w-full h-12 font-bold uppercase">
             {creating || analyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : (file || sheetUrl.trim())
-              ? <><Mic2 className="w-4 h-4 mr-2" /> Аналізувати таблицю</>
+              ? <><Wand2 className="w-4 h-4 mr-2" strokeWidth={1.75} /> Аналізувати таблицю</>
               : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
           </Button>
         </div>
