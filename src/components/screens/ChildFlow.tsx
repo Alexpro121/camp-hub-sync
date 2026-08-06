@@ -235,7 +235,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsContent>
 
           <TabsContent value="schedule" className="mt-0">
-            <ScheduleView myTeam={child.team_number} />
+            <ScheduleView myTeam={child.team_number} lockTeam />
           </TabsContent>
         </Tabs>
       </div>
