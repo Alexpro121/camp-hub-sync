@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
 import { catMeta, fromMinutes, sentenceCase, toMinutes } from '@/lib/scheduleCategories';
-import { useEventReminders, type ReminderEvent } from '@/hooks/useEventReminders';
+import { type ReminderEvent } from '@/hooks/useEventReminders';
 
 /** Fallback duration when the source table has no end time. */
 const DEFAULT_DURATION = 60;
@@ -143,7 +143,8 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
       .filter(Boolean) as ReminderEvent[];
   }, [items, todaySchedule?.id, team, lockTeam]);
 
-  useEventReminders(reminderEvents, lockTeam && reminderEvents.length > 0, todayISO());
+  // Reminders are delivered app-wide by useScheduleNotifier, not from this view.
+  void reminderEvents;
 
   /** Next upcoming event of today for the summary strip. */
   const nextUp = useMemo(() => {
