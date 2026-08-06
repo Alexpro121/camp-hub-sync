@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Plus, Trash2, Coffee, Loader2 } from 'lucide-react';
+import { Mic2, Plus, Trash2, Coffee, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
@@ -69,7 +69,7 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
   if (!event) {
     return (
       <Card className="p-8 text-center bg-gradient-card">
-        <Sparkles className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
+        <Mic2 className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
         <p className="text-sm text-muted-foreground">Вечір талантів ще не оголошено</p>
       </Card>
     );
@@ -83,7 +83,7 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
     <div className="space-y-3">
       <Card className="p-4 bg-gradient-card space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
+          <Mic2 className="w-5 h-5 text-primary" />
           <p className="font-bold uppercase text-sm tracking-wide flex-1">{event.title}</p>
           <Badge className="text-[9px] px-1.5 py-0 h-5 border bg-primary/20 text-primary border-primary/40">
             {collecting ? 'Збір номерів' : event.status === 'finished' ? 'Сценарій готовий' : 'Очікуй'}

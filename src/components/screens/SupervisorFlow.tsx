@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Sparkles } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -220,7 +220,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
               <CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span>
             </TabsTrigger>
             <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <Sparkles className="w-[18px] h-[18px]" /> <span>Таланти</span>
+              <Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span>
             </TabsTrigger>
             <TabsTrigger value="transfers" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <ArrowLeftRight className="w-[18px] h-[18px]" /> <span>Трансфери</span>

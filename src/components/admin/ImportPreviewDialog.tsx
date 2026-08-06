@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Loader2, Sparkles, Users } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, Wand2, Users } from 'lucide-react';
 import type { ImportResult, StdKey } from '@/lib/importer';
 
 interface Props {
@@ -52,7 +52,7 @@ const ImportPreviewDialog = ({ open, onOpenChange, result, busy, onConfirm }: Pr
             </p>
           </div>
           <Badge variant="secondary" className="text-[10px] gap-1">
-            <Sparkles className="w-3 h-3" />
+            <Wand2 className="w-3 h-3" strokeWidth={1.75} />
             {result.mapSource === 'ai' ? 'Колонки визначено ШІ (Groq)' : 'Колонки визначено словником'}
           </Badge>
           <div className="flex flex-wrap gap-1.5">

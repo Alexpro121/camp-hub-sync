@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee } from 'lucide-react';
+import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift, TalentEntry, TalentEvent } from '@/types/app';
@@ -111,7 +111,7 @@ const TalentAdmin = () => {
   if (!event) {
     return (
       <Card className="p-6 bg-gradient-card text-center space-y-3">
-        <Sparkles className="w-10 h-10 text-primary mx-auto" />
+        <Mic2 className="w-10 h-10 text-primary mx-auto" />
         <p className="text-sm text-muted-foreground">Вечір талантів ще не створено</p>
         <Button onClick={startCollecting} disabled={busy} className="w-full h-12 font-bold uppercase">
           {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Play className="w-4 h-4 mr-2" /> Розпочати збір номерів</>}
@@ -126,7 +126,7 @@ const TalentAdmin = () => {
     <div className="space-y-3">
       <Card className="p-4 bg-gradient-card space-y-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
+          <Mic2 className="w-5 h-5 text-primary" />
           <p className="font-bold uppercase text-sm tracking-wide flex-1">{event.title}</p>
           <Badge className={`text-[9px] px-1.5 py-0 h-5 border ${meta.cls}`}>{meta.label}</Badge>
         </div>

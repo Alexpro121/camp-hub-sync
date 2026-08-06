@@ -1,21 +1,22 @@
 import type { ScheduleCategory } from './schedule-parser-fallback';
+import { Utensils, Activity, Mic2, Bus, Megaphone, Pin, type LucideIcon } from 'lucide-react';
 
 export interface CategoryMeta {
   value: ScheduleCategory;
   label: string;
-  emoji: string;
+  icon: LucideIcon;
   /** tailwind token name from the `cat` palette */
   token: 'meal' | 'sports' | 'event' | 'transfer' | 'gathering' | 'general';
   gradient: string;
 }
 
 export const CATEGORY_META: Record<ScheduleCategory, CategoryMeta> = {
-  meal: { value: 'meal', label: 'Харчування', emoji: '🍲', token: 'meal', gradient: 'var(--gradient-meal)' },
-  sports: { value: 'sports', label: 'Спорт', emoji: '🧘', token: 'sports', gradient: 'var(--gradient-sports)' },
-  entertainment: { value: 'entertainment', label: 'Захід', emoji: '🎤', token: 'event', gradient: 'var(--gradient-event)' },
-  transfer: { value: 'transfer', label: 'Виїзд', emoji: '🚌', token: 'transfer', gradient: 'var(--gradient-transfer)' },
-  gathering: { value: 'gathering', label: 'Збір', emoji: '📣', token: 'gathering', gradient: 'var(--gradient-gathering)' },
-  general: { value: 'general', label: 'Загальне', emoji: '📌', token: 'general', gradient: 'var(--gradient-general)' },
+  meal: { value: 'meal', label: 'Харчування', icon: Utensils, token: 'meal', gradient: 'var(--gradient-meal)' },
+  sports: { value: 'sports', label: 'Спорт', icon: Activity, token: 'sports', gradient: 'var(--gradient-sports)' },
+  entertainment: { value: 'entertainment', label: 'Захід', icon: Mic2, token: 'event', gradient: 'var(--gradient-event)' },
+  transfer: { value: 'transfer', label: 'Виїзд', icon: Bus, token: 'transfer', gradient: 'var(--gradient-transfer)' },
+  gathering: { value: 'gathering', label: 'Збір', icon: Megaphone, token: 'gathering', gradient: 'var(--gradient-gathering)' },
+  general: { value: 'general', label: 'Загальне', icon: Pin, token: 'general', gradient: 'var(--gradient-general)' },
 };
 
 export const CATEGORY_LIST = Object.values(CATEGORY_META);
@@ -38,4 +39,10 @@ export const fromMinutes = (v: number): string => {
 export const shiftTime = (t: string | null, delta: number): string | null => {
   const m = toMinutes(t);
   return m == null ? t : fromMinutes(m + delta);
+};
+
+/** Capitalize first letter, keep the rest as authored. */
+export const sentenceCase = (s?: string | null): string => {
+  const t = (s || '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 };
