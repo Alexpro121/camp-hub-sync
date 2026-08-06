@@ -65,6 +65,9 @@ export function parseTrainCoupesLocal(rawText: string): ParsedPassenger[] {
 const TEAM_REGEX = /^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})/i;
 const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
 
+/** Cities that may appear on their own line right under a passenger. */
+const CITY_LINES = ['львів', 'івано-франківськ', 'київ', 'тернопіль', 'рівне', 'луцьк', 'хмельницький', 'ужгород'];
+
 /** Split "ПІБ - Місто" at the FIRST dash, keeping hyphenated city names intact. */
 function splitNameCity(line: string): { name: string; boardingCity: string | null } {
   const m = line.match(/^(.*?)\s*[-–—]\s*(.+)$/u);
@@ -87,14 +90,15 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
   let seatCounter = 0;
   let isParsingSeats = false;
 
-  for (const raw of rawText.split(/\r?\n/)) {
-    const line = normalizeLine(raw).replace(/\t+/g, ' ').trim();
+  const lines = rawText.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = normalizeLine(lines[i]).replace(/\t+/g, ' ').trim();
     if (!line) continue;
 
     const teamMatch = line.match(TEAM_REGEX);
     if (teamMatch) {
       currentTeam = parseInt(teamMatch[1], 10);
-      seatCounter = 0;
+      seatCounter = 0; // seats restart at 1 for every team (own carriage)
       isParsingSeats = false;
       continue;
     }
@@ -114,7 +118,15 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
     if (seatCounter > 40) continue;
     if (isPlaceholder) continue;
 
-    const { name, boardingCity } = splitNameCity(line.replace(/^\d{1,2}\s*[.)]\s*/, ''));
+    let { name, boardingCity } = splitNameCity(line.replace(/^\d{1,2}\s*[.)]\s*/, ''));
+    // City written on its own line right below the passenger
+    if (!boardingCity && i + 1 < lines.length) {
+      const next = normalizeLine(lines[i + 1]).replace(/^м\.\s*/i, '').trim();
+      if (CITY_LINES.includes(next.toLowerCase())) {
+        boardingCity = next;
+        i++;
+      }
+    }
     if (name.length < 2) continue;
 
     result.push({
@@ -127,4 +139,33 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
   }
 
   return result;
+}
+
+export interface TeamTrainDisposition {
+  teamNumber: number;
+  totalPassengers: number;
+  coupes: { coupeNumber: number; passengers: Required<ParsedPassenger>[] }[];
+}
+
+/** Sequential parse grouped per team: every team gets its own coupes 1..10. */
+export function parseTrainTextGroupedByTeams(rawText: string): TeamTrainDisposition[] {
+  const flat = parseSequentialTrainText(rawText);
+  const teams = new Map<number, Required<ParsedPassenger>[]>();
+  for (const p of flat) {
+    const arr = teams.get(p.teamNumber) || [];
+    arr.push(p);
+    teams.set(p.teamNumber, arr);
+  }
+  return Array.from(teams.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([teamNumber, passengers]) => {
+      const maxCoupe = Math.max(10, ...passengers.map((p) => p.coupeNumber));
+      const coupes = Array.from({ length: maxCoupe }, (_, i) => ({
+        coupeNumber: i + 1,
+        passengers: passengers
+          .filter((p) => p.coupeNumber === i + 1)
+          .sort((a, b) => a.seatNumber - b.seatNumber),
+      }));
+      return { teamNumber, totalPassengers: passengers.length, coupes };
+    });
 }

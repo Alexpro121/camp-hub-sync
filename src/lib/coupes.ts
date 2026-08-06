@@ -96,6 +96,23 @@ export function parseCoupes(text: string, defaultTeam = 0): CoupeParseResult {
 }
 
 /** Group flat passengers into ordered coupes. */
+export function groupByTeamThenCoupe<T extends { team_number: number; coupe_number: number; seat_number?: number | null }>(rows: T[]) {
+  const byTeam = new Map<number, T[]>();
+  for (const r of rows) {
+    const arr = byTeam.get(r.team_number) || [];
+    arr.push(r);
+    byTeam.set(r.team_number, arr);
+  }
+  return Array.from(byTeam.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([team_number, list]) => ({
+      team_number,
+      total: list.length,
+      coupes: groupByCoupe(list),
+    }));
+}
+
+/** Group flat passengers into ordered coupes. */
 export function groupByCoupe<T extends { coupe_number: number; seat_number?: number | null }>(rows: T[]) {
   const map = new Map<number, T[]>();
   for (const r of rows) {
