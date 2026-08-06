@@ -6,11 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, Sparkles, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu } from 'lucide-react';
+import { Trash2, Sparkles, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, Minus, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
 import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCategory } from '@/lib/schedule-parser-fallback';
+import { CATEGORY_LIST, catMeta, shiftTime } from '@/lib/scheduleCategories';
+import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
 import { pushIsland } from '@/lib/islandBus';
 import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
@@ -18,17 +20,11 @@ import { pickActiveShift } from '@/lib/shift';
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-const CATEGORIES: Array<{ value: ScheduleCategory; label: string }> = [
-  { value: 'general', label: 'Загальне' },
-  { value: 'meal', label: 'Харчування' },
-  { value: 'sports', label: 'Спорт' },
-  { value: 'gathering', label: 'Збір' },
-  { value: 'entertainment', label: 'Розвага' },
-  { value: 'transfer', label: 'Переїзд' },
-];
+const CATEGORIES = CATEGORY_LIST;
 
 const emptyRow = (): AiScheduleItem => ({
-  time_start: null, time_end: null, title: '', description: null, target_teams: [], category: 'general',
+  time_start: null, time_end: null, title: '', description: null, target_teams: [],
+  category: 'general', has_sub_slots: false, sub_slots: [],
 });
 
 const ScheduleAdmin = () => {
@@ -39,6 +35,8 @@ const ScheduleAdmin = () => {
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existing, setExisting] = useState<Array<Schedule & { items: ScheduleItem[] }>>([]);
+  const [aiError, setAiError] = useState<AiErrorInfo | null>(null);
+  const [errorOpen, setErrorOpen] = useState(false);
 
   const load = async () => {
     const { data: sch } = await supabase.from('schedules').select('*').order('date');
@@ -72,6 +70,16 @@ const ScheduleAdmin = () => {
     try {
       const { data, error } = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText: raw } });
       const items = (data?.items ?? []) as Array<AiScheduleItem & { date?: string | null }>;
+      if (error || data?.error || data?.source !== 'ai' || !items.length) {
+        const info: AiErrorInfo = {
+          ...(data?.error ?? {}),
+          reason: data?.reason ?? (error ? 'invoke_error' : 'empty_result'),
+          code: data?.error?.code ?? (error ? 'EDGE_INVOKE_ERROR' : 'EMPTY_RESULT'),
+          message: data?.error?.message ?? error?.message ?? 'ШІ не повернув подій',
+        };
+        setAiError(info);
+        setErrorOpen(true);
+      }
       if (error || data?.source !== 'ai' || !items.length) {
         applyLocal(data?.reason);
         return;
@@ -83,6 +91,8 @@ const ScheduleAdmin = () => {
         description: null,
         target_teams: Array.isArray(it.target_teams) ? it.target_teams : [],
         category: it.category ?? detectCategory(it.title),
+        has_sub_slots: Boolean(it.has_sub_slots && it.sub_slots?.length),
+        sub_slots: Array.isArray(it.sub_slots) ? it.sub_slots : [],
       }));
       const ddmm = items.find((i) => i.date)?.date ?? null;
       if (ddmm && /^\d{1,2}[.\/]\d{1,2}$/.test(ddmm)) {
@@ -95,7 +105,9 @@ const ScheduleAdmin = () => {
       setDraft(mapped);
       setSource('ai');
       pushIsland(`ШІ розпізнав ${mapped.length} подій`, 'success');
-    } catch {
+    } catch (e: any) {
+      setAiError({ code: 'CLIENT_EXCEPTION', status: 0, reason: 'offline', message: e?.message ?? 'offline', raw: '' });
+      setErrorOpen(true);
       applyLocal('offline');
     } finally {
       setParsing(false);
@@ -111,6 +123,43 @@ const ScheduleAdmin = () => {
       const has = it.target_teams.includes(team);
       return { ...it, target_teams: has ? it.target_teams.filter((t) => t !== team) : [...it.target_teams, team].sort((a, b) => a - b) };
     }) ?? prev);
+
+  const patchSlot = (idx: number, si: number, values: Partial<{ time: string; teams: number[] }>) =>
+    setDraft((prev) => prev?.map((it, i) => (i === idx
+      ? { ...it, sub_slots: it.sub_slots.map((s, k) => (k === si ? { ...s, ...values } : s)) }
+      : it)) ?? prev);
+
+  const toggleSlotTeam = (idx: number, si: number, team: number) =>
+    setDraft((prev) => prev?.map((it, i) => {
+      if (i !== idx) return it;
+      return {
+        ...it,
+        sub_slots: it.sub_slots.map((s, k) => {
+          if (k !== si) return s;
+          const has = s.teams.includes(team);
+          return { ...s, teams: has ? s.teams.filter((t) => t !== team) : [...s.teams, team].sort((a, b) => a - b) };
+        }),
+      };
+    }) ?? prev);
+
+  const swapSlots = (idx: number, si: number) =>
+    setDraft((prev) => prev?.map((it, i) => {
+      if (i !== idx || si + 1 >= it.sub_slots.length) return it;
+      const slots = [...it.sub_slots];
+      const a = slots[si];
+      const b = slots[si + 1];
+      slots[si] = { ...a, teams: b.teams };
+      slots[si + 1] = { ...b, teams: a.teams };
+      return { ...it, sub_slots: slots };
+    }) ?? prev);
+
+  const shiftAll = (delta: number) =>
+    setDraft((prev) => prev?.map((it) => ({
+      ...it,
+      time_start: shiftTime(it.time_start, delta),
+      time_end: shiftTime(it.time_end, delta),
+      sub_slots: it.sub_slots.map((s) => ({ ...s, time: shiftTime(s.time, delta) ?? s.time })),
+    })) ?? prev);
 
   const publish = async (isPublished: boolean) => {
     if (!draft?.length) return;
@@ -134,6 +183,9 @@ const ScheduleAdmin = () => {
         description: it.description,
         target_teams: it.target_teams,
         order_index: i,
+        category: it.category,
+        has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
+        sub_slots: it.sub_slots,
       }));
       const { error: itErr } = await supabase.from('schedule_items').insert(rows);
       if (itErr) throw itErr;
