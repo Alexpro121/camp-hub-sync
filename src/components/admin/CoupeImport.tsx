@@ -14,9 +14,11 @@ import {
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 /** Admin: paste or upload a train seating list, verify it, then store it. */
-const CoupeImport = () => {
+const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
+  const island = useDynamicIsland();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftId, setShiftId] = useState<string>('');
   const [text, setText] = useState('');
@@ -120,7 +122,12 @@ const CoupeImport = () => {
       }));
       const { error } = await supabase.from('train_coupes').insert(payload);
       if (error) throw error;
+      const teamLabel = teams.filter(Boolean).join(', ') || '—';
+      island.showSuccess(`Розселення команди №${teamLabel} збережено`, `${payload.length} пасажирів`);
       toast.success(`Збережено ${payload.length} пасажирів`);
+      setRows(null);
+      setText('');
+      onSaved?.();
     } catch (e: any) {
       toast.error(e.message || 'Не вдалося зберегти розселення');
     } finally {
