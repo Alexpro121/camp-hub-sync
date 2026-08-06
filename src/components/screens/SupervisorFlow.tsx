@@ -94,7 +94,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
     if (error || !data?.session) {
       haptics.notification('error');
-      toast.error('Невірний пароль для цієї команди');
+      toast.error('Невірний пароль. Паролі команд змінено — запитай новий в адміна');
       setLoading(false);
       return;
     }
