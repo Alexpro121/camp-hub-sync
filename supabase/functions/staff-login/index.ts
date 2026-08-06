@@ -1,6 +1,12 @@
 import { admin as adminClient, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
 
 const ADMIN_TEAM = 99;
+const SUPERVISOR_PREFIX = 'Супровід';
+
+/** Default, easy-to-share supervisor password for a team. */
+function defaultSupervisorPassword(team: number): string {
+  return `${SUPERVISOR_PREFIX}${team}`;
+}
 
 /**
  * Per-team supervisor passwords are derived from a server-only random secret,
@@ -53,7 +59,7 @@ Deno.serve(async (req) => {
       const { data: teams } = await svc.from('children').select('team_number');
       const unique = [...new Set((teams ?? []).map((t: { team_number: number }) => t.team_number))].sort((a, b) => a - b);
       const list = [];
-      for (const t of unique) list.push({ team: t, password: await supervisorPassword(t) });
+      for (const t of unique) list.push({ team: t, password: defaultSupervisorPassword(t) });
       return json({ passwords: list });
     }
 
@@ -73,7 +79,16 @@ Deno.serve(async (req) => {
       return json({ role: 'admin', team, session });
     }
 
-    if (!constantTimeEqual(password, await supervisorPassword(team))) {
+    // Default password is "Супровід<номер команди>"; the derived code stays valid as a fallback.
+    let ok = constantTimeEqual(password, defaultSupervisorPassword(team));
+    if (!ok) {
+      try {
+        ok = constantTimeEqual(password, await supervisorPassword(team));
+      } catch (_e) {
+        ok = false;
+      }
+    }
+    if (!ok) {
       return json({ error: 'invalid_credentials' }, 401);
     }
 
