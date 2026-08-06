@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, ChevronLeft, ChevronRight, Clock, Sparkles, Users } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
-import { catMeta, toMinutes } from '@/lib/scheduleCategories';
+import { catMeta, fromMinutes, sentenceCase, toMinutes } from '@/lib/scheduleCategories';
+
+/** Fallback duration when the source table has no end time. */
+const DEFAULT_DURATION = 60;
 
 interface Props { myTeam?: number | null; }
 
@@ -93,17 +96,22 @@ const ScheduleView = ({ myTeam = null }: Props) => {
   /** Absolute time-based tops, pushed down so cards never overlap each other. */
   const laidOut = useMemo(() => {
     let prevBottom = -Infinity;
-    return dayItems.map((i) => {
+    return dayItems.map((i, idx) => {
       const start = toMinutes(i.time_start);
       if (start == null) return { item: i, top: null as number | null, height: 0 };
-      const end = toMinutes(i.time_end) ?? start + 30;
+      // Every event must show a full HH:MM – HH:MM range: derive the end from the
+      // next event's start (capped) or fall back to a default duration.
+      const nextStart = toMinutes(dayItems[idx + 1]?.time_start);
+      const end =
+        toMinutes(i.time_end) ??
+        (nextStart != null && nextStart > start ? Math.min(nextStart, start + DEFAULT_DURATION) : start + DEFAULT_DURATION);
       const slots = slotsOf(i);
       const minH = slots.length ? 96 + slots.length * 10 : 74;
       const height = Math.max(minH, (end - start) * PX_PER_MIN);
       const wanted = (Math.max(start, DAY_START) - DAY_START) * PX_PER_MIN;
       const top = Math.max(wanted, prevBottom + 8);
       prevBottom = top + height;
-      return { item: i, top, height };
+      return { item: i, top, height, range: `${fromMinutes(start)} – ${fromMinutes(end)}`, endMin: end };
     });
   }, [dayItems]);
 
@@ -116,13 +124,12 @@ const ScheduleView = ({ myTeam = null }: Props) => {
   const currentId = useMemo(() => {
     if (!isToday) return null;
     let id: string | null = null;
-    dayItems.forEach((i) => {
+    laidOut.forEach(({ item: i, endMin }) => {
       const s = toMinutes(i.time_start);
-      const e = toMinutes(i.time_end) ?? (s != null ? s + 30 : null);
-      if (s != null && e != null && nowMin >= s && nowMin <= e) id = i.id;
+      if (s != null && endMin != null && nowMin >= s && nowMin < endMin) id = i.id;
     });
     return id;
-  }, [dayItems, nowMin, isToday]);
+  }, [laidOut, nowMin, isToday]);
 
   const dayIdx = schedules.findIndex((s) => s.date === activeDay);
   const goDay = (delta: number) => {
