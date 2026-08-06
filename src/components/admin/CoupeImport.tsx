@@ -64,13 +64,29 @@ const CoupeImport = () => {
     if (!text.trim()) { toast.error('Встав текст розселення'); return; }
     setParsing(true);
     try {
+      // 1. Smart Regex first
       const parsed = parseCoupesDeterministic(text);
-      const src: 'local' | 'ai' = 'local';
+      let list = parsed.passengers;
+      let src: 'local' | 'ai' = 'local';
 
-      if (!parsed.passengers.length) { toast.error('Не вдалося розпізнати жодного пасажира'); return; }
+      // 2. Fallback to Groq AI only when the regex found nothing
+      if (!list.length) {
+        try {
+          const { data, error } = await supabase.functions.invoke('parse-coupes-ai', { body: { text } });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.message || data.error);
+          list = (data?.passengers || []) as CoupePassenger[];
+          src = 'ai';
+        } catch (e: any) {
+          toast.error('Не вдалося розпізнати текст', { description: e?.message || 'Перевірте формат або завантажте файл повторно' });
+          return;
+        }
+      }
+
+      if (!list.length) { toast.error('Не вдалося розпізнати жодного пасажира'); return; }
 
       const { data: kids } = await supabase.from('children').select('id, full_name, team_number');
-      const verified = verifyAgainstRoster(parsed.passengers, (kids || []) as RosterChild[]);
+      const verified = verifyAgainstRoster(list, (kids || []) as RosterChild[]);
       // Inherit the team from the matched roster record when the text had none.
       const rosterById = new Map((kids || []).map((k: any) => [k.id, k.team_number]));
       setRows(verified.map((p) => ({
@@ -168,7 +184,9 @@ const CoupeImport = () => {
       {rows && (
         <>
           <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-2">
-            <Badge variant="secondary" className="text-[10px]">Розібрано детермінованим парсером</Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              {source === 'ai' ? 'Розібрано Groq AI (резерв)' : 'Розібрано смарт-парсером'}
+            </Badge>
             <p className="text-sm flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-success shrink-0" strokeWidth={1.75} />
               Знайдено в базі списку табору: {matched.length} з {rows.length}
