@@ -2,8 +2,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders, json, SUPABASE_URL, ANON_KEY } from '../_shared/accounts.ts';
 
-const NVIDIA_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const MODEL = 'mistralai/mistral-medium-3.5-128b';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for a Ukrainian youth camp.
 Your job is to convert unstructured Ukrainian raw text schedule into a valid JSON array of event objects.
@@ -89,13 +89,13 @@ Deno.serve(async (req) => {
     if (!parsedBody.success) return json({ error: 'invalid_body' }, 400);
     const { rawText } = parsedBody.data;
 
-    const key = Deno.env.get('NVIDIA_API_KEY');
+    const key = Deno.env.get('GROQ_API_KEY');
     if (!key) return json({ source: 'fallback', reason: 'no_api_key', items: [] }, 200);
 
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(NVIDIA_URL, {
+      const res = await fetch(GROQ_URL, {
         method: 'POST',
         signal: ctrl.signal,
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -116,13 +116,13 @@ Deno.serve(async (req) => {
         try { providerMessage = JSON.parse(bodyText)?.error?.message ?? JSON.parse(bodyText)?.detail ?? ''; } catch { /* raw */ }
         return json({
           source: 'fallback',
-          reason: `nvidia_${res.status}`,
+          reason: `groq_${res.status}`,
           items: [],
           error: {
-            code: `NVIDIA_HTTP_${res.status}`,
+            code: `GROQ_HTTP_${res.status}`,
             status: res.status,
             model: MODEL,
-            message: providerMessage || res.statusText || 'NVIDIA API error',
+            message: providerMessage || res.statusText || 'Groq API error',
             raw: bodyText.slice(0, 300),
           },
         }, 200);
@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
         reason: aborted ? 'timeout' : 'network_error',
         items: [],
         error: {
-          code: aborted ? 'TIMEOUT_15S' : 'NETWORK_ERROR',
+          code: aborted ? 'TIMEOUT_8S' : 'NETWORK_ERROR',
           status: 0,
           model: MODEL,
           message: (e as Error)?.message ?? 'Unknown network error',

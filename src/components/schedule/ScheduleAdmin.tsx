@@ -78,6 +78,7 @@ const ScheduleAdmin = () => {
           message: data?.error?.message ?? error?.message ?? 'ШІ не повернув подій',
         };
         const silent =
+          info.code === 'TIMEOUT_8S' ||
           info.code === 'TIMEOUT_15S' ||
           info.code === 'TIMEOUT_10S' ||
           info.reason === 'timeout' ||
@@ -243,7 +244,7 @@ const ScheduleAdmin = () => {
               source === 'ai' ? 'bg-success/15 text-success border-success/40' : 'bg-warning/15 text-warning border-warning/40'
             }`}>
               {source === 'ai' ? <Sparkles className="w-3.5 h-3.5" /> : <Cpu className="w-3.5 h-3.5" />}
-              {source === 'ai' ? 'Розпізнано за допомогою ШІ Mistral' : 'Розпізнано локальним аналізатором (Резерв)'}
+              {source === 'ai' ? 'Розпізнано за допомогою ШІ Groq (LPU)' : 'Розпізнано локальним аналізатором (Резерв)'}
             </div>
           )}
 

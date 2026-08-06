@@ -22,12 +22,12 @@ interface Props {
 
 const buildLog = (i: AiErrorInfo) =>
   [
-    '=== CAMP HUB · AI SCHEDULE PARSER ERROR ===',
+    '=== GROQ AI SCHEDULE PARSER DIAGNOSTICS ===',
     `time:    ${new Date().toISOString()}`,
     `code:    ${i.code ?? '—'}`,
     `reason:  ${i.reason ?? '—'}`,
     `status:  ${i.status ?? '—'}`,
-    `model:   ${i.model ?? 'mistralai/mistral-medium-3.5-128b'}`,
+    `model:   ${i.model ?? 'llama-3.3-70b-versatile (Groq)'}`,
     `message: ${i.message ?? '—'}`,
     '--- raw response (first 300 chars) ---',
     i.raw || '(empty)',
@@ -51,7 +51,7 @@ const AIErrorDialog = ({ open, onOpenChange, info, onFallback }: Props) => {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast.success('Текст помилки скопійовано в буфер обміну!');
+    toast.success('Скопійовано!');
   };
 
   return (
@@ -80,7 +80,7 @@ const AIErrorDialog = ({ open, onOpenChange, info, onFallback }: Props) => {
             </div>
           </div>
           <div className="rounded-lg bg-surface-1 border border-border/50 p-2 text-xs">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Повідомлення NVIDIA API</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Повідомлення Groq API</p>
             <p className="break-words">{info.message || '—'}</p>
           </div>
           <div>
@@ -94,7 +94,7 @@ const AIErrorDialog = ({ open, onOpenChange, info, onFallback }: Props) => {
         <div className="grid grid-cols-1 gap-2">
           <Button onClick={copy} variant="secondary" className="h-11 text-xs font-bold uppercase">
             {copied ? <Check className="w-4 h-4 mr-1.5" /> : <Copy className="w-4 h-4 mr-1.5" />}
-            Скопіювати текст помилки
+            📋 Скопіювати текст помилки
           </Button>
           <Button
             onClick={() => {
