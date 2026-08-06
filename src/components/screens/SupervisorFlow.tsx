@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2, Train } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
+import TeamCoupesView from '@/components/coupes/TeamCoupesView';
 
 interface Props {
   onBack: () => void;
@@ -212,7 +213,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-3">
         <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
-          <TabsList className="grid w-full grid-cols-5 h-[54px] p-1">
+          <TabsList className="grid w-full grid-cols-6 h-[54px] p-1">
             <TabsTrigger value="teams" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <Users className="w-[18px] h-[18px]" /> <span>Команди</span>
             </TabsTrigger>
@@ -221,6 +222,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             </TabsTrigger>
             <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span>
+            </TabsTrigger>
+            <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[11px] leading-none">
+              <Train className="w-[18px] h-[18px]" /> <span>Потяг</span>
             </TabsTrigger>
             <TabsTrigger value="transfers" className="flex-col gap-0.5 h-full text-[11px] leading-none">
               <ArrowLeftRight className="w-[18px] h-[18px]" /> <span>Трансфери</span>
@@ -244,6 +248,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         </TabsContent>
         <TabsContent value="talent" className="mt-3 animate-fade-in">
           <TalentTeamView myTeam={authedTeam} />
+        </TabsContent>
+        <TabsContent value="coupes" className="mt-3 animate-fade-in">
+          <TeamCoupesView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="transfers" className="mt-3 animate-fade-in">
           <TransfersView myTeam={authedTeam} />
