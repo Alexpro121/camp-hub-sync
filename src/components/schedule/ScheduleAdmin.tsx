@@ -14,6 +14,7 @@ import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCatego
 import { CATEGORY_LIST, catMeta, shiftTime } from '@/lib/scheduleCategories';
 import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
 import { pushIsland } from '@/lib/islandBus';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
