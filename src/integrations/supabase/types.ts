@@ -282,6 +282,7 @@ export type Database = {
           shift_type: string
           start_date: string
           team_offset: number
+          train_coupes_published: boolean
           updated_at: string
         }
         Insert: {
@@ -294,6 +295,7 @@ export type Database = {
           shift_type: string
           start_date: string
           team_offset?: number
+          train_coupes_published?: boolean
           updated_at?: string
         }
         Update: {
@@ -306,6 +308,7 @@ export type Database = {
           shift_type?: string
           start_date?: string
           team_offset?: number
+          train_coupes_published?: boolean
           updated_at?: string
         }
         Relationships: []
