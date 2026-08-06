@@ -28,6 +28,7 @@ const emptyRow = (): AiScheduleItem => ({
 });
 
 const ScheduleAdmin = () => {
+  const island = useDynamicIsland();
   const [raw, setRaw] = useState('');
   const [date, setDate] = useState(todayISO());
   const [draft, setDraft] = useState<AiScheduleItem[] | null>(null);
