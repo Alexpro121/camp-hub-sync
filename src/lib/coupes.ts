@@ -1,4 +1,5 @@
 import { normalizeName } from '@/lib/normalize';
+import { normalizeLine, parseSeatLine } from '@/lib/train-parser';
 
 export const SEATS_PER_COUPE = 4;
 
@@ -26,26 +27,6 @@ export function coupeOf(seat: number): number {
   return Math.ceil(seat / SEATS_PER_COUPE);
 }
 
-const EMPTY_MARKERS = /^(\.{1,}|-{1,}|—|ss|сс|вільно|free)$/i;
-
-/** Normalize tabs, non-breaking spaces and exotic whitespace before parsing. */
-function cleanLine(raw: string): string {
-  return String(raw)
-    .replace(/\u00A0|\u2007|\u202F/g, ' ')
-    .replace(/\t/g, '\t')
-    .trim();
-}
-
-/** Split "Кундик Сергій - Львів" into the name and the boarding city (first dash wins). */
-function splitCity(rest: string): { name: string; city: string | null } {
-  const parts = rest.split(/\s*[-–—]\s*/);
-  if (parts.length < 2) return { name: rest.trim(), city: null };
-  const name = parts[0].trim();
-  const city = parts.slice(1).join('-').trim();
-  if (!name || !city) return { name: rest.trim(), city: null };
-  return { name, city };
-}
-
 /**
  * Deterministic parser — reads "№. ПІБ - Місто" lines and computes the coupe.
  * Zero mutation: names are kept exactly as written.
@@ -58,7 +39,7 @@ export function parseCoupesDeterministic(text: string, defaultTeam = 0): CoupePa
   let skipped = 0;
 
   for (const raw of lines) {
-    const line = cleanLine(raw);
+    const line = normalizeLine(raw);
     if (!line) continue;
 
     const teamMatch = line.match(/^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})\b/i);
@@ -68,16 +49,9 @@ export function parseCoupesDeterministic(text: string, defaultTeam = 0): CoupePa
       continue;
     }
 
-    // Numbered seat lines only: "12. Name - City", "12) Name", "12<TAB>Name". Headers are ignored.
-    const m = line.match(/^(\d{1,3})\s*[.)\t]\s*(.*)$/u);
-    if (!m) { skipped++; continue; }
-
-    const seat = parseInt(m[1], 10);
-    const rest = m[2].replace(/\t/g, ' ').trim();
-    if (!rest || EMPTY_MARKERS.test(rest)) { skipped++; continue; }
-
-    const { name, city } = splitCity(rest);
-    if (!name || name.length < 2) { skipped++; continue; }
+    const parsed = parseSeatLine(line);
+    if (!parsed) { skipped++; continue; }
+    const { seatNumber: seat, name, boardingCity: city } = parsed;
 
     if (team) teams.add(team);
     passengers.push({
