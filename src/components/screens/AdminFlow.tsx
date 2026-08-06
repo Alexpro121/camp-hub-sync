@@ -414,13 +414,34 @@ const DataTab = () => {
         </Card>
       </div>
 
+      <Card className="p-5 bg-gradient-card space-y-3">
+        <div>
+          <p className="text-xs uppercase text-muted-foreground tracking-wider">Паролі супроводу</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">
+            Унікальні паролі для кожної команди. Передавай їх особисто.
+          </p>
+        </div>
+        <Button onClick={loadPasswords} disabled={pwLoading} variant="secondary" className="w-full h-11 font-bold uppercase">
+          {pwLoading ? 'Завантаження…' : 'Показати паролі'}
+        </Button>
+        {passwords && (
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {passwords.map((p) => (
+              <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
+                <span className="text-sm font-bold">#{p.team}</span>
+                <span className="text-sm font-mono tracking-wider">{p.password}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="destructive" className="w-full h-12 font-bold uppercase">
             <Trash2 className="w-4 h-4 mr-2" /> Очистити всю базу
           </Button>
         </AlertDialogTrigger>
-
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Видалити всі дані?</AlertDialogTitle>
