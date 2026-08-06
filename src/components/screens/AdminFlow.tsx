@@ -18,7 +18,7 @@ import { shiftStatus } from '@/lib/shift';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
-import CoupeImport from '@/components/admin/CoupeImport';
+import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
@@ -60,7 +60,7 @@ const AdminFlow = ({ onBack }: Props) => {
         <TabsContent value="shifts" className="mt-3"><ShiftsTab /></TabsContent>
         <TabsContent value="schedule" className="mt-3"><ScheduleAdmin /></TabsContent>
         <TabsContent value="talent" className="mt-3"><TalentAdmin /></TabsContent>
-        <TabsContent value="coupes" className="mt-3"><CoupeImport /></TabsContent>
+        <TabsContent value="coupes" className="mt-3"><TrainTab /></TabsContent>
         <TabsContent value="stats" className="mt-3"><StatsTab /></TabsContent>
         <TabsContent value="data" className="mt-3"><DataTab /></TabsContent>
       </Tabs>

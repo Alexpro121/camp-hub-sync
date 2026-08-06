@@ -18,7 +18,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
-import TeamCoupesView from '@/components/coupes/TeamCoupesView';
+import CoupeManager from '@/components/coupes/CoupeManager';
 
 interface Props {
   onBack: () => void;
@@ -250,7 +250,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TalentTeamView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
-          <TeamCoupesView myTeam={authedTeam} />
+          <CoupeManager myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="transfers" className="mt-3 animate-fade-in">
           <TransfersView myTeam={authedTeam} />
