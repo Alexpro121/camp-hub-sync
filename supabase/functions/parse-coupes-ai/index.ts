@@ -3,15 +3,21 @@ import { corsHeaders } from '../_shared/accounts.ts';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
 
-const SYSTEM_PROMPT = `You parse Ukrainian train seating lists into JSON.
-RULES (critical):
-- NEVER reorder, rename, translate, correct or invent people. Copy names byte-for-byte.
-- Each line looks like "<seat>.<Full name>" and may end with " - <City>" (boarding city).
-- coupe_number = ceil(seat_number / 4).
-- Lines whose name is "..", "SS", "-" or empty are service/empty seats: SKIP them.
-- "Команда N" lines set team_number for following rows.
-Return ONLY JSON:
-{"team_number":6,"passengers":[{"seat_number":5,"name":"...","boarding_city":null,"coupe_number":2,"team_number":6}]}`;
+const SYSTEM_PROMPT = `You are a Ukrainian train seating parsing assistant for a youth camp.
+Your job is to parse train seat allocations into a JSON array of passengers.
+STRICT RULES:
+1. IGNORE HEADER LINES that do not have explicit seat numbers (e.g. "Команда 5", "МАН + Сайт", "Валера, Валерія..."). DO NOT put header metadata into Coupe #1!
+2. ONLY parse lines with explicit seat numbers 1 to 40.
+3. Ignore empty seats marked as ".", "..", "SS".
+4. If a line contains a city suffix (e.g., "12. Кундик Сергій - Львів" or "24. Васильченко Лілія – Івано-Франківськ"):
+   - Set "name" = "Кундик Сергій"
+   - Set "boarding_city" = "Львів"
+   - DO NOT create a second passenger named "Львів"!
+5. Map coupe_number = Math.ceil(seat_number / 4).
+6. NEVER rename, translate, correct or invent people. Copy names byte-for-byte.
+7. "Команда N" lines set team_number for the rows that follow.
+OUTPUT FORMAT (JSON Object):
+{"team_number":6,"passengers":[{"seat_number":5,"coupe_number":2,"name":"Могилка Анастасія Павлівна","boarding_city":null,"team_number":6},{"seat_number":12,"coupe_number":3,"name":"Кундик Сергій","boarding_city":"Львів","team_number":6}]}`;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -51,6 +57,7 @@ Deno.serve(async (req) => {
       const passengers = list
         .map((p: any) => {
           const seat = Number(p.seat_number);
+          if (!(seat >= 1 && seat <= 40)) return null;
           const name = String(p.name ?? '').trim();
           if (!seat || !name) return null;
           return {
