@@ -106,6 +106,13 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
 
     const isPlaceholder = PLACEHOLDER.test(line);
 
+    // Header lines listing several people through commas
+    // ("Даша Мелікян, Лера Березанцева, Сізіков Олексій (каченя)") describe
+    // the supervising crew — they are never a seat.
+    if (!isParsingSeats && line.includes(',') && line.split(',').length >= 2) {
+      continue;
+    }
+
     if (!isParsingSeats) {
       if (isPlaceholder || /^[А-ЯІЇЄҐ][а-яіїєґ'’-]+\s+[А-ЯІЇЄҐ]/u.test(line)) {
         isParsingSeats = true;
