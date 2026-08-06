@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
           temperature: 0.1,
           max_tokens: 2048,
           stream: false,
-          response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: rawText },
