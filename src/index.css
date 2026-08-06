@@ -266,3 +266,52 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =============== UIVERSE LOADER (Dynamic Island) =============== */
+.loader {
+  display: block;
+  --height-of-loader: 4px;
+  --loader-color: #0071e2;
+  width: 100px;
+  height: var(--height-of-loader);
+  border-radius: 30px;
+  background-color: rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.loader::before {
+  content: "";
+  position: absolute;
+  background: var(--loader-color);
+  top: 0;
+  left: 0;
+  width: 0%;
+  height: 100%;
+  border-radius: 30px;
+  animation: moving 1s ease-in-out infinite;
+}
+
+@keyframes moving {
+  50% { width: 100%; }
+  100% { width: 0; right: 0; left: unset; }
+}
+
+/* =============== APPLE SPRING PHYSICS FOR DYNAMIC ISLAND =============== */
+.island-container {
+  transition:
+    width 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+    height 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+    border-radius 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.4s ease;
+  will-change: width, height, transform, opacity, box-shadow;
+}
+
+.content-layer {
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
