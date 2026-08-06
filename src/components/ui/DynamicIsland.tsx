@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   FileSpreadsheet, AlertTriangle, Coins, AlertCircle, Megaphone, Siren, Sparkles, Utensils, X,
+  Clock, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicIsland, type BroadcastColor } from '@/context/DynamicIslandContext';
@@ -28,7 +29,7 @@ const BroadcastIcon = ({ color }: { color: BroadcastColor }) => {
 };
 
 const DynamicIsland = () => {
-  const { state, payload, hide } = useDynamicIsland();
+  const { state, payload, expanded, hide, toggleExpanded, pauseAutoHide, resumeAutoHide } = useDynamicIsland();
   const [contentIn, setContentIn] = useState(false);
 
   // Stagger: geometry expands first, content fades in after ~140ms
@@ -37,7 +38,7 @@ const DynamicIsland = () => {
     if (state === 'HIDDEN') return;
     const t = setTimeout(() => setContentIn(true), 140);
     return () => clearTimeout(t);
-  }, [state, payload]);
+  }, [state, payload, expanded]);
 
   const shape = (() => {
     switch (state) {
@@ -53,6 +54,10 @@ const DynamicIsland = () => {
         return 'w-[320px] max-w-[92vw] h-[68px] rounded-[24px] border-rose-500/40 shadow-[0_12px_30px_rgba(244,63,94,0.25)]';
       case 'BROADCAST':
         return `w-[350px] max-w-[92vw] min-h-[96px] rounded-[28px] ${BROADCAST_THEME[payload.color ?? 'red']}`;
+      case 'EVENT_ALERT':
+        return expanded
+          ? 'w-[360px] max-w-[94vw] min-h-[110px] rounded-[28px] bg-black/95 border-amber-500/30 shadow-[0_16px_40px_rgba(245,158,11,0.25)]'
+          : 'w-[290px] max-w-[92vw] h-[40px] rounded-full border-amber-500/30 shadow-[0_10px_25px_rgba(245,158,11,0.2)]';
       default:
         return 'w-3.5 h-3.5 rounded-full border-transparent opacity-0 scale-0 shadow-none';
     }
@@ -60,11 +65,21 @@ const DynamicIsland = () => {
 
   const color = payload.color ?? 'red';
   const p = payload.progress ?? 0;
+  const teamsLabel = payload.myTeams?.length
+    ? `(Команд${payload.myTeams.length > 1 ? 'и' : 'а'} ${payload.myTeams.join(' і ')})`
+    : '';
 
   return (
     <div className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none safe-top top-0">
       <div
-        onClick={() => state !== 'HIDDEN' && state !== 'EXCEL_IMPORT' && state !== 'LOADING_ONLY' && hide()}
+        onMouseEnter={() => state !== 'HIDDEN' && pauseAutoHide()}
+        onMouseLeave={() => state !== 'HIDDEN' && !expanded && resumeAutoHide()}
+        onTouchStart={() => state !== 'HIDDEN' && pauseAutoHide()}
+        onClick={() => {
+          if (state === 'HIDDEN' || state === 'EXCEL_IMPORT' || state === 'LOADING_ONLY') return;
+          if (state === 'EVENT_ALERT') toggleExpanded();
+          else hide();
+        }}
         className={`${BASE} ${shape} ${state === 'HIDDEN' ? '' : 'opacity-100 scale-100 pointer-events-auto cursor-pointer'}`}
       >
         <div
