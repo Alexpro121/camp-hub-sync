@@ -185,7 +185,7 @@ const ScheduleAdmin = () => {
         order_index: i,
         category: it.category,
         has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
-        sub_slots: it.sub_slots,
+        sub_slots: it.sub_slots as unknown as any,
       }));
       const { error: itErr } = await supabase.from('schedule_items').insert(rows);
       if (itErr) throw itErr;
