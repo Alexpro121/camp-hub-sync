@@ -69,7 +69,7 @@ const ChildFlow = ({ onBack }: Props) => {
       setStep('profile');
       setSuggestions([]);
       haptics.notification('success');
-      toast.success(`Привіт, ${candidate.full_name.split(' ')[0]}!`);
+      toast.success(`Привіт, ${String((row as Child).full_name || '').split(' ')[0]}!`);
     } catch (e: any) {
       haptics.notification('error');
       toast.error(e.message || 'Помилка входу');
@@ -86,6 +86,14 @@ const ChildFlow = ({ onBack }: Props) => {
   const handleLogin = async () => {
     if (!fullName.trim()) {
       toast.error('Введи ПІБ');
+      return;
+    }
+    if (fullName.trim().split(/\s+/).filter(Boolean).length < 2) {
+      toast.error('Введи повне ПІБ (мінімум прізвище та імʼя)');
+      return;
+    }
+    if (!team.replace(/[^\d]/g, '')) {
+      toast.error('Введи номер команди');
       return;
     }
     setLoading(true);
@@ -314,7 +322,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="team" className="flex items-center gap-1.5">
-              Номер команди <span className="text-[10px] text-muted-foreground/70 font-normal normal-case">(необов'язково)</span>
+              Номер команди
             </Label>
             <Input
               id="team"
@@ -327,7 +335,7 @@ const ChildFlow = ({ onBack }: Props) => {
               className="h-12 text-base"
             />
             <p className="text-[10px] text-muted-foreground/70 leading-snug">
-              Не пам'ятаєш команду? Можна не вводити — система знайде тебе за ПІБ.
+              Не пам'ятаєш команду? Запитай у свого супроводу.
             </p>
           </div>
           <Button onClick={handleLogin} disabled={loading} className="w-full h-12 text-base font-bold uppercase">
