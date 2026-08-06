@@ -77,8 +77,14 @@ const ScheduleAdmin = () => {
           code: data?.error?.code ?? (error ? 'EDGE_INVOKE_ERROR' : 'EMPTY_RESULT'),
           message: data?.error?.message ?? error?.message ?? 'ШІ не повернув подій',
         };
+        const silent =
+          info.code === 'TIMEOUT_15S' ||
+          info.code === 'TIMEOUT_10S' ||
+          info.reason === 'timeout' ||
+          /aborted/i.test(info.message ?? '');
         setAiError(info);
-        setErrorOpen(true);
+        if (!silent) setErrorOpen(true);
+        else pushIsland('⚠️ Мережева затримка ШІ. Розклад розпізнано резервним алгоритмом. Перевірте дані.', 'warning', undefined, 8000);
       }
       if (error || data?.source !== 'ai' || !items.length) {
         applyLocal(data?.reason);
