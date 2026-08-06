@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Sparkles, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Sparkles, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift, ShiftType } from '@/types/app';
-import { parseExcelFile } from '@/lib/excel';
+
+import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
+import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
+import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import { shiftStatus } from '@/lib/shift';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
@@ -71,6 +74,11 @@ const ShiftsTab = () => {
   const [end, setEnd] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [sourceLabel, setSourceLabel] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -106,82 +114,94 @@ const ShiftsTab = () => {
   };
 
   const reset = () => {
-    setName(''); setStart(''); setEnd(''); setFile(null);
+    setName(''); setStart(''); setEnd(''); setFile(null); setSheetUrl('');
+    setPreview(null); setSourceLabel('');
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const create = async () => {
+  /** Step 1 — read the source (file or Google Sheet), analyze columns, show preview. */
+  const analyze = async () => {
+    if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
+    if (!file && !sheetUrl.trim()) { await createOnly(); return; }
+    if (sheetUrl.trim() && !parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
+    setAnalyzing(true);
+    try {
+      const res = file ? await analyzeFile(file) : await analyzeSheetUrl(sheetUrl);
+      if (!res.rows.length) { toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
+      setSourceLabel(file ? file.name : sheetUrl.trim());
+      setPreview(res);
+      setPreviewOpen(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Не вдалося зчитати таблицю');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const createOnly = async () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
     try {
-      // 1. Create shift
+      const { data: shift, error: shErr } = await supabase.from('shifts').insert({
+        name, shift_type: type, start_date: start, end_date: end,
+        team_offset: 0, is_active: true,
+      }).select().single();
+      if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
+      toast.success('Зміну створено');
+      reset();
+      load();
+    } catch (err: any) {
+      toast.error(err.message || 'Помилка');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  /** Step 2 — confirmed in preview: create the shift and write deduplicated rows. */
+  const confirmImport = async () => {
+    if (!preview) return;
+    setCreating(true);
+    try {
       const { data: shift, error: shErr } = await supabase.from('shifts').insert({
         name, shift_type: type, start_date: start, end_date: end,
         team_offset: 0, is_active: true,
       }).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
 
-      // 2. Parse and upload file (if present)
-      if (file) {
-        const rows = await parseExcelFile(file);
-        if (rows.length === 0) {
-          toast.warning('Зміну створено, але у файлі не знайдено даних');
+      const valid = preview.rows.filter(r => r.full_name && r.team_number);
+      const dbRows = valid.map(r => toDbRow(r, shift.id));
+
+      // Dedup by shift_id + team_number + normalized name against what's already stored
+      const { data: existing } = await supabase
+        .from('children').select('id, full_name, team_number').eq('shift_id', shift.id);
+      const map = new Map<string, string>();
+      (existing || []).forEach((c: any) => map.set(`${c.team_number}|${(c.full_name || '').toLowerCase().trim()}`, c.id));
+
+      const toInsert: any[] = [];
+      for (const r of dbRows) {
+        const id = map.get(`${r.team_number}|${r.full_name.toLowerCase().trim()}`);
+        if (id) {
+          await supabase.from('children').update({
+            is_present: r.is_present, row_number: r.row_number, phone: r.phone,
+            team_name: r.team_name, note_from_table: r.note_from_table, raw_data: r.raw_data,
+          }).eq('id', id);
         } else {
-          const insertRows = rows.map(r => ({ ...r, shift_id: shift.id }));
-
-          // Upsert by unique (shift_id, team_number, lower(full_name), phone)
-          const { error: upErr } = await supabase
-            .from('children')
-            .upsert(insertRows, {
-              onConflict: 'COALESCE((shift_id)::text, \'\'::text), team_number, lower(TRIM(BOTH FROM full_name)), COALESCE(phone, \'\'::text)',
-              ignoreDuplicates: false,
-            } as any);
-
-          // Fallback: if upsert fails (some PostgREST versions), do manual dedup
-          if (upErr) {
-            // Manual upsert: load existing, decide insert/update per row
-            const { data: existing } = await supabase
-              .from('children')
-              .select('id, full_name, phone, team_number')
-              .eq('shift_id', shift.id);
-            const map = new Map<string, string>();
-            (existing || []).forEach((c: any) => {
-              const key = `${c.team_number}|${(c.full_name || '').toLowerCase().trim()}|${c.phone || ''}`;
-              map.set(key, c.id);
-            });
-            const toInsert: any[] = [];
-            for (const r of insertRows) {
-              const key = `${r.team_number}|${r.full_name.toLowerCase().trim()}|${r.phone || ''}`;
-              const existId = map.get(key);
-              if (existId) {
-                await supabase.from('children').update({
-                  is_present: r.is_present,
-                  row_number: r.row_number,
-                  team_name: r.team_name,
-                  note_from_table: r.note_from_table,
-                  raw_data: r.raw_data,
-                }).eq('id', existId);
-              } else {
-                toInsert.push(r);
-              }
-            }
-            if (toInsert.length) {
-              const { error: insErr } = await supabase.from('children').insert(toInsert);
-              if (insErr) throw insErr;
-            }
-          }
-
-          await supabase.from('uploaded_files').insert({
-            filename: file.name,
-            shift_id: shift.id,
-            rows_count: rows.length,
-          });
-          toast.success(`Зміну створено · завантажено ${rows.length} дітей`);
+          toInsert.push(r);
         }
-      } else {
-        toast.success('Зміну створено');
+      }
+      if (toInsert.length) {
+        const { error: insErr } = await supabase.from('children').insert(toInsert);
+        if (insErr) throw insErr;
       }
 
+      await supabase.from('uploaded_files').insert({
+        filename: sourceLabel || 'Google Sheets',
+        shift_id: shift.id,
+        rows_count: valid.length,
+      });
+
+      toast.success(`✅ Зміну створено · імпортовано ${valid.length} дітей`);
+      setPreviewOpen(false);
       reset();
       load();
     } catch (err: any) {
@@ -207,7 +227,15 @@ const ShiftsTab = () => {
 
   return (
     <div className="space-y-4">
-      {creating && <FullScreenLoader label={file ? 'Завантаження таблиці' : 'Створення зміни'} />}
+      {creating && <FullScreenLoader label={preview ? 'Імпорт таблиці' : 'Створення зміни'} />}
+      {analyzing && <FullScreenLoader label="ШІ аналізує структуру таблиці…" />}
+      <ImportPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        result={preview}
+        busy={creating}
+        onConfirm={confirmImport}
+      />
       <Card className="p-5 bg-gradient-card space-y-3">
         <h3 className="font-bold uppercase text-sm tracking-wide">Створити зміну і завантажити таблицю</h3>
         <div className="space-y-3">
@@ -239,7 +267,7 @@ const ShiftsTab = () => {
 
           {/* File upload area */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Таблиця дітей (.xlsx / .csv)</Label>
+            <Label className="text-xs">Варіант А · Файл (.xlsx / .xls / .csv)</Label>
             <input
               ref={fileRef}
               type="file"
@@ -285,8 +313,28 @@ const ShiftsTab = () => {
             </p>
           </div>
 
-          <Button onClick={create} disabled={creating} className="w-full h-12 font-bold uppercase">
-            {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
+          {/* Google Sheets URL */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Варіант Б · Посилання на Google Таблицю</Label>
+            <div className="relative">
+              <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={sheetUrl}
+                onChange={e => setSheetUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/…"
+                className="h-11 pl-9 text-xs"
+                disabled={!!file}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Таблиця має бути відкрита за посиланням («Усі, хто має посилання — Переглядач»). ШІ сам розпізнає колонки навіть з описками.
+            </p>
+          </div>
+
+          <Button onClick={analyze} disabled={creating || analyzing} className="w-full h-12 font-bold uppercase">
+            {creating || analyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : (file || sheetUrl.trim())
+              ? <><Sparkles className="w-4 h-4 mr-2" /> Аналізувати таблицю</>
+              : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
           </Button>
         </div>
       </Card>
