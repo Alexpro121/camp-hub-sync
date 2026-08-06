@@ -373,6 +373,8 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
+  const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
+  const [pwLoading, setPwLoading] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -380,6 +382,16 @@ const DataTab = () => {
     setTeamsCount(new Set((data || []).map((d: any) => d.team_number)).size);
   };
   useEffect(() => { load(); }, []);
+
+  const loadPasswords = async () => {
+    setPwLoading(true);
+    const { data, error } = await supabase.functions.invoke('staff-login', {
+      body: { action: 'list_team_passwords' },
+    });
+    setPwLoading(false);
+    if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
+    setPasswords(data.passwords);
+  };
 
   const wipe = async () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -401,6 +413,28 @@ const DataTab = () => {
           <p className="text-4xl font-black mt-1 text-gradient-primary tabular-nums">{teamsCount}</p>
         </Card>
       </div>
+
+      <Card className="p-5 bg-gradient-card space-y-3">
+        <div>
+          <p className="text-xs uppercase text-muted-foreground tracking-wider">Паролі супроводу</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">
+            Унікальні паролі для кожної команди. Передавай їх особисто.
+          </p>
+        </div>
+        <Button onClick={loadPasswords} disabled={pwLoading} variant="secondary" className="w-full h-11 font-bold uppercase">
+          {pwLoading ? 'Завантаження…' : 'Показати паролі'}
+        </Button>
+        {passwords && (
+          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+            {passwords.map((p) => (
+              <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
+                <span className="text-sm font-bold">#{p.team}</span>
+                <span className="text-sm font-mono tracking-wider">{p.password}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
