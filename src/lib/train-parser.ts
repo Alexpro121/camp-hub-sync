@@ -5,6 +5,7 @@ export interface ParsedPassenger {
   coupeNumber: number;
   name: string;
   boardingCity: string | null;
+  teamNumber?: number;
 }
 
 /** Numbered seat line: "5. Ім'я", "5) Ім'я", "5<TAB>Ім'я". */
@@ -59,4 +60,71 @@ export function parseTrainCoupesLocal(rawText: string): ParsedPassenger[] {
     if (p) out.push(p);
   }
   return out;
+}
+
+const TEAM_REGEX = /^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})/i;
+const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
+
+/** Split "ПІБ - Місто" at the FIRST dash, keeping hyphenated city names intact. */
+function splitNameCity(line: string): { name: string; boardingCity: string | null } {
+  const m = line.match(/^(.*?)\s*[-–—]\s*(.+)$/u);
+  if (!m) return { name: line, boardingCity: null };
+  const name = m[1].trim();
+  const city = m[2].trim();
+  if (!name || !city) return { name: line, boardingCity: null };
+  return { name, boardingCity: city };
+}
+
+/**
+ * Sequential positional parser: no seat numbers in the source.
+ * Every line after a team header is one seat (1..40); ".", "..", "SS" are
+ * empty/service seats — they still advance the counter.
+ */
+export function parseSequentialTrainText(rawText: string): Required<ParsedPassenger>[] {
+  if (!rawText || typeof rawText !== 'string') return [];
+  const result: Required<ParsedPassenger>[] = [];
+  let currentTeam: number | null = null;
+  let seatCounter = 0;
+  let isParsingSeats = false;
+
+  for (const raw of rawText.split(/\r?\n/)) {
+    const line = normalizeLine(raw).replace(/\t+/g, ' ').trim();
+    if (!line) continue;
+
+    const teamMatch = line.match(TEAM_REGEX);
+    if (teamMatch) {
+      currentTeam = parseInt(teamMatch[1], 10);
+      seatCounter = 0;
+      isParsingSeats = false;
+      continue;
+    }
+    if (currentTeam === null) continue;
+
+    const isPlaceholder = PLACEHOLDER.test(line);
+
+    if (!isParsingSeats) {
+      if (isPlaceholder || /^[А-ЯІЇЄҐ][а-яіїєґ'’-]+\s+[А-ЯІЇЄҐ]/u.test(line)) {
+        isParsingSeats = true;
+      } else {
+        continue; // header/description line ("МАН + Сайт", "Лідери…")
+      }
+    }
+
+    seatCounter++;
+    if (seatCounter > 40) continue;
+    if (isPlaceholder) continue;
+
+    const { name, boardingCity } = splitNameCity(line.replace(/^\d{1,2}\s*[.)]\s*/, ''));
+    if (name.length < 2) continue;
+
+    result.push({
+      teamNumber: currentTeam,
+      seatNumber: seatCounter,
+      coupeNumber: Math.ceil(seatCounter / 4),
+      name,
+      boardingCity,
+    });
+  }
+
+  return result;
 }

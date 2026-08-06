@@ -1,5 +1,5 @@
 import { normalizeName } from '@/lib/normalize';
-import { normalizeLine, parseSeatLine } from '@/lib/train-parser';
+import { normalizeLine, parseSeatLine, parseSequentialTrainText } from '@/lib/train-parser';
 
 export const SEATS_PER_COUPE = 4;
 
@@ -68,6 +68,30 @@ export function parseCoupesDeterministic(text: string, defaultTeam = 0): CoupePa
     teams: Array.from(teams).sort((a, b) => a - b),
     source: 'local',
     skipped,
+  };
+}
+
+/**
+ * Main entry: numbered lists win when present, otherwise the sequential
+ * positional parser (one line = one seat, placeholders still consume a seat).
+ */
+export function parseCoupes(text: string, defaultTeam = 0): CoupeParseResult {
+  const numbered = parseCoupesDeterministic(text, defaultTeam);
+  if (numbered.passengers.length) return numbered;
+
+  const seq = parseSequentialTrainText(text);
+  const passengers: CoupePassenger[] = seq.map((p) => ({
+    seat_number: p.seatNumber,
+    name: p.name,
+    boarding_city: p.boardingCity,
+    coupe_number: p.coupeNumber,
+    team_number: p.teamNumber || defaultTeam,
+  }));
+  return {
+    passengers,
+    teams: Array.from(new Set(passengers.map((p) => p.team_number))).sort((a, b) => a - b),
+    source: 'local',
+    skipped: 0,
   };
 }
 

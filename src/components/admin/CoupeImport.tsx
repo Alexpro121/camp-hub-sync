@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift } from '@/types/app';
 import {
-  groupByCoupe, parseCoupesDeterministic, verifyAgainstRoster,
+  groupByCoupe, parseCoupes, verifyAgainstRoster,
   type CoupePassenger, type RosterChild,
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
@@ -66,8 +66,8 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
     if (!text.trim()) { toast.error('Встав текст розселення'); return; }
     setParsing(true);
     try {
-      // 1. Smart Regex first
-      const parsed = parseCoupesDeterministic(text);
+      // 1. Smart Regex, then sequential positional parser
+      const parsed = parseCoupes(text);
       let list = parsed.passengers;
       let src: 'local' | 'ai' = 'local';
 
