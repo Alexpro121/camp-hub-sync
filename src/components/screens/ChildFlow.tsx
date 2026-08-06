@@ -250,17 +250,17 @@ const ChildFlow = ({ onBack }: Props) => {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-md mx-auto safe-top safe-bottom">
+    <div className="min-h-screen px-4 py-5 max-w-md mx-auto safe-top safe-bottom">
       {loading && <FullScreenLoader label="Шукаємо тебе" />}
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground mb-8 hover:text-foreground transition-smooth">
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground mb-6 hover:text-foreground transition-smooth active:scale-[0.98]">
         <ArrowLeft className="w-4 h-4" /> Назад
       </button>
 
       <div className="animate-slide-up">
-        <h1 className="text-3xl font-black uppercase mb-1">Я дитина</h1>
-        <p className="text-muted-foreground text-sm mb-8">Введи дані для входу</p>
+        <h1 className="text-2xl font-semibold tracking-tight mb-1">Я дитина</h1>
+        <p className="text-muted-foreground text-sm mb-5">Введи дані для входу</p>
 
-        <Card className="p-6 bg-gradient-card space-y-5">
+        <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">ПІБ</Label>
             <Input
@@ -290,17 +290,17 @@ const ChildFlow = ({ onBack }: Props) => {
               Не пам'ятаєш команду? Запитай у свого супроводу.
             </p>
           </div>
-          <Button onClick={handleLogin} disabled={loading} className="w-full h-12 text-base font-bold uppercase">
+          <Button onClick={() => { haptics.impact('light'); handleLogin(); }} disabled={loading} className="w-full h-12 text-base font-medium active:scale-[0.98] transition-transform">
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти'}
           </Button>
         </Card>
 
         {/* Fuzzy suggestions — "did you mean?" */}
         {suggestions.length > 0 && (
-          <Card className="mt-4 p-4 bg-gradient-card border-primary/40 animate-slide-up">
+          <Card className="mt-3 p-4 bg-card/80 backdrop-blur-md border-border/50 animate-slide-up">
             <div className="flex items-center gap-2 mb-3">
               <HelpCircle className="w-4 h-4 text-primary" />
-              <p className="text-xs font-black uppercase tracking-wider">
+              <p className="text-xs font-medium">
                 Це ти?
               </p>
             </div>
@@ -310,16 +310,16 @@ const ChildFlow = ({ onBack }: Props) => {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => loginAs(item)}
-                    className="w-full p-3 rounded-lg bg-surface-1 hover:bg-surface-2 hover:border-primary/60 border border-border/40 text-left transition-smooth flex items-center gap-3"
+                    onClick={() => { haptics.impact('light'); loginAs(item); }}
+                    className="w-full p-3 rounded-lg bg-surface-1 hover:bg-muted/60 border border-border/40 text-left transition-smooth active:scale-[0.98] flex items-center gap-3"
                   >
                     <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
                       <User className="w-4 h-4 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">{item.full_name}</p>
+                      <p className="text-sm font-medium truncate">{item.full_name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Команда #{item.team_number}
+                        Команда {item.team_number}
                         {item.team_name ? ` · ${item.team_name}` : ''}
                       </p>
                     </div>
@@ -344,7 +344,7 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   <div className="flex items-start gap-3">
     <div className="text-primary/70 mt-0.5">{icon}</div>
     <div className="flex-1 min-w-0">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{label}</p>
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
       <p className="text-sm font-medium break-words">{value}</p>
     </div>
   </div>
