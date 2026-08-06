@@ -1,5 +1,5 @@
 import { normalizeName } from '@/lib/normalize';
-import { normalizeLine, parseSeatLine } from '@/lib/train-parser';
+import { normalizeLine, parseSeatLine, parseSequentialTrainText } from '@/lib/train-parser';
 
 export const SEATS_PER_COUPE = 4;
 
