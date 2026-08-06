@@ -11,6 +11,7 @@ import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 
@@ -192,6 +193,8 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
+            <ChildCoupeCard childId={child.id} />
+
             <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
               <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">
                 Дані
