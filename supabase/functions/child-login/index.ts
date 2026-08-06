@@ -115,24 +115,20 @@ Deno.serve(async (req) => {
 
       const pool = (data || []) as Row[];
 
+      // Self-identification only: the caller must already know their own full name.
+      // We never return names, teams or partial hints, so the endpoint cannot be
+      // used to enumerate the roster.
       const exact = pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
-      if (exact) return json({ exact: { id: exact.id, full_name: maskName(exact.full_name), team_number: exact.team_number } });
+      if (exact) return json({ exact: { id: exact.id } });
 
-      const scored = pool
+      // Allow only a single near-certain match (typo tolerance) and still reveal nothing.
+      const strong = pool
         .map((item) => ({ item, s: score(fullName, item.full_name) }))
-        // High threshold: only near-certain matches are hinted at.
-        .filter((x) => x.s >= 0.75)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 3)
-        .map(({ item, s }) => ({
-          id: item.id,
-          full_name: maskName(item.full_name),
-          team_number: item.team_number,
-          team_name: null,
-          score: Math.min(1, s),
-        }));
+        .filter((x) => x.s >= 0.92)
+        .sort((a, b) => b.s - a.s);
+      if (strong.length === 1) return json({ exact: { id: strong[0].item.id } });
 
-      return json({ suggestions: scored });
+      return json({ suggestions: [] });
     }
 
     // claim
