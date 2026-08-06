@@ -291,31 +291,43 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
 
             {isToday && nowMin >= DAY_START && nowMin <= DAY_END && (
               <div className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-1000" style={{ top: (nowMin - DAY_START) * PX_PER_MIN }}>
-                <div className="flex items-center gap-1.5" style={{ marginLeft: GUTTER - 40 }}>
-                  <span className="text-[9px] font-medium uppercase tracking-wide text-destructive tabular-nums">Зараз</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                  <div className="flex-1 h-px bg-destructive/70" />
+                <div className="flex items-center gap-1.5" style={{ marginLeft: GUTTER - 46 }}>
+                  <span className="rounded-md bg-destructive px-1.5 py-[1px] text-[9px] font-semibold tabular-nums text-destructive-foreground shadow-sm">
+                    {fromMinutes(nowMin)}
+                  </span>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-destructive/60 animate-ping" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-destructive" />
+                  </span>
+                  <div className="flex-1 h-px bg-gradient-to-r from-destructive/70 to-destructive/10" />
                 </div>
               </div>
             )}
 
-            {laidOut.map(({ item: i, top, height, range }) => {
+            {laidOut.map(({ item: i, top, height, range, endMin }) => {
               if (top == null) return null;
               const meta = catMeta(i.category);
               const Icon = meta.icon;
               const slots = slotsOf(i);
               const isNow = i.id === currentId;
-              const mySlot = filterTeam != null ? slots.find((s) => s.teams?.includes(filterTeam)) : undefined;
+              const startMin = toMinutes(i.time_start) ?? 0;
+              const progress = isNow && endMin ? Math.min(100, Math.max(0, ((nowMin - startMin) / Math.max(1, endMin - startMin)) * 100)) : 0;
+              const past = isToday && endMin != null && nowMin >= endMin;
+              const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
               return (
                 <div key={i.id} className="absolute right-1 z-10" style={{ top, left: GUTTER, minHeight: height }}>
                   <div
-                    className={`rounded-xl border bg-card/80 backdrop-blur-md p-2.5 h-full transition-smooth ${
-                      isNow ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border/40'
-                    }`}
+                    className={`relative overflow-hidden rounded-xl border bg-card/80 backdrop-blur-md p-2.5 h-full transition-smooth ${
+                      isNow ? 'border-primary/60 ring-1 ring-primary/30 shadow-lg' : 'border-border/40'
+                    } ${past ? 'opacity-55' : ''}`}
                     style={{
                       borderLeft: `4px solid hsl(var(--cat-${meta.token}) / 0.8)`,
+                      backgroundImage: `linear-gradient(100deg, hsl(var(--cat-${meta.token}) / 0.10), transparent 55%)`,
                     }}
                   >
+                    {isNow && (
+                      <div className="absolute bottom-0 left-0 h-[2px] bg-primary/70 transition-all duration-1000" style={{ width: `${progress}%` }} />
+                    )}
                     <div className="flex items-center gap-1.5">
                       <Icon className="w-3.5 h-3.5 shrink-0" strokeWidth={1.75} style={{ color: `hsl(var(--cat-${meta.token}))` }} />
                       <p className="text-xs font-semibold tabular-nums tracking-tight">{range}</p>
@@ -347,7 +359,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
                     {!slots.length && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {i.target_teams?.length ? i.target_teams.map((t) => (
-                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${t === filterTeam ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
+                          <Badge key={t} className={`text-[9px] px-1.5 py-0 h-4 border font-medium ${t === team ? 'bg-primary/10 text-primary border-primary/30' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
                             <Users className="w-2.5 h-2.5 mr-0.5" strokeWidth={1.75} />{t}
                           </Badge>
                         )) : (
