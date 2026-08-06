@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Coins, User, Phone, Hash, Users, FileText, Loader2, Shield, Train, Cog, Sparkles, ChevronDown, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Coins, User, Phone, Hash, Users, FileText, Loader2, Shield, Check, ChevronDown, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,8 @@ import type { Child } from '@/types/app';
 import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ScheduleView from '@/components/schedule/ScheduleView';
 
 interface Props { onBack: () => void; }
 
