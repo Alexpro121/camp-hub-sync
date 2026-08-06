@@ -11,6 +11,7 @@ import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 
