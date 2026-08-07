@@ -17,6 +17,8 @@ import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import TalentTeamView from '@/components/talent/TalentTeamView';
 import { Mic2 } from 'lucide-react';
+import { useTeamPhase } from '@/hooks/useTeamPhase';
+import PhaseBanner from '@/components/shift/PhaseBanner';
 
 interface Props { onBack: () => void; }
 
@@ -37,6 +39,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
+  const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // App-wide schedule alerts: the island pops on any screen once logged in.
   useScheduleNotifier(child?.team_number ?? null, !!child);
@@ -207,7 +210,8 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
-            <ChildCoupeCard childId={child.id} />
+            {phase && <PhaseBanner status={phase} teamNumber={child.team_number} />}
+            {(!phase || phase.currentPhase !== 'PREPARING') && <ChildCoupeCard childId={child.id} />}
 
             <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
               <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">
@@ -256,7 +260,11 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsContent>
 
           <TabsContent value="schedule" className="mt-0">
-            <ScheduleView myTeam={child.team_number} lockTeam />
+            {phase?.currentPhase === 'PREPARING' ? (
+              <PhaseBanner status={phase} teamNumber={child.team_number} />
+            ) : (
+              <ScheduleView myTeam={child.team_number} lockTeam />
+            )}
           </TabsContent>
           {talent.active && (
             <TabsContent value="talent" className="mt-0">
