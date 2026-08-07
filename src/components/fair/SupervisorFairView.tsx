@@ -240,7 +240,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     else setError(res.error);
   }, []);
 
-  // Live purchases feed for this supervisor's team.
+  // Live payment feed — driven by the Iron Dollar ledger so manual credits show up too.
   useEffect(() => {
     if (!userId) return;
     let mounted = true;
@@ -256,22 +256,38 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     load();
     // Server-side filter keeps the Telegram WebView off other supervisors' traffic.
     const ch = supabase
-      .channel(`supervisor_fair_txs:${userId}`)
+      .channel(`supervisor_iron_txs:${userId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'fair_payments',
+        table: 'iron_dollar_transactions',
         filter: `supervisor_user_id=eq.${userId}`,
-      }, (p) => {
-        const row = p.new as FeedRow;
+      }, async (p) => {
+        const tx = p.new as {
+          id: string; child_id: string; amount_change: number; created_at: string;
+        };
+        // Instant QR rotation: the scanned code can never be reused.
+        startTransition(() => setNonce((n) => n + 1));
         haptics.notification('success');
-        // Auto-hiding success card.
+
+        // Resolve the child's full name and team for the success HUD.
+        const { data: child } = await supabase
+          .from('children')
+          .select('full_name, team_number')
+          .eq('id', tx.child_id)
+          .maybeSingle();
+        if (!mounted) return;
+
+        const row: FeedRow = {
+          id: tx.id,
+          child_name: child?.full_name ?? 'Дитина',
+          team_number: child?.team_number ?? 0,
+          amount: Math.abs(tx.amount_change),
+          created_at: tx.created_at,
+        };
         setToast({ id: row.id, name: row.child_name, team: row.team_number, amount: row.amount });
         clearTimeout(toastTimer.current);
         toastTimer.current = setTimeout(() => setToast(null), SUCCESS_CARD_MS);
-        // Background QR rotation — a fresh tx_id without blocking input.
-        startTransition(() => setNonce((n) => n + 1));
-        // Functional update — no refetch, no cascade into the QR generator.
         setFeed((prev) => [row, ...prev.slice(0, FEED_LIMIT - 1)]);
       })
       .subscribe();
