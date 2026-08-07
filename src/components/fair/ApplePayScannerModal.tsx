@@ -7,8 +7,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import {
-  decodeFairCode,
-  formatFairCode,
+  FAIR_CODE_LENGTH,
+  normalizeFairCode,
   parseFairQr,
   type FairQrPayload,
 } from '@/lib/fair';
@@ -359,25 +359,38 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     return () => clearTimeout(t);
   }, [stage, cameraReady]);
 
-  const submitManual = () => {
-    const decoded = decodeFairCode(manualCode);
-    if (!decoded) { showFailure('Недійсний код ярмарку'); return; }
-    if (Date.now() - decoded.timestamp > 2 * 60 * 60 * 1000) {
-      showFailure('QR-код застарів, попросіть новий у вожатого');
+  const submitManual = useCallback(async (raw?: string) => {
+    const code = normalizeFairCode(raw ?? manualCode);
+    if (code.length !== FAIR_CODE_LENGTH) { showFailure('Недійсний код ярмарку'); return; }
+    haptics.impact('medium');
+    setStage('processing');
+
+    const { data, error } = await supabase
+      .from('fair_short_codes')
+      .select('code, supervisor_user_id, supervisor_team, amount, tx_id, expires_at')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (error) { showFailure('Немає звʼязку. Спробуй ще раз'); return; }
+    if (!data) { showFailure('Код не знайдено або він застарів'); return; }
+    if (new Date(data.expires_at).getTime() < Date.now()) {
+      showFailure('Код застарів, попросіть новий у вожатого');
       return;
     }
-    haptics.impact('medium');
+
     charge({
       type: 'CAMP_FAIR_PAYMENT',
-      tx_id: decoded.tx_id,
-      supervisor_id: null,
-      supervisor_team: null,
-      supervisor_name: 'Ярмарок · Залізна зміна',
-      amount: decoded.amount,
-      timestamp: decoded.timestamp,
-      code: decoded.code,
+      tx_id: data.tx_id,
+      supervisor_id: data.supervisor_user_id,
+      supervisor_team: data.supervisor_team,
+      supervisor_name: data.supervisor_team
+        ? `Ярмарок · Команда ${data.supervisor_team}`
+        : 'Ярмарок · Залізна зміна',
+      amount: data.amount,
+      timestamp: Date.now(),
+      code: data.code,
     });
-  };
+  }, [manualCode, charge, haptics, showFailure]);
 
   if (!open) return null;
 
@@ -448,19 +461,25 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
               Камера недоступна
             </p>
             <p className="text-[12px] text-white/50 text-center mt-1">
-              Введи код із цінника — він під QR-кодом
+              Введи 5-значний код — він під QR-кодом вожатого
             </p>
             <Input
-              value={formatFairCode(manualCode.replace(/[^0-9a-fA-F]/g, ''))}
-              onChange={(e) => setManualCode(e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 16))}
-              placeholder="XXXX-XXXX-XXXX-XXXX"
-              inputMode="text"
-              autoCapitalize="characters"
-              className="mt-4 h-12 text-center font-mono tracking-[0.18em] bg-white/5 border-white/10 text-white placeholder:text-white/30"
+              value={manualCode}
+              onChange={(e) => {
+                const next = normalizeFairCode(e.target.value);
+                setManualCode(next);
+                if (next.length === FAIR_CODE_LENGTH) void submitManual(next);
+              }}
+              placeholder="00000"
+              inputMode="numeric"
+              type="tel"
+              autoComplete="one-time-code"
+              maxLength={FAIR_CODE_LENGTH}
+              className="mt-4 h-14 text-center font-mono text-3xl tracking-[0.4em] bg-white/5 border-white/10 text-white placeholder:text-white/25"
             />
             <Button
-              onClick={submitManual}
-              disabled={manualCode.replace(/[^0-9a-fA-F]/g, '').length !== 16}
+              onClick={() => void submitManual()}
+              disabled={manualCode.length !== FAIR_CODE_LENGTH}
               className="w-full h-12 mt-3 rounded-2xl bg-white text-black hover:bg-white/90 font-semibold"
             >
               Оплатити
