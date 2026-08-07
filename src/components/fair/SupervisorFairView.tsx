@@ -249,8 +249,11 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     const pushReceipt = (row: FeedRow) => {
       if (!mounted) return;
       // Manual-code payments arrive on two channels — never show them twice.
-      if (seenRef.current.has(row.id)) return;
-      seenRef.current.add(row.id);
+      // The ledger row and the receipt row have different ids, so dedupe on the
+      // purchase itself: same child + amount within a couple of seconds.
+      const key = `${row.child_name}:${row.amount}:${Math.round(new Date(row.created_at).getTime() / 2000)}`;
+      if (seenRef.current.has(key)) return;
+      seenRef.current.add(key);
 
       // Instant QR rotation: the scanned code can never be reused.
       startTransition(() => setNonce((n) => n + 1));
