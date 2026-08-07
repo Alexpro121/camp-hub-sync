@@ -65,8 +65,39 @@ export function parseTrainCoupesLocal(rawText: string): ParsedPassenger[] {
 const TEAM_REGEX = /^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})/i;
 const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
 
-/** Cities that may appear on their own line right under a passenger. */
-const CITY_LINES = ['львів', 'івано-франківськ', 'київ', 'тернопіль', 'рівне', 'луцьк', 'хмельницький', 'ужгород'];
+/** Frequent boarding points — an instant match, no heuristics needed. */
+const KNOWN_CITIES = new Set([
+  'львів', 'івано-франківськ', 'київ', 'тернопіль', 'рівне', 'луцьк', 'хмельницький', 'ужгород',
+  'вінниця', 'житомир', 'чернівці', 'коломия', 'стрий', 'дрогобич', 'калуш', 'долина', 'яремче',
+  'буковель', 'ходорів', 'красне', 'здолбунів', 'шепетівка', 'козятин', 'фастів', 'миколаїв',
+  'одеса', 'харків', 'дніпро', 'запоріжня', 'запоріжжя', 'полтава', 'черкаси', 'кропивницький',
+  'суми', 'чернігів', 'херсон', 'ковель', 'сарни', 'дубно', 'броди', 'бердичів', 'мукачево',
+]);
+
+/** Suffixes that make a single Ukrainian word almost certainly a settlement. */
+const CITY_SUFFIX =
+  /(ів|їв|ськ|цьк|ець|поль|град|город|біль|ин|ине|івка|ївка|анка|енко-?)$/iu;
+
+/**
+ * Is this standalone line a boarding city rather than a passenger?
+ * A city is one or two capitalised words, no initials/patronymic, and either a
+ * known name or a recognisable settlement suffix. Any static whitelist would
+ * silently drop real stations, so this is heuristic, not a fixed list.
+ */
+export function looksLikeCityLine(rawLine: string): boolean {
+  const line = normalizeLine(rawLine).replace(/^(?:м\.|c\.|с\.|смт\.?|місто)\s*/iu, '').trim();
+  if (!line || line.length < 3 || line.length > 32) return false;
+  if (/[0-9@()]/.test(line)) return false;
+  if (/,/.test(line)) return false;
+  const words = line.split(/\s+/);
+  if (words.length > 2) return false;
+  if (words.some((w) => /^[\p{Lu}]\.$/u.test(w))) return false; // "І." — initials
+  if (!/^[\p{Lu}]/u.test(line)) return false;
+  const key = line.toLowerCase();
+  if (KNOWN_CITIES.has(key)) return true;
+  if (words.length === 2) return false; // two-word names are usually people
+  return CITY_SUFFIX.test(key);
+}
 
 /** Split "ПІБ - Місто" at the FIRST dash, keeping hyphenated city names intact. */
 function splitNameCity(line: string): { name: string; boardingCity: string | null } {
@@ -137,8 +168,8 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
     let { name, boardingCity } = splitNameCity(body);
     // City written on its own line right below the passenger
     if (!boardingCity && i + 1 < lines.length) {
-      const next = normalizeLine(lines[i + 1]).replace(/^м\.\s*/i, '').trim();
-      if (CITY_LINES.includes(next.toLowerCase())) {
+      const next = normalizeLine(lines[i + 1]).replace(/^(?:м\.|с\.|смт\.?)\s*/iu, '').trim();
+      if (looksLikeCityLine(lines[i + 1])) {
         boardingCity = next;
         i++;
       }
