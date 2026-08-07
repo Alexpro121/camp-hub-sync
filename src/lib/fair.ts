@@ -37,62 +37,27 @@ export interface FairQrPayload {
   code: string;
 }
 
-const HEX = '0123456789abcdef';
-const randHex = (n: number) => {
-  const bytes = new Uint8Array(n);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < n; i++) bytes[i] = Math.floor(Math.random() * 256);
-  return Array.from(bytes, (b) => HEX[b % 16]).join('');
-};
+/** Length of the human-typed fair code. Short, numeric, keypad-friendly. */
+export const FAIR_CODE_LENGTH = 5;
 
-/**
- * Short code layout (16 hex chars): 6 random · 4 amount · 6 minutes-since-epoch.
- * It is fully self-contained, so a child can type it in when the camera fails.
- */
-export const encodeFairCode = (amount: number, timestamp: number): string => {
-  const amt = Math.max(0, Math.min(0xffff, Math.round(amount))).toString(16).padStart(4, '0');
-  const mins = (Math.floor(timestamp / 60000) % 0xffffff).toString(16).padStart(6, '0');
-  return `${randHex(6)}${amt}${mins}`.toLowerCase();
-};
+/** A brand new 5-digit code, e.g. "58492". */
+export const generateShortCode = (): string =>
+  String(Math.floor(10000 + Math.random() * 90000));
 
-export const formatFairCode = (code: string) =>
-  (code.match(/.{1,4}/g) || []).join('-').toUpperCase();
+/** Codes are already short and readable — nothing to prettify. */
+export const formatFairCode = (code: string) => code;
 
 export const normalizeFairCode = (input: string) =>
-  input.replace(/[^0-9a-fA-F]/g, '').toLowerCase();
+  input.replace(/\D/g, '').slice(0, FAIR_CODE_LENGTH);
 
-export interface DecodedFairCode {
-  code: string;
-  amount: number;
-  timestamp: number;
-  tx_id: string;
-}
+export const isValidFairCode = (input: string) =>
+  normalizeFairCode(input).length === FAIR_CODE_LENGTH;
 
-/** Deterministic UUID derived from the short code, so retries never double-charge. */
-export const txIdFromCode = (code: string): string => {
-  const base = code.padEnd(16, '0').slice(0, 16);
-  const hex = (base + base.split('').reverse().join('')).slice(0, 32).split('');
-  hex[12] = '4';
-  hex[16] = '8';
-  const h = hex.join('');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-};
-
-export const decodeFairCode = (raw: string): DecodedFairCode | null => {
-  const code = normalizeFairCode(raw);
-  if (code.length !== 16) return null;
-  const amount = parseInt(code.slice(6, 10), 16);
-  const mins = parseInt(code.slice(10, 16), 16);
-  if (!Number.isFinite(amount) || amount < FAIR_MIN_AMOUNT || amount > FAIR_MAX_AMOUNT) return null;
-  if (!Number.isFinite(mins)) return null;
-
-  // Rebuild the absolute timestamp from the truncated minute counter.
-  const period = 0xffffff;
-  const nowMins = Math.floor(Date.now() / 60000);
-  let full = Math.floor(nowMins / period) * period + mins;
-  if (full > nowMins + 60) full -= period;
-
-  return { code, amount, timestamp: full * 60000, tx_id: txIdFromCode(code) };
+const randomUuid = (): string => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () =>
+    Math.floor(Math.random() * 16).toString(16),
+  );
 };
 
 export const createFairPayload = (opts: {
@@ -102,10 +67,10 @@ export const createFairPayload = (opts: {
   supervisorName?: string | null;
 }): FairQrPayload => {
   const timestamp = Date.now();
-  const code = encodeFairCode(opts.amount, timestamp);
+  const code = generateShortCode();
   return {
     type: FAIR_QR_TYPE,
-    tx_id: txIdFromCode(code),
+    tx_id: randomUuid(),
     supervisor_id: opts.supervisorId ?? null,
     supervisor_team: opts.supervisorTeam ?? null,
     supervisor_name: opts.supervisorName ?? null,

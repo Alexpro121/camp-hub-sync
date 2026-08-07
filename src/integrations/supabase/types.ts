@@ -244,6 +244,36 @@ export type Database = {
         }
         Relationships: []
       }
+      fair_short_codes: {
+        Row: {
+          amount: number
+          code: string
+          created_at: string
+          expires_at: string
+          supervisor_team: number | null
+          supervisor_user_id: string | null
+          tx_id: string
+        }
+        Insert: {
+          amount: number
+          code: string
+          created_at?: string
+          expires_at?: string
+          supervisor_team?: number | null
+          supervisor_user_id?: string | null
+          tx_id: string
+        }
+        Update: {
+          amount?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          supervisor_team?: number | null
+          supervisor_user_id?: string | null
+          tx_id?: string
+        }
+        Relationships: []
+      }
       iron_dollar_transactions: {
         Row: {
           amount_change: number

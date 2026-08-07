@@ -86,9 +86,14 @@ const QrDisplay = memo(({ payload, amount, stale }: QrProps) => {
       <p className="mt-3 text-3xl font-bold tabular-nums tracking-tight">{amount}</p>
       <p className="text-xs text-muted-foreground">Айрон-доларів до списання</p>
       {payload && (
-        <p className="mt-2 text-[11px] font-mono tracking-[0.18em] text-muted-foreground">
-          {formatFairCode(payload.code)}
-        </p>
+        <div className="mt-4 w-full rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-center">
+          <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            Код для введення
+          </p>
+          <p className="mt-1 font-mono text-4xl font-bold tabular-nums tracking-[0.24em] text-foreground">
+            {formatFairCode(payload.code)}
+          </p>
+        </div>
       )}
       <p className="mt-1 text-[11px] text-muted-foreground">Код діє 2 години</p>
     </div>
@@ -374,6 +379,28 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   // Manual code entry carries no supervisor id — the child pings this
   // code-derived channel instead, so the QR still rotates instantly.
   const activeCode = payload?.code ?? null;
+
+  // Publish the 5-digit code so a child can pay by typing it in.
+  useEffect(() => {
+    if (!payload || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const { error } = await supabase.from('fair_short_codes').insert({
+        code: payload.code,
+        supervisor_user_id: userId,
+        supervisor_team: myTeam,
+        amount: payload.amount,
+        tx_id: payload.tx_id,
+        expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      });
+      // Extremely rare 5-digit collision — just roll a fresh code.
+      if (!cancelled && error && (error as { code?: string }).code === '23505') {
+        setNonce((n) => n + 1);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [payload, userId, myTeam]);
+
   useEffect(() => {
     if (!activeCode) return;
     const ch = supabase
