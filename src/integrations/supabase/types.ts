@@ -273,42 +273,54 @@ export type Database = {
       }
       shifts: {
         Row: {
+          assigned_teams: number[]
           created_at: string
           deleted_at: string | null
           end_date: string
+          hotel_start_date: string | null
           id: string
           is_active: boolean
           name: string
+          shift_category: string
           shift_type: string
           start_date: string
           team_offset: number
           train_coupes_published: boolean
+          travel_start_date: string | null
           updated_at: string
         }
         Insert: {
+          assigned_teams?: number[]
           created_at?: string
           deleted_at?: string | null
           end_date: string
+          hotel_start_date?: string | null
           id?: string
           is_active?: boolean
           name: string
+          shift_category?: string
           shift_type: string
           start_date: string
           team_offset?: number
           train_coupes_published?: boolean
+          travel_start_date?: string | null
           updated_at?: string
         }
         Update: {
+          assigned_teams?: number[]
           created_at?: string
           deleted_at?: string | null
           end_date?: string
+          hotel_start_date?: string | null
           id?: string
           is_active?: boolean
           name?: string
+          shift_category?: string
           shift_type?: string
           start_date?: string
           team_offset?: number
           train_coupes_published?: boolean
+          travel_start_date?: string | null
           updated_at?: string
         }
         Relationships: []
