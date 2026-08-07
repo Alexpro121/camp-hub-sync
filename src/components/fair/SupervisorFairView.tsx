@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Check, Coins, RefreshCw, ShoppingBag, Receipt, Users } from 'lucide-react';
+import { Check, Coins, RefreshCw, ShoppingBag, Receipt, Users, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -174,6 +174,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [toast, setToast] = useState<SuccessToast | null>(null);
   const [allowOtherTeams, setAllowOtherTeams] = useState(false);
+  const [standTotal, setStandTotal] = useState(0);
   const [, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const seenRef = useRef<Set<string>>(new Set());
@@ -215,6 +216,21 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   }, [userId, myTeam, haptics]);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // Stand till: everything this supervisor has earned on the fair.
+  useEffect(() => {
+    if (!userId) return;
+    let mounted = true;
+    supabase
+      .from('fair_payments')
+      .select('amount')
+      .eq('supervisor_user_id', userId)
+      .then(({ data }) => {
+        if (!mounted) return;
+        setStandTotal((data || []).reduce((s, r: { amount: number }) => s + Math.abs(r.amount), 0));
+      });
+    return () => { mounted = false; };
+  }, [userId]);
 
   const payload = useMemo<FairQrPayload | null>(() => {
     if (!Number.isFinite(deferredAmount) || deferredAmount <= 0) return null;
@@ -259,6 +275,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
       // Instant QR rotation: the scanned code can never be reused.
       startTransition(() => setNonce((n) => n + 1));
+      setStandTotal((t) => t + Math.abs(row.amount));
       haptics.notification('success');
       setToast({ id: row.id, name: row.child_name, team: row.team_number, amount: row.amount });
       clearTimeout(toastTimer.current);
@@ -354,9 +371,56 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     };
   }, [userId, myTeam, haptics]);
 
+  // Manual code entry carries no supervisor id — the child pings this
+  // code-derived channel instead, so the QR still rotates instantly.
+  const activeCode = payload?.code ?? null;
+  useEffect(() => {
+    if (!activeCode) return;
+    const ch = supabase
+      .channel(`fair_code_${activeCode}`)
+      .on('broadcast', { event: 'FAIR_PAYMENT_SUCCESS' }, (e) => {
+        const b = (e.payload ?? {}) as {
+          childName?: string; teamNumber?: number; amount?: number; txId?: string;
+        };
+        const amount = Math.abs(Number(b.amount) || 0);
+        startTransition(() => setNonce((n) => n + 1));
+        setStandTotal((t) => t + amount);
+        haptics.notification('success');
+        setToast({
+          id: b.txId || `mc-${Date.now()}`,
+          name: b.childName || 'Дитина',
+          team: b.teamNumber ?? 0,
+          amount,
+        });
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setToast(null), SUCCESS_CARD_MS);
+        setFeed((prev) => [{
+          id: b.txId || `mc-${Date.now()}`,
+          child_name: b.childName || 'Дитина',
+          team_number: b.teamNumber ?? 0,
+          amount,
+          created_at: new Date().toISOString(),
+        }, ...prev.slice(0, FEED_LIMIT - 1)]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeCode, haptics]);
+
   return (
     <div className="space-y-3">
       <PaymentSuccessCard toast={toast} />
+      <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold tracking-tight">Каса стенду</p>
+              <p className="text-[11px] text-muted-foreground">Зароблено на ярмарку</p>
+            </div>
+          </div>
+          <p className="text-2xl font-bold tabular-nums tracking-tight text-primary">{standTotal} 💰</p>
+        </div>
+      </Card>
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center gap-2 mb-3">
           <ShoppingBag className="w-4 h-4 text-primary" strokeWidth={1.75} />

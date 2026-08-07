@@ -174,24 +174,29 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
           if (typeof res.balance_after === 'number') onPaid?.(res.balance_after);
           // Instant WebSocket ping to the supervisor: rotates their QR immediately,
           // without waiting for Postgres replication.
-          if (payload.supervisor_id) {
-            void (async () => {
-              const ch = supabase.channel(`supervisor_fair_${payload.supervisor_id}`);
-              try {
-                await ch.subscribe();
-                await ch.send({
-                  type: 'broadcast',
-                  event: 'FAIR_PAYMENT_SUCCESS',
-                  payload: {
-                    childName: childName || 'Дитина',
-                    teamNumber: childTeam ?? 0,
-                    amount: Math.abs(payload.amount),
-                    txId: payload.tx_id,
-                  },
-                });
-              } catch { /* the ledger channels still cover this */ }
-              supabase.removeChannel(ch);
-            })();
+          // A manually typed code carries no supervisor id, so also ping the
+          // code-derived channel the supervisor listens on for their live QR.
+          {
+            const targets = [
+              payload.supervisor_id ? `supervisor_fair_${payload.supervisor_id}` : null,
+              payload.code ? `fair_code_${payload.code}` : null,
+            ].filter(Boolean) as string[];
+            const body = {
+              childName: childName || 'Дитина',
+              teamNumber: childTeam ?? 0,
+              amount: Math.abs(payload.amount),
+              txId: payload.tx_id,
+            };
+            targets.forEach((name) => {
+              void (async () => {
+                const ch = supabase.channel(name);
+                try {
+                  await ch.subscribe();
+                  await ch.send({ type: 'broadcast', event: 'FAIR_PAYMENT_SUCCESS', payload: body });
+                } catch { /* the ledger channels still cover this */ }
+                supabase.removeChannel(ch);
+              })();
+            });
           }
           // Free the camera the moment the payment lands.
           stopCamera();
