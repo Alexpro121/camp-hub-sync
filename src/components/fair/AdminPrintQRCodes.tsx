@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import QrCanvas from './QrCanvas';
+import QrSvg from './QrSvg';
 import { FAIR_PRESETS, createFairPayload, formatFairCode } from '@/lib/fair';
 
 /**
@@ -48,7 +48,7 @@ const AdminPrintQRCodes = () => {
             </p>
             <p className="mt-1 text-4xl font-bold tabular-nums tracking-tight">{t.amount}</p>
             <p className="text-[11px] text-neutral-500 mb-2">Айрон-доларів</p>
-            <QrCanvas value={t.value} size={150} />
+            <QrSvg value={t.value} size={150} />
             <p className="mt-2 text-[10px] font-mono tracking-[0.16em] text-neutral-500">
               {formatFairCode(t.payload.code)}
             </p>
