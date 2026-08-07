@@ -1,9 +1,14 @@
 export type ShiftType = 'long' | 'short' | 'international';
+export type ShiftCategory = 'long' | 'short' | 'international';
 
 export interface Shift {
   id: string;
   name: string;
   shift_type: ShiftType;
+  shift_category?: ShiftCategory | null;
+  assigned_teams?: number[] | null;
+  travel_start_date?: string | null;
+  hotel_start_date?: string | null;
   start_date: string;
   end_date: string;
   is_active: boolean;
