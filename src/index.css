@@ -343,6 +343,22 @@
     border: 3px solid rgba(255, 255, 255, 0.9);
     border-radius: 4px;
   }
+
+  /* Telegram-style bounding frame that snaps onto the detected QR geometry. */
+  .scan-frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: 2.5px solid rgba(52, 199, 89, 0.95);
+    border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28), 0 0 18px rgba(52, 199, 89, 0.55);
+    transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+      width 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+      height 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform, width, height;
+    pointer-events: none;
+    z-index: 3;
+  }
   .scan-corner.tl { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
   .scan-corner.tr { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
   .scan-corner.bl { bottom: 12px; left: 12px; border-right: 0; border-top: 0; }

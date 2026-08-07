@@ -1,9 +1,11 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { Coins, RefreshCw, ShoppingBag, Receipt } from 'lucide-react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Coins, RefreshCw, ShoppingBag, Receipt, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
 import QrSvg from './QrSvg';
@@ -27,6 +29,8 @@ interface FeedRow {
 
 /** DOM stays small: only the newest receipts are kept in memory. */
 const FEED_LIMIT = 15;
+/** The success card disappears on its own — no taps, never blocks the next QR. */
+const SUCCESS_CARD_MS = 2500;
 
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
@@ -133,6 +137,30 @@ const LiveReceiptsFeed = memo(({ feed }: { feed: FeedRow[] }) => {
 });
 LiveReceiptsFeed.displayName = 'LiveReceiptsFeed';
 
+/* ------------------------------ Success card -------------------------------- */
+
+interface SuccessToast { id: string; name: string; team: number; amount: number }
+
+const PaymentSuccessCard = memo(({ toast }: { toast: SuccessToast | null }) => (
+  <div className="pointer-events-none fixed inset-x-4 top-4 z-[90] flex justify-center">
+    {toast && (
+      <div
+        key={toast.id}
+        className="animate-scale-in rounded-2xl border border-primary/30 bg-card/95 backdrop-blur-xl px-4 py-3 shadow-lg flex items-center gap-3"
+      >
+        <span className="text-xl">🎉</span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tabular-nums text-primary">+{toast.amount} 💰</p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {toast.name} (Команда №{toast.team})
+          </p>
+        </div>
+      </div>
+    )}
+  </div>
+));
+PaymentSuccessCard.displayName = 'PaymentSuccessCard';
+
 /* ---------------------------------- Screen ---------------------------------- */
 
 const SupervisorFairView = ({ myTeam }: Props) => {
@@ -142,6 +170,10 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   const [nonce, setNonce] = useState(0);
   const [feed, setFeed] = useState<FeedRow[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [toast, setToast] = useState<SuccessToast | null>(null);
+  const [allowOtherTeams, setAllowOtherTeams] = useState(false);
+  const [, startTransition] = useTransition();
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
   const haptics = useHaptics();
 
   // Typing stays at 60 FPS: the QR payload only follows the deferred amount.
@@ -152,6 +184,34 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
+
+  // Fair access settings for this supervisor (default: own team only).
+  useEffect(() => {
+    if (!userId) return;
+    let mounted = true;
+    supabase
+      .from('fair_settings')
+      .select('allow_other_teams')
+      .eq('supervisor_user_id', userId)
+      .maybeSingle()
+      .then(({ data }) => { if (mounted && data) setAllowOtherTeams(!!data.allow_other_teams); });
+    return () => { mounted = false; };
+  }, [userId]);
+
+  const toggleAllowOtherTeams = useCallback(async (next: boolean) => {
+    if (!userId) return;
+    haptics.selection();
+    setAllowOtherTeams(next);
+    const { error } = await supabase
+      .from('fair_settings')
+      .upsert(
+        { supervisor_user_id: userId, team_number: myTeam, allow_other_teams: next },
+        { onConflict: 'supervisor_user_id' },
+      );
+    if (error) setAllowOtherTeams(!next);
+  }, [userId, myTeam, haptics]);
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const payload = useMemo<FairQrPayload | null>(() => {
     if (!Number.isFinite(deferredAmount) || deferredAmount <= 0) return null;
@@ -205,6 +265,12 @@ const SupervisorFairView = ({ myTeam }: Props) => {
       }, (p) => {
         const row = p.new as FeedRow;
         haptics.notification('success');
+        // Auto-hiding success card.
+        setToast({ id: row.id, name: row.child_name, team: row.team_number, amount: row.amount });
+        clearTimeout(toastTimer.current);
+        toastTimer.current = setTimeout(() => setToast(null), SUCCESS_CARD_MS);
+        // Background QR rotation — a fresh tx_id without blocking input.
+        startTransition(() => setNonce((n) => n + 1));
         // Functional update — no refetch, no cascade into the QR generator.
         setFeed((prev) => [row, ...prev.slice(0, FEED_LIMIT - 1)]);
       })
@@ -214,6 +280,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
   return (
     <div className="space-y-3">
+      <PaymentSuccessCard toast={toast} />
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center gap-2 mb-3">
           <ShoppingBag className="w-4 h-4 text-primary" strokeWidth={1.75} />
@@ -242,6 +309,30 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         {error && <p className="text-xs text-destructive mt-2">{error}</p>}
 
         <QrDisplay payload={payload} amount={amount} stale={stale} />
+      </Card>
+
+      <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <Users className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
+            <div className="min-w-0">
+              <Label htmlFor="allow-other-teams" className="text-sm font-medium">
+                Дозволити оплату дітям з інших команд
+              </Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {allowOtherTeams
+                  ? 'Купувати можуть діти з будь-якої команди'
+                  : `Купувати можуть лише діти Команди №${myTeam ?? '—'}`}
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="allow-other-teams"
+            checked={allowOtherTeams}
+            onCheckedChange={toggleAllowOtherTeams}
+            disabled={!userId}
+          />
+        </div>
       </Card>
 
       <LiveReceiptsFeed feed={feed} />

@@ -220,6 +220,30 @@ export type Database = {
           },
         ]
       }
+      fair_settings: {
+        Row: {
+          allow_other_teams: boolean
+          created_at: string
+          supervisor_user_id: string
+          team_number: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_other_teams?: boolean
+          created_at?: string
+          supervisor_user_id: string
+          team_number?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_other_teams?: boolean
+          created_at?: string
+          supervisor_user_id?: string
+          team_number?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       iron_dollar_transactions: {
         Row: {
           amount_change: number
