@@ -301,6 +301,32 @@ const ShiftsTab = () => {
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label className="text-xs">Команди зміни</Label>
+            <Input
+              value={teamsInput}
+              onChange={e => setTeamsInput(e.target.value)}
+              placeholder="1-6 або 7, 8"
+              className="h-11"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Діти цих команд автоматично прив'язуються до зміни. За замовчуванням: Коротка — 1-6, Довга — 7-8.
+            </p>
+          </div>
+
+          {type === 'long' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Старт подорожі</Label>
+                <Input type="date" value={travelStart} onChange={e => setTravelStart(e.target.value)} className="h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Заїзд у Буковель</Label>
+                <Input type="date" value={hotelStart} onChange={e => setHotelStart(e.target.value)} className="h-11" />
+              </div>
+            </div>
+          )}
+
           {/* File upload area */}
           <div className="space-y-1.5">
             <Label className="text-xs">Варіант А · Файл (.xlsx / .xls / .csv)</Label>
