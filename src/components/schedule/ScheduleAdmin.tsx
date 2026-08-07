@@ -19,7 +19,7 @@ import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 
 const CATEGORIES = CATEGORY_LIST;
 

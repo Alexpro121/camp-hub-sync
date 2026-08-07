@@ -18,7 +18,7 @@ interface Props {
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 const DAY_START = 7 * 60;
 const DAY_END = 22 * 60;
 const PX_PER_MIN = 1.25;
