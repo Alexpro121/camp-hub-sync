@@ -15,6 +15,7 @@ import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import { shiftStatus } from '@/lib/shift';
+import { CATEGORY_LABELS, DEFAULT_TEAMS, parseTeamsInput, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
@@ -76,6 +77,9 @@ const ShiftsTab = () => {
   const [type, setType] = useState<ShiftType>('long');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [teamsInput, setTeamsInput] = useState(DEFAULT_TEAMS.long.join(', '));
+  const [travelStart, setTravelStart] = useState('');
+  const [hotelStart, setHotelStart] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
@@ -103,6 +107,8 @@ const ShiftsTab = () => {
 
   const onTypeChange = (t: ShiftType) => {
     setType(t);
+    setTeamsInput(DEFAULT_TEAMS[t].join(', '));
+    if (t !== 'long') { setTravelStart(''); setHotelStart(''); }
     const e = computeEnd(start, t);
     if (e) setEnd(e);
   };
@@ -121,7 +127,25 @@ const ShiftsTab = () => {
   const reset = () => {
     setName(''); setStart(''); setEnd(''); setFile(null); setSheetUrl('');
     setPreview(null); setSourceLabel('');
+    setTravelStart(''); setHotelStart(''); setTeamsInput(DEFAULT_TEAMS[type].join(', '));
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  /** Fields shared by both create paths — category, team range and phase dates. */
+  const shiftPayload = () => {
+    const teams = parseTeamsInput(teamsInput);
+    return {
+      name,
+      shift_type: type,
+      shift_category: type,
+      assigned_teams: teams.length ? teams : DEFAULT_TEAMS[type],
+      travel_start_date: type === 'long' ? (travelStart || start || null) : null,
+      hotel_start_date: type === 'long' ? (hotelStart || null) : null,
+      start_date: start,
+      end_date: end,
+      team_offset: 0,
+      is_active: true,
+    };
   };
 
   /** Step 1 — read the source (file or Google Sheet), analyze columns, show preview. */
@@ -152,10 +176,7 @@ const ShiftsTab = () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert({
-        name, shift_type: type, start_date: start, end_date: end,
-        team_offset: 0, is_active: true,
-      }).select().single();
+      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       toast.success('Зміну створено');
       reset();
@@ -173,10 +194,7 @@ const ShiftsTab = () => {
     setCreating(true);
     island.showExcelProgress(20, sourceLabel || 'Google Sheets');
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert({
-        name, shift_type: type, start_date: start, end_date: end,
-        team_offset: 0, is_active: true,
-      }).select().single();
+      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
 
       const valid = preview.rows.filter(r => r.full_name && r.team_number);
