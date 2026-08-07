@@ -1,4 +1,4 @@
-import { type ComponentType } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -6,7 +6,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 export interface DockItem {
   value: string;
   label: string;
-  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: LucideIcon;
   badge?: number;
   isNew?: boolean;
 }
