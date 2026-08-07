@@ -217,7 +217,7 @@ const ChildFlow = ({ onBack }: Props) => {
             {fair.active && (!phase || phase.currentPhase !== 'PREPARING') && (
               <ChildFairCard balance={child.iron_dollars} />
             )}
-            {(!phase || phase.currentPhase !== 'PREPARING') && <ChildCoupeCard childId={child.id} />}
+            {(!phase || phase.currentPhase !== 'PREPARING') && <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />}
 
             <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
               <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">

@@ -16,7 +16,7 @@ interface Row extends SwapRow {
 }
 
 /** "Твоє купе в потязі" — coupe, neighbours, trips and optional seat swapping. */
-const ChildCoupeCard = ({ childId }: { childId: string }) => {
+const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: number }) => {
   const { settings } = useTrainSettings();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,7 +140,7 @@ const ChildCoupeCard = ({ childId }: { childId: string }) => {
             open={swapOpen}
             onOpenChange={setSwapOpen}
             childId={childId}
-            teamNumber={0}
+            teamNumber={teamNumber}
             tripNumber={trip}
             shiftId={settings.shiftId}
             rows={tripRows}
