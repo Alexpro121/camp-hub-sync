@@ -63,9 +63,12 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     setCustom(raw);
     if (!raw.trim()) { setError(null); return; }
     const res = validateFairAmount(raw);
-    if (!res.ok) { setError(res.error); return; }
-    setError(null);
-    setAmount(res.amount);
+    if (res.ok) {
+      setError(null);
+      setAmount(res.amount);
+    } else {
+      setError(res.error);
+    }
   };
 
   // Live purchases feed for this supervisor's team.
