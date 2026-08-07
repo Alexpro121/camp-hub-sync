@@ -116,6 +116,7 @@ export type Database = {
           child_id: string
           created_at: string
           id: string
+          idempotency_key: string | null
           performed_by: string | null
           reason: string | null
           supervisor_user_id: string | null
@@ -126,6 +127,7 @@ export type Database = {
           child_id: string
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           performed_by?: string | null
           reason?: string | null
           supervisor_user_id?: string | null
@@ -136,6 +138,7 @@ export type Database = {
           child_id?: string
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           performed_by?: string | null
           reason?: string | null
           supervisor_user_id?: string | null
@@ -566,7 +569,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_iron_dollars: {
+        Args: {
+          p_amount: number
+          p_child_id: string
+          p_idempotency_key?: string
+          p_reason?: string
+          p_supervisor_id?: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       app_role: "admin" | "supervisor" | "child"
