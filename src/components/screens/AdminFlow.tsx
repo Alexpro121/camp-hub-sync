@@ -724,6 +724,10 @@ const ShiftStatsCard = ({ stats: r }: { stats: ShiftStats }) => {
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {SHIFT_LABELS[r.shift.shift_type]} · {r.shift.start_date} → {r.shift.end_date}
           </p>
+          <p className="text-[11px] text-primary mt-0.5">
+            {CATEGORY_LABELS[resolveShiftPhase(r.shift).category]} (Команди {formatTeams(teamsOf(r.shift))}): {r.total} дітей
+            {' · '}Етап: {resolveShiftPhase(r.shift).phaseTitle}
+          </p>
         </div>
       </div>
 
