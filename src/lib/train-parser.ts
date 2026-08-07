@@ -70,13 +70,19 @@ const CITY_LINES = ['львів', 'івано-франківськ', 'київ',
 
 /** Split "ПІБ - Місто" at the FIRST dash, keeping hyphenated city names intact. */
 function splitNameCity(line: string): { name: string; boardingCity: string | null } {
-  const m = line.match(/^(.*?)\s*[-–—]\s*(.+)$/u);
+  // Prefer a dash surrounded by spaces so hyphenated surnames stay intact.
+  const m = line.match(/^(.*?)\s+[-–—]\s+(.+)$/u) ?? line.match(/^(.*?)\s*[-–—]\s*(.+)$/u);
   if (!m) return { name: line, boardingCity: null };
   const name = m[1].trim();
   const city = m[2].trim();
   if (!name || !city) return { name: line, boardingCity: null };
   return { name, boardingCity: city };
 }
+
+/** "Прізвище Ім'я" in Cyrillic or Latin — enough to know the seat list started. */
+const NAME_LIKE = /^[\p{Lu}][\p{L}'’-]+\s+[\p{Lu}]/u;
+/** Leading numbering: "5.", "5)", "5 " at the start of a seat line. */
+const LEADING_NUM = /^(\d{1,3})\s*[.)]\s*/;
 
 /**
  * Sequential positional parser: no seat numbers in the source.
@@ -104,28 +110,31 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
     }
     if (currentTeam === null) continue;
 
-    const isPlaceholder = PLACEHOLDER.test(line);
+    const numbered = line.match(LEADING_NUM);
+    const body = numbered ? line.slice(numbered[0].length).trim() : line;
+    const isPlaceholder = PLACEHOLDER.test(body) || PLACEHOLDER.test(line);
 
     // Header lines listing several people through commas
     // ("Даша Мелікян, Лера Березанцева, Сізіков Олексій (каченя)") describe
     // the supervising crew — they are never a seat.
-    if (!isParsingSeats && line.includes(',') && line.split(',').length >= 2) {
+    if (!isParsingSeats && !numbered && line.includes(',') && line.split(',').length >= 2) {
       continue;
     }
 
     if (!isParsingSeats) {
-      if (isPlaceholder || /^[А-ЯІЇЄҐ][а-яіїєґ'’-]+\s+[А-ЯІЇЄҐ]/u.test(line)) {
+      if (numbered || isPlaceholder || NAME_LIKE.test(line)) {
         isParsingSeats = true;
       } else {
         continue; // header/description line ("МАН + Сайт", "Лідери…")
       }
     }
 
-    seatCounter++;
+    // Explicit numbering in the source wins over the running counter.
+    seatCounter = numbered ? parseInt(numbered[1], 10) : seatCounter + 1;
     if (seatCounter > 40) continue;
     if (isPlaceholder) continue;
 
-    let { name, boardingCity } = splitNameCity(line.replace(/^\d{1,2}\s*[.)]\s*/, ''));
+    let { name, boardingCity } = splitNameCity(body);
     // City written on its own line right below the passenger
     if (!boardingCity && i + 1 < lines.length) {
       const next = normalizeLine(lines[i + 1]).replace(/^м\.\s*/i, '').trim();
