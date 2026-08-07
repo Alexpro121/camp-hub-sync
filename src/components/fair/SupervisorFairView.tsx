@@ -174,6 +174,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   const [allowOtherTeams, setAllowOtherTeams] = useState(false);
   const [, startTransition] = useTransition();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  const seenRef = useRef<Set<string>>(new Set());
   const haptics = useHaptics();
 
   // Typing stays at 60 FPS: the QR payload only follows the deferred amount.
@@ -244,6 +245,22 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   useEffect(() => {
     if (!userId) return;
     let mounted = true;
+
+    const pushReceipt = (row: FeedRow) => {
+      if (!mounted) return;
+      // Manual-code payments arrive on two channels — never show them twice.
+      if (seenRef.current.has(row.id)) return;
+      seenRef.current.add(row.id);
+
+      // Instant QR rotation: the scanned code can never be reused.
+      startTransition(() => setNonce((n) => n + 1));
+      haptics.notification('success');
+      setToast({ id: row.id, name: row.child_name, team: row.team_number, amount: row.amount });
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), SUCCESS_CARD_MS);
+      setFeed((prev) => [row, ...prev.slice(0, FEED_LIMIT - 1)]);
+    };
+
     const load = async () => {
       const { data } = await supabase
         .from('fair_payments')
@@ -266,10 +283,6 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         const tx = p.new as {
           id: string; child_id: string; amount_change: number; created_at: string;
         };
-        // Instant QR rotation: the scanned code can never be reused.
-        startTransition(() => setNonce((n) => n + 1));
-        haptics.notification('success');
-
         // Resolve the child's full name and team for the success HUD.
         const { data: child } = await supabase
           .from('children')
@@ -278,21 +291,44 @@ const SupervisorFairView = ({ myTeam }: Props) => {
           .maybeSingle();
         if (!mounted) return;
 
-        const row: FeedRow = {
+        pushReceipt({
           id: tx.id,
           child_name: child?.full_name ?? 'Дитина',
           team_number: child?.team_number ?? 0,
           amount: Math.abs(tx.amount_change),
           created_at: tx.created_at,
-        };
-        setToast({ id: row.id, name: row.child_name, team: row.team_number, amount: row.amount });
-        clearTimeout(toastTimer.current);
-        toastTimer.current = setTimeout(() => setToast(null), SUCCESS_CARD_MS);
-        setFeed((prev) => [row, ...prev.slice(0, FEED_LIMIT - 1)]);
+        });
       })
       .subscribe();
-    return () => { mounted = false; supabase.removeChannel(ch); };
-  }, [userId, haptics]);
+
+    // Fallback: a manually typed fair code carries no supervisor id, so the ledger
+    // filter above never fires. Watch this team's fair receipts instead.
+    const teamCh = myTeam == null ? null : supabase
+      .channel(`supervisor_fair_team:${myTeam}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'fair_payments',
+        filter: `team_number=eq.${myTeam}`,
+      }, (p) => {
+        const r = p.new as FeedRow & { supervisor_user_id: string | null };
+        if (r.supervisor_user_id && r.supervisor_user_id !== userId) return;
+        pushReceipt({
+          id: r.id,
+          child_name: r.child_name,
+          team_number: r.team_number,
+          amount: Math.abs(r.amount),
+          created_at: r.created_at,
+        });
+      })
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(ch);
+      if (teamCh) supabase.removeChannel(teamCh);
+    };
+  }, [userId, myTeam, haptics]);
 
   return (
     <div className="space-y-3">
