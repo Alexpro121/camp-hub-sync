@@ -163,6 +163,8 @@ const ShiftsTab = () => {
       if (!res.rows.length) { island.hide(); toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
       setSourceLabel(file ? file.name : sheetUrl.trim());
       setPreview(res);
+      // Teams are derived from the file itself — never from a template.
+      if (res.detectedTeams.length) setTeams(res.detectedTeams);
       setPreviewOpen(true);
       island.showExcelProgress(100, file ? file.name : 'Google Sheets');
       setTimeout(() => island.hide(), 700);
@@ -178,7 +180,13 @@ const ShiftsTab = () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
+      const detected = preview.detectedTeams;
+      const finalTeams = [...new Set([...teams, ...detected])].sort((a, b) => a - b);
+      const { data: shift, error: shErr } = await supabase
+        .from('shifts')
+        .insert({ ...shiftPayload(), assigned_teams: finalTeams })
+        .select()
+        .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       toast.success('Зміну створено');
       reset();

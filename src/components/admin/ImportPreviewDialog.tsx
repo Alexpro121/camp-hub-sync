@@ -27,7 +27,7 @@ const ORDER: StdKey[] = ['full_name', 'team_number', 'phone', 'is_present', 'row
 const ImportPreviewDialog = ({ open, onOpenChange, result, busy, onConfirm }: Props) => {
   if (!result) return null;
   const found = new Set(Object.values(result.headerMap));
-  const teams = Array.from(new Set(result.rows.map((r) => r.team_number).filter(Boolean))).sort((a, b) => a - b);
+  const teams = result.detectedTeams;
   const issues = result.rows.filter((r) => r._issues.length);
   const phonesNormalized = result.rows.filter((r) => r.phone?.startsWith('+380')).length;
   const canImport = result.rows.length > 0 && found.has('full_name') && found.has('team_number');
@@ -47,8 +47,7 @@ const ImportPreviewDialog = ({ open, onOpenChange, result, busy, onConfirm }: Pr
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-primary shrink-0" />
             <p className="text-sm font-bold">
-              Успішно зчитано: {result.rows.length} дітей
-              {teams.length ? ` у ${teams.length > 1 ? 'командах' : 'команді'} №${teams.join(', №')}` : ''}
+              Виявлено команди у файлі: {teams.length ? teams.map((t) => `Команда №${t}`).join(', ') : '—'} — всього {result.rows.length} дітей
             </p>
           </div>
           <Badge variant="secondary" className="text-[10px] gap-1">
