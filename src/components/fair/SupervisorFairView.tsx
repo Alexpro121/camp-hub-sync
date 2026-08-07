@@ -73,27 +73,34 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
   // Live purchases feed for this supervisor's team.
   useEffect(() => {
+    if (!userId) return;
     let mounted = true;
     const load = async () => {
       const { data } = await supabase
         .from('fair_payments')
         .select('id, child_name, team_number, amount, created_at')
+        .eq('supervisor_user_id', userId)
         .order('created_at', { ascending: false })
         .limit(25);
       if (mounted) setFeed((data || []) as FeedRow[]);
     };
     load();
+    // Server-side filter keeps the Telegram WebView off other supervisors' traffic.
     const ch = supabase
-      .channel('fair-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'fair_payments' }, (p) => {
+      .channel(`supervisor_fair_txs:${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'fair_payments',
+        filter: `supervisor_user_id=eq.${userId}`,
+      }, (p) => {
         const row = p.new as FeedRow;
-        if (myTeam != null && row.team_number !== myTeam) return;
         haptics.notification('success');
         setFeed((cur) => [row, ...cur].slice(0, 25));
       })
       .subscribe();
     return () => { mounted = false; supabase.removeChannel(ch); };
-  }, [myTeam]);
+  }, [userId]);
 
   const total = useMemo(() => feed.reduce((s, r) => s + r.amount, 0), [feed]);
   const qrValue = payload ? JSON.stringify(payload) : '';
