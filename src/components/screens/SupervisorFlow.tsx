@@ -25,8 +25,6 @@ import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useTeamPhase } from '@/hooks/useTeamPhase';
-import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useFairActive } from '@/hooks/useFairActive';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
 
@@ -50,7 +48,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const talent = useTalentEventActive();
   const fair = useFairActive();
   const isMobile = useIsMobile();
-  const { status: phase } = useTeamPhase(authedTeam);
 
   const tabItems: DockItem[] = [
     { value: 'teams', label: 'Команди', icon: Users },
