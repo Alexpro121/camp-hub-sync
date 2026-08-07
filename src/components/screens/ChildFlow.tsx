@@ -41,6 +41,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
+  const fair = useFairActive();
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // App-wide schedule alerts: the island pops on any screen once logged in.

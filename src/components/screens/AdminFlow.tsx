@@ -48,11 +48,12 @@ const AdminFlow = ({ onBack }: Props) => {
 
       <Tabs defaultValue="shifts" className="w-full px-3">
         <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
-          <TabsList className="grid grid-cols-6 h-[54px] w-full p-1">
+          <TabsList className="grid grid-cols-7 h-[54px] w-full p-1">
             <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Calendar className="w-[18px] h-[18px]" /> <span>Зміни</span></TabsTrigger>
             <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none"><CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span></TabsTrigger>
             <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span></TabsTrigger>
             <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Train className="w-[18px] h-[18px]" /> <span>Потяг</span></TabsTrigger>
+            <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[11px] leading-none"><ShoppingBag className="w-[18px] h-[18px]" /> <span>Ярмарок</span></TabsTrigger>
             <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[11px] leading-none"><BarChart3 className="w-[18px] h-[18px]" /> <span>Статистика</span></TabsTrigger>
             <TabsTrigger value="data" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Database className="w-[18px] h-[18px]" /> <span>База</span></TabsTrigger>
           </TabsList>
@@ -62,6 +63,7 @@ const AdminFlow = ({ onBack }: Props) => {
         <TabsContent value="schedule" className="mt-3"><ScheduleAdmin /></TabsContent>
         <TabsContent value="talent" className="mt-3"><TalentAdmin /></TabsContent>
         <TabsContent value="coupes" className="mt-3"><TrainTab /></TabsContent>
+        <TabsContent value="fair" className="mt-3"><AdminPrintQRCodes /></TabsContent>
         <TabsContent value="stats" className="mt-3"><StatsTab /></TabsContent>
         <TabsContent value="data" className="mt-3"><DataTab /></TabsContent>
       </Tabs>
