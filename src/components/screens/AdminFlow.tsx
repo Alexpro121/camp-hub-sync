@@ -691,8 +691,22 @@ const StatsTab = () => {
   );
 };
 
+/** "1-6" / "7, 8" compact team range label. */
+const formatTeams = (teams: number[]): string => {
+  if (!teams.length) return '—';
+  const sorted = [...teams].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let s = sorted[0], p = sorted[0];
+  for (let i = 1; i <= sorted.length; i++) {
+    const n = sorted[i];
+    if (n === p + 1) { p = n; continue; }
+    parts.push(s === p ? String(s) : `${s}-${p}`);
+    s = n; p = n;
+  }
+  return parts.join(', ');
+};
+
 const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) => (
-  <Card className="p-3 bg-gradient-card">
   <Card className="p-3 bg-gradient-card">
     <div className="flex items-center gap-1 text-muted-foreground">
       {icon}
