@@ -15,6 +15,7 @@ import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import { shiftStatus } from '@/lib/shift';
+import { CATEGORY_LABELS, DEFAULT_TEAMS, parseTeamsInput, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
@@ -76,6 +77,9 @@ const ShiftsTab = () => {
   const [type, setType] = useState<ShiftType>('long');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
+  const [teamsInput, setTeamsInput] = useState(DEFAULT_TEAMS.long.join(', '));
+  const [travelStart, setTravelStart] = useState('');
+  const [hotelStart, setHotelStart] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
@@ -103,6 +107,8 @@ const ShiftsTab = () => {
 
   const onTypeChange = (t: ShiftType) => {
     setType(t);
+    setTeamsInput(DEFAULT_TEAMS[t].join(', '));
+    if (t !== 'long') { setTravelStart(''); setHotelStart(''); }
     const e = computeEnd(start, t);
     if (e) setEnd(e);
   };
@@ -121,7 +127,25 @@ const ShiftsTab = () => {
   const reset = () => {
     setName(''); setStart(''); setEnd(''); setFile(null); setSheetUrl('');
     setPreview(null); setSourceLabel('');
+    setTravelStart(''); setHotelStart(''); setTeamsInput(DEFAULT_TEAMS[type].join(', '));
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  /** Fields shared by both create paths — category, team range and phase dates. */
+  const shiftPayload = () => {
+    const teams = parseTeamsInput(teamsInput);
+    return {
+      name,
+      shift_type: type,
+      shift_category: type,
+      assigned_teams: teams.length ? teams : DEFAULT_TEAMS[type],
+      travel_start_date: type === 'long' ? (travelStart || start || null) : null,
+      hotel_start_date: type === 'long' ? (hotelStart || null) : null,
+      start_date: start,
+      end_date: end,
+      team_offset: 0,
+      is_active: true,
+    };
   };
 
   /** Step 1 — read the source (file or Google Sheet), analyze columns, show preview. */
@@ -152,10 +176,7 @@ const ShiftsTab = () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert({
-        name, shift_type: type, start_date: start, end_date: end,
-        team_offset: 0, is_active: true,
-      }).select().single();
+      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       toast.success('Зміну створено');
       reset();
@@ -173,10 +194,7 @@ const ShiftsTab = () => {
     setCreating(true);
     island.showExcelProgress(20, sourceLabel || 'Google Sheets');
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert({
-        name, shift_type: type, start_date: start, end_date: end,
-        team_offset: 0, is_active: true,
-      }).select().single();
+      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
 
       const valid = preview.rows.filter(r => r.full_name && r.team_number);
@@ -282,6 +300,32 @@ const ShiftsTab = () => {
               <Input type="date" value={end} onChange={e => setEnd(e.target.value)} className="h-11" />
             </div>
           </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Команди зміни</Label>
+            <Input
+              value={teamsInput}
+              onChange={e => setTeamsInput(e.target.value)}
+              placeholder="1-6 або 7, 8"
+              className="h-11"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Діти цих команд автоматично прив'язуються до зміни. За замовчуванням: Коротка — 1-6, Довга — 7-8.
+            </p>
+          </div>
+
+          {type === 'long' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Старт подорожі</Label>
+                <Input type="date" value={travelStart} onChange={e => setTravelStart(e.target.value)} className="h-11" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Заїзд у Буковель</Label>
+                <Input type="date" value={hotelStart} onChange={e => setHotelStart(e.target.value)} className="h-11" />
+              </div>
+            </div>
+          )}
 
           {/* File upload area */}
           <div className="space-y-1.5">
@@ -399,6 +443,9 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
         </div>
         <p className="text-xs text-muted-foreground">
           {SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Команди {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
         </p>
         <p className="text-[11px] text-primary mt-0.5 flex items-center gap-1">
           <FileSpreadsheet className="w-3 h-3" /> {count ?? '...'} дітей
@@ -644,6 +691,21 @@ const StatsTab = () => {
   );
 };
 
+/** "1-6" / "7, 8" compact team range label. */
+const formatTeams = (teams: number[]): string => {
+  if (!teams.length) return '—';
+  const sorted = [...teams].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let s = sorted[0], p = sorted[0];
+  for (let i = 1; i <= sorted.length; i++) {
+    const n = sorted[i];
+    if (n === p + 1) { p = n; continue; }
+    parts.push(s === p ? String(s) : `${s}-${p}`);
+    s = n; p = n;
+  }
+  return parts.join(', ');
+};
+
 const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) => (
   <Card className="p-3 bg-gradient-card">
     <div className="flex items-center gap-1 text-muted-foreground">
@@ -676,6 +738,10 @@ const ShiftStatsCard = ({ stats: r }: { stats: ShiftStats }) => {
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {SHIFT_LABELS[r.shift.shift_type]} · {r.shift.start_date} → {r.shift.end_date}
+          </p>
+          <p className="text-[11px] text-primary mt-0.5">
+            {CATEGORY_LABELS[resolveShiftPhase(r.shift).category]} (Команди {formatTeams(teamsOf(r.shift))}): {r.total} дітей
+            {' · '}Етап: {resolveShiftPhase(r.shift).phaseTitle}
           </p>
         </div>
       </div>

@@ -23,6 +23,8 @@ import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useTeamPhase } from '@/hooks/useTeamPhase';
+import PhaseBanner from '@/components/shift/PhaseBanner';
 
 interface Props {
   onBack: () => void;
@@ -42,6 +44,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const haptics = useHaptics();
   const talent = useTalentEventActive();
   const isMobile = useIsMobile();
+  const { status: phase } = useTeamPhase(authedTeam);
 
   const tabItems: DockItem[] = [
     { value: 'teams', label: 'Команди', icon: Users },
@@ -229,6 +232,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             <p className="text-lg font-black text-primary leading-none">#{authedTeam}</p>
           </div>
         </div>
+        {phase && (
+          <div className="mt-2">
+            <PhaseBanner status={phase} teamNumber={authedTeam} compact />
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3">
