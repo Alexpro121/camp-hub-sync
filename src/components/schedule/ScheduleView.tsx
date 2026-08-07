@@ -7,10 +7,14 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
 import { catMeta, fromMinutes, sentenceCase, toMinutes } from '@/lib/scheduleCategories';
+import {
+  minutesSinceDayStart,
+  normalizeScheduleItems,
+  ongoingEvents,
+  shiftISODate,
+  type NormalizedScheduleItem,
+} from '@/lib/schedule';
 import { type ReminderEvent } from '@/hooks/useEventReminders';
-
-/** Fallback duration when the source table has no end time. */
-const DEFAULT_DURATION = 60;
 
 interface Props {
   myTeam?: number | null;
@@ -87,47 +91,58 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
   }, []);
 
   const daySchedule = schedules.find((s) => s.date === activeDay);
-  const dayItems = useMemo(() => {
-    let list = items.filter((i) => i.schedule_id === daySchedule?.id);
-    if (team != null) {
-      list = list.filter((i) =>
-        !i.target_teams?.length ||
-        i.target_teams.includes(team) ||
-        slotsOf(i).some((s) => s.teams?.includes(team)),
-      );
-    }
-    return list.sort((a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index);
-  }, [items, daySchedule?.id, team]);
 
-  const isToday = daySchedule?.date === todayISO();
+  const matchesTeam = useMemo(
+    () => (i: ScheduleItem) =>
+      team == null ||
+      !i.target_teams?.length ||
+      i.target_teams.includes(team) ||
+      slotsOf(i).some((s) => s.teams?.includes(team)),
+    [team],
+  );
+
+  /** Events of the selected day, with ISO start/end (auto +1 day past midnight). */
+  const dayEvents = useMemo<NormalizedScheduleItem[]>(() => {
+    if (!daySchedule) return [];
+    return normalizeScheduleItems(items.filter((i) => i.schedule_id === daySchedule.id).filter(matchesTeam), daySchedule.date);
+  }, [items, daySchedule?.id, daySchedule?.date, matchesTeam]);
+
+  /** Yesterday's night events that are still running right now (cross-midnight). */
+  const carryOver = useMemo<NormalizedScheduleItem[]>(() => {
+    if (!activeDay) return [];
+    const prev = schedules.find((s) => s.date === shiftISODate(activeDay, -1));
+    if (!prev) return [];
+    const prevEvents = normalizeScheduleItems(items.filter((i) => i.schedule_id === prev.id).filter(matchesTeam), prev.date);
+    // Shift into the selected day's minute space (start is negative, i.e. before 00:00).
+    return ongoingEvents(prevEvents, now).map((e) => ({ ...e, startMin: e.startMin - 1440, endMin: e.endMin - 1440 }));
+  }, [items, schedules, activeDay, matchesTeam, now]);
+
+  const visibleEvents = useMemo(() => [...carryOver, ...dayEvents], [carryOver, dayEvents]);
+  const dayItems = useMemo(() => visibleEvents.map((e) => e.item), [visibleEvents]);
+
+  /** Minutes since 00:00 of the selected day (can be < 0 or > 1440 for other days). */
+  const nowRel = activeDay ? minutesSinceDayStart(activeDay, now) : -1;
+  const isToday = nowRel >= 0 && nowRel < 1440;
+  const nowMin = Math.round(nowRel);
 
   /** Absolute time-based tops, pushed down so cards never overlap each other. */
   const laidOut = useMemo(() => {
     let prevBottom = -Infinity;
-    return dayItems.map((i, idx) => {
-      const start = toMinutes(i.time_start);
-      if (start == null) return { item: i, top: null as number | null, height: 0 };
-      // Every event must show a full HH:MM – HH:MM range: derive the end from the
-      // next event's start (capped) or fall back to a default duration.
-      const nextStart = toMinutes(dayItems[idx + 1]?.time_start);
-      const end =
-        toMinutes(i.time_end) ??
-        (nextStart != null && nextStart > start ? Math.min(nextStart, start + DEFAULT_DURATION) : start + DEFAULT_DURATION);
-      const slots = slotsOf(i);
+    return visibleEvents.map((e) => {
+      const slots = slotsOf(e.item);
       const minH = slots.length ? 96 + slots.length * 10 : 74;
-      const height = Math.max(minH, (end - start) * PX_PER_MIN);
-      const wanted = (Math.max(start, DAY_START) - DAY_START) * PX_PER_MIN;
+      const height = Math.max(minH, (e.endMin - e.startMin) * PX_PER_MIN);
+      const wanted = (Math.max(e.startMin, DAY_START) - DAY_START) * PX_PER_MIN;
       const top = Math.max(wanted, prevBottom + 8);
       prevBottom = top + height;
-      return { item: i, top, height, range: `${fromMinutes(start)} – ${fromMinutes(end)}`, endMin: end };
+      return { event: e, item: e.item, top, height, range: e.range, startMin: e.startMin, endMin: e.endMin };
     });
-  }, [dayItems]);
+  }, [visibleEvents]);
 
   const canvasHeight = Math.max(
     (DAY_END - DAY_START) * PX_PER_MIN + 24,
     ...laidOut.map((l) => (l.top ?? 0) + l.height + 24),
   );
-  const nowMin = now.getHours() * 60 + now.getMinutes();
 
   /* ---- local reminders: 5 min before + at start (today, own team only) ---- */
   const todaySchedule = schedules.find((s) => s.date === todayISO());
@@ -151,22 +166,16 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
   /** Next upcoming event of today for the summary strip. */
   const nextUp = useMemo(() => {
     if (!isToday) return null;
-    const upcoming = laidOut
-      .map((l) => ({ l, s: toMinutes(l.item.time_start) }))
-      .filter((x) => x.s != null && (x.s as number) > nowMin)
-      .sort((a, b) => (a.s as number) - (b.s as number))[0];
-    return upcoming ? { item: upcoming.l.item, inMin: (upcoming.s as number) - nowMin, range: upcoming.l.range } : null;
-  }, [laidOut, nowMin, isToday]);
+    const upcoming = laidOut.filter((l) => l.startMin > nowRel).sort((a, b) => a.startMin - b.startMin)[0];
+    return upcoming ? { item: upcoming.item, inMin: Math.round(upcoming.startMin - nowRel), range: upcoming.range } : null;
+  }, [laidOut, nowRel, isToday]);
 
-  const currentId = useMemo(() => {
+  /** Currently running event — stays active until its exact endAt, even past 00:00. */
+  const currentEvent = useMemo(() => {
     if (!isToday) return null;
-    let id: string | null = null;
-    laidOut.forEach(({ item: i, endMin }) => {
-      const s = toMinutes(i.time_start);
-      if (s != null && endMin != null && nowMin >= s && nowMin < endMin) id = i.id;
-    });
-    return id;
-  }, [laidOut, nowMin, isToday]);
+    return laidOut.find((l) => nowRel >= l.startMin && nowRel < l.endMin) ?? null;
+  }, [laidOut, nowRel, isToday]);
+  const currentId = currentEvent?.item.id ?? null;
 
   const dayIdx = schedules.findIndex((s) => s.date === activeDay);
   const goDay = (delta: number) => {
@@ -262,6 +271,26 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
         )}
       </Card>
 
+      {currentEvent && (
+        <Card className="flex items-center gap-2.5 p-2.5 bg-card/80 backdrop-blur-md border-primary/40 ring-1 ring-primary/20">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-primary/60 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-primary font-semibold">Зараз триває</p>
+            <p className="text-sm font-semibold truncate">{sentenceCase(currentEvent.item.title)}</p>
+            <div className="mt-1 h-[3px] rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-1000"
+                style={{ width: `${Math.min(100, Math.max(0, ((nowRel - currentEvent.startMin) / Math.max(1, currentEvent.endMin - currentEvent.startMin)) * 100))}%` }}
+              />
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground shrink-0">{currentEvent.range}</span>
+        </Card>
+      )}
+
       {nextUp && (
         <Card className="flex items-center gap-2.5 p-2.5 bg-card/80 backdrop-blur-md border-border/40">
           <Bell className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
@@ -307,15 +336,13 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
               </div>
             )}
 
-            {laidOut.map(({ item: i, top, height, range, endMin }) => {
-              if (top == null) return null;
+            {laidOut.map(({ item: i, top, height, range, startMin, endMin }) => {
               const meta = catMeta(i.category);
               const Icon = meta.icon;
               const slots = slotsOf(i);
               const isNow = i.id === currentId;
-              const startMin = toMinutes(i.time_start) ?? 0;
-              const progress = isNow && endMin ? Math.min(100, Math.max(0, ((nowMin - startMin) / Math.max(1, endMin - startMin)) * 100)) : 0;
-              const past = isToday && endMin != null && nowMin >= endMin;
+              const progress = isNow ? Math.min(100, Math.max(0, ((nowRel - startMin) / Math.max(1, endMin - startMin)) * 100)) : 0;
+              const past = isToday && nowRel >= endMin;
               const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
               return (
                 <div key={i.id} className="absolute right-1 z-10" style={{ top, left: GUTTER, minHeight: height }}>
