@@ -66,6 +66,23 @@ export function groupSubSlots(items: AiScheduleItem[]): AiScheduleItem[] {
   return out;
 }
 
+/**
+ * Every event must render as HH:MM – HH:MM. When the source gives only a start
+ * time, derive the end from the next event (capped at 2h) or default to +1h.
+ */
+function fillMissingEnds(items: AiScheduleItem[]): AiScheduleItem[] {
+  const pad = (m: number) =>
+    `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return items.map((it, i) => {
+    if (it.time_end) return it;
+    const start = toMin(it.time_start);
+    if (start == null) return it;
+    const nextStart = toMin(items[i + 1]?.time_start ?? null);
+    const gap = nextStart != null && nextStart > start ? nextStart - start : 60;
+    return { ...it, time_end: pad(start + Math.min(gap, 120)) };
+  });
+}
+
 /** Local regex fallback: never throws, always returns something usable. */
 export function fallbackParse(raw: string): { items: AiScheduleItem[]; date: string | null } {
   const parsed = parseScheduleText(raw).map<AiScheduleItem>((it) => ({
@@ -74,7 +91,7 @@ export function fallbackParse(raw: string): { items: AiScheduleItem[]; date: str
     has_sub_slots: false,
     sub_slots: [],
   }));
-  return { items: groupSubSlots(parsed), date: extractDate(raw) };
+  return { items: fillMissingEnds(groupSubSlots(parsed)), date: extractDate(raw) };
 }
 
 export { extractTeams };

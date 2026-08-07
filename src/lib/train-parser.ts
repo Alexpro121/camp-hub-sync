@@ -112,6 +112,23 @@ function splitNameCity(line: string): { name: string; boardingCity: string | nul
 
 /** "Прізвище Ім'я" in Cyrillic or Latin — enough to know the seat list started. */
 const NAME_LIKE = /^[\p{Lu}][\p{L}'’-]+\s+[\p{Lu}]/u;
+/** Patronymic ending — the strongest signal that the seat list has begun. */
+const PATRONYMIC = /(ович|йович|ьович|івна|ївна|инична|івич)\s*$/iu;
+/** Surname-like single word ("Баркова", "Шевченко") also opens the seat list. */
+const SURNAME_LIKE = /^[\p{Lu}][\p{L}'’-]{3,}(?:ов|ова|ев|єва|енко|ук|юк|ський|ська|ich|чук|ак|ян)$/u;
+
+/**
+ * A line before the first seat is a crew/description header unless it clearly
+ * looks like a roster entry. Two bare given names ("Аня Вова", "Лідери Дарина")
+ * are supervising staff, not passengers.
+ */
+function startsSeatList(line: string): boolean {
+  if (PATRONYMIC.test(line)) return true;
+  const words = line.split(/\s+/);
+  if (words.length === 1) return SURNAME_LIKE.test(words[0]);
+  if (words.length >= 3) return NAME_LIKE.test(line);
+  return false;
+}
 /** Leading numbering: "5.", "5)", "5 " at the start of a seat line. */
 const LEADING_NUM = /^(\d{1,3})\s*[.)]\s*/;
 
@@ -153,7 +170,7 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
     }
 
     if (!isParsingSeats) {
-      if (numbered || isPlaceholder || NAME_LIKE.test(line)) {
+      if (numbered || isPlaceholder || startsSeatList(splitNameCity(body).name)) {
         isParsingSeats = true;
       } else {
         continue; // header/description line ("МАН + Сайт", "Лідери…")
