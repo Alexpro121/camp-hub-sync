@@ -115,9 +115,9 @@ export const createFairPayload = (opts: {
   };
 };
 
-export type FairParseResult =
-  | { ok: true; payload: FairQrPayload }
-  | { ok: false; reason: 'invalid' | 'expired' };
+export interface FairParseOk { ok: true; payload: FairQrPayload; reason?: undefined }
+export interface FairParseFail { ok: false; payload?: undefined; reason: 'invalid' | 'expired' }
+export type FairParseResult = FairParseOk | FairParseFail;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
