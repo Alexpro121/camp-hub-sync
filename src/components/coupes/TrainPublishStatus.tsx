@@ -43,7 +43,7 @@ const TrainPublishStatus = ({ editable = false }: { editable?: boolean }) => {
       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${published ? 'bg-primary shadow-glow' : 'bg-muted-foreground/40'}`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium leading-tight">
-          {published ? 'Опубліковано' : 'Приховано'}
+          {published ? 'Опубліковано для дітей' : 'Приховано від дітей'}
         </p>
         <p className="text-[11px] text-muted-foreground leading-tight">
           {published ? 'Діти бачать свої купе' : 'Бачить лише персонал (режим очікування)'}
