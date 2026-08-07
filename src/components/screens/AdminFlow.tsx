@@ -188,6 +188,15 @@ const ShiftsTab = () => {
     }
   };
 
+  /** Long shift is the anchor: short shifts follow its entry period. */
+  const syncShortShifts = async (startDate: string, endDate: string) => {
+    await supabase
+      .from('shifts')
+      .update({ start_date: startDate, end_date: endDate, travel_start_date: startDate, hotel_start_date: addDays(startDate, 1) })
+      .eq('shift_category', 'short')
+      .is('deleted_at', null);
+  };
+
   const createOnly = async () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
@@ -200,6 +209,7 @@ const ShiftsTab = () => {
         .select()
         .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
+      if (type === 'long') await syncShortShifts(start, end);
       toast.success('Зміну створено');
       reset();
       load();
@@ -218,6 +228,7 @@ const ShiftsTab = () => {
     try {
       const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
+      if (type === 'long') await syncShortShifts(start, end);
 
       const valid = preview.rows.filter(r => r.full_name && r.team_number);
       const dbRows = valid.map(r => toDbRow(r, shift.id));

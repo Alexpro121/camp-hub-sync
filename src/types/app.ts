@@ -13,6 +13,9 @@ export interface Shift {
   end_date: string;
   is_active: boolean;
   team_offset: number;
+  train_coupes_published?: boolean;
+  allow_coupe_swaps?: boolean;
+  auto_approve_swaps?: boolean;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
