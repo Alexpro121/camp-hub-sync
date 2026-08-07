@@ -156,8 +156,12 @@ export const parseFairQr = (raw: string): FairParseResult => {
   };
 };
 
+export interface FairAmountValid { ok: true; amount: number; error?: undefined }
+export interface FairAmountInvalid { ok: false; amount?: undefined; error: string }
+export type FairAmountResult = FairAmountValid | FairAmountInvalid;
+
 /** Validates a manually typed amount from the supervisor keypad. */
-export const validateFairAmount = (input: string): { ok: true; amount: number } | { ok: false; error: string } => {
+export const validateFairAmount = (input: string): FairAmountResult => {
   const trimmed = input.trim();
   if (!trimmed) return { ok: false, error: 'Введіть суму' };
   if (!/^\d{1,6}$/.test(trimmed)) return { ok: false, error: 'Лише цілі числа без символів' };
