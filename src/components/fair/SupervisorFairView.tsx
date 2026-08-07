@@ -379,6 +379,28 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   // Manual code entry carries no supervisor id — the child pings this
   // code-derived channel instead, so the QR still rotates instantly.
   const activeCode = payload?.code ?? null;
+
+  // Publish the 5-digit code so a child can pay by typing it in.
+  useEffect(() => {
+    if (!payload || !userId) return;
+    let cancelled = false;
+    (async () => {
+      const { error } = await supabase.from('fair_short_codes').insert({
+        code: payload.code,
+        supervisor_user_id: userId,
+        supervisor_team: myTeam,
+        amount: payload.amount,
+        tx_id: payload.tx_id,
+        expires_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      });
+      // Extremely rare 5-digit collision — just roll a fresh code.
+      if (!cancelled && error && (error as { code?: string }).code === '23505') {
+        setNonce((n) => n + 1);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [payload, userId, myTeam]);
+
   useEffect(() => {
     if (!activeCode) return;
     const ch = supabase
