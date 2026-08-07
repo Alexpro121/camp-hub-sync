@@ -115,7 +115,7 @@ const NAME_LIKE = /^[\p{Lu}][\p{L}'’-]+\s+[\p{Lu}]/u;
 /** Patronymic ending — the strongest signal that the seat list has begun. */
 const PATRONYMIC = /(ович|йович|ьович|івна|ївна|инична|івич)\s*$/iu;
 /** Surname-like single word ("Баркова", "Шевченко") also opens the seat list. */
-const SURNAME_LIKE = /^[\p{Lu}][\p{L}'’-]{3,}(?:ов|ова|ев|єва|енко|ук|юк|ський|ська|ich|чук|ак|ян|іна|ина)$/u;
+const SURNAME_LIKE = /^[\p{Lu}][\p{L}'’-]{3,}(?:ов|ова|ев|єва|енко|ук|юк|ський|ська|ich|чук|ак|ян)$/u;
 
 /**
  * A line before the first seat is a crew/description header unless it clearly
