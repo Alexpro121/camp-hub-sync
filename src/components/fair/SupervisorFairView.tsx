@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
-import { Coins, RefreshCw, ShoppingBag, Receipt, Users } from 'lucide-react';
+import { Check, Coins, RefreshCw, ShoppingBag, Receipt, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -328,10 +328,29 @@ const SupervisorFairView = ({ myTeam }: Props) => {
       })
       .subscribe();
 
+    // Direct WebSocket broadcast straight from the child's scanner (~20 ms),
+    // independent of Postgres replication lag.
+    const broadcastCh = supabase
+      .channel(`supervisor_fair_${userId}`)
+      .on('broadcast', { event: 'FAIR_PAYMENT_SUCCESS' }, (e) => {
+        const b = (e.payload ?? {}) as {
+          childName?: string; teamNumber?: number; amount?: number; txId?: string;
+        };
+        pushReceipt({
+          id: b.txId || `bc-${Date.now()}`,
+          child_name: b.childName || 'Дитина',
+          team_number: b.teamNumber ?? 0,
+          amount: Math.abs(Number(b.amount) || 0),
+          created_at: new Date().toISOString(),
+        });
+      })
+      .subscribe();
+
     return () => {
       mounted = false;
       supabase.removeChannel(ch);
       if (teamCh) supabase.removeChannel(teamCh);
+      supabase.removeChannel(broadcastCh);
     };
   }, [userId, myTeam, haptics]);
 
