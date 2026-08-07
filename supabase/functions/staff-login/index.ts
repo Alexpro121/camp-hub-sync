@@ -38,6 +38,22 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Wrong-keyboard-layout tolerance: map Ukrainian/Russian ЙЦУКЕН chars to their QWERTY keys.
+const UA_KEYS = 'йцукенгшщзхїфівапролджєячсмитьбю.ЙЦУКЕНГШЩЗХЇФІВАПРОЛДЖЄЯЧСМИТЬБЮ,';
+const EN_KEYS = "qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?";
+
+function toLatinLayout(s: string): string {
+  return [...s].map((ch) => {
+    const i = UA_KEYS.indexOf(ch);
+    return i === -1 ? ch : EN_KEYS[i];
+  }).join('');
+}
+
+/** Compare in constant time, also accepting the same password typed in the Cyrillic layout. */
+function passwordMatches(input: string, expected: string): boolean {
+  return constantTimeEqual(input, expected) || constantTimeEqual(toLatinLayout(input), expected);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -74,7 +90,7 @@ Deno.serve(async (req) => {
     if (team === ADMIN_TEAM) {
       const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD') ?? '';
       if (!adminPassword) return json({ error: 'not_configured' }, 503);
-      if (!constantTimeEqual(password, adminPassword)) return json({ error: 'invalid_credentials' }, 401);
+      if (!passwordMatches(password, adminPassword)) return json({ error: 'invalid_credentials' }, 401);
       const session = await issueSession('staff-admin@ironhelp.local', 'admin', { team_number: ADMIN_TEAM });
       return json({ role: 'admin', team, session });
     }
@@ -83,7 +99,7 @@ Deno.serve(async (req) => {
     let ok = constantTimeEqual(password, defaultSupervisorPassword(team));
     if (!ok) {
       try {
-        ok = constantTimeEqual(password, await supervisorPassword(team));
+        ok = passwordMatches(password, await supervisorPassword(team));
       } catch (_e) {
         ok = false;
       }
