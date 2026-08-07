@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { shiftStatus } from '@/lib/shift';
 import { CATEGORY_LABELS, DEFAULT_TEAMS, parseTeamsInput, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
+import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
 import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
