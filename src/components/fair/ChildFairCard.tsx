@@ -8,9 +8,11 @@ import { useHaptics } from '@/hooks/useHaptics';
 interface Props {
   balance: number;
   onPaid?: (newBalance: number) => void;
+  childName?: string;
+  childTeam?: number | null;
 }
 
-const ChildFairCard = ({ balance, onPaid }: Props) => {
+const ChildFairCard = ({ balance, onPaid, childName, childTeam }: Props) => {
   const [open, setOpen] = useState(false);
   const haptics = useHaptics();
 
@@ -46,6 +48,8 @@ const ChildFairCard = ({ balance, onPaid }: Props) => {
         onClose={() => setOpen(false)}
         balance={balance}
         onPaid={onPaid}
+        childName={childName}
+        childTeam={childTeam}
       />
     </>
   );

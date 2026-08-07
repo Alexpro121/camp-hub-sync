@@ -225,7 +225,11 @@ const ChildFlow = ({ onBack }: Props) => {
           <TabsContent value="profile" className="space-y-3 mt-0">
             {phase && <PhaseBanner status={phase} teamNumber={child.team_number} />}
             {fair.active && (!phase || phase.currentPhase !== 'PREPARING') && (
-              <ChildFairCard balance={child.iron_dollars} />
+              <ChildFairCard
+                balance={child.iron_dollars}
+                childName={child.full_name}
+                childTeam={child.team_number}
+              />
             )}
             {(!phase || phase.currentPhase !== 'PREPARING') && <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />}
 

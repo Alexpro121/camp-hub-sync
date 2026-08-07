@@ -18,6 +18,8 @@ interface Props {
   onClose: () => void;
   balance: number;
   onPaid?: (newBalance: number) => void;
+  childName?: string;
+  childTeam?: number | null;
 }
 
 type Stage = 'scanning' | 'manual' | 'processing' | 'success' | 'failure';
@@ -106,7 +108,7 @@ const triggerConfetti = (canvas: HTMLCanvasElement | null) => {
   return () => cancelAnimationFrame(raf);
 };
 
-const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
+const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, childTeam }: Props) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLCanvasElement>(null);
   const confettiRef = useRef<HTMLCanvasElement>(null);
@@ -170,6 +172,27 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
         }
         if (res.status === 'ok' || res.status === 'duplicate') {
           if (typeof res.balance_after === 'number') onPaid?.(res.balance_after);
+          // Instant WebSocket ping to the supervisor: rotates their QR immediately,
+          // without waiting for Postgres replication.
+          if (payload.supervisor_id) {
+            void (async () => {
+              const ch = supabase.channel(`supervisor_fair_${payload.supervisor_id}`);
+              try {
+                await ch.subscribe();
+                await ch.send({
+                  type: 'broadcast',
+                  event: 'FAIR_PAYMENT_SUCCESS',
+                  payload: {
+                    childName: childName || 'Дитина',
+                    teamNumber: childTeam ?? 0,
+                    amount: Math.abs(payload.amount),
+                    txId: payload.tx_id,
+                  },
+                });
+              } catch { /* the ledger channels still cover this */ }
+              supabase.removeChannel(ch);
+            })();
+          }
           // Free the camera the moment the payment lands.
           stopCamera();
           setReceipt({
@@ -204,7 +227,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
     }
 
     showFailure(lastError ? 'Немає звʼязку. Спробуй ще раз — списання не подвоїться' : 'Не вдалося провести оплату');
-  }, [balance, haptics, island, onPaid, showFailure, stopCamera]);
+  }, [balance, childName, childTeam, haptics, island, onPaid, showFailure, stopCamera]);
 
   const handleDecoded = useCallback((raw: string) => {
     if (lockedRef.current) return;
