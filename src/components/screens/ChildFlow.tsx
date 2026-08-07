@@ -22,6 +22,7 @@ import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useFairActive } from '@/hooks/useFairActive';
 import ChildFairCard from '@/components/fair/ChildFairCard';
 import TransactionHistory from '@/components/fair/TransactionHistory';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 interface Props { onBack: () => void; }
 
@@ -41,6 +42,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [showAllFields, setShowAllFields] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
+  const island = useDynamicIsland();
   const talent = useTalentEventActive();
   const fair = useFairActive();
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
@@ -60,6 +62,28 @@ const ChildFlow = ({ onBack }: Props) => {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [child?.id]);
+
+  // Incoming Iron Dollars — the island pops on any screen, with haptics.
+  useEffect(() => {
+    const childId = child?.id;
+    if (!childId) return;
+    const channel = supabase
+      .channel(`child_incoming_funds:${childId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'iron_dollar_transactions',
+        filter: `child_id=eq.${childId}`,
+      }, (payload) => {
+        const tx = payload.new as { amount_change: number; reason: string | null };
+        if (tx.amount_change > 0) {
+          island.showSuccess(`+${tx.amount_change} Айрон-доларів`, tx.reason || 'Нараховано супроводом');
+          haptics.notification('success');
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [child?.id, island, haptics]);
 
   const loginAs = async (candidate: { id: string }) => {
     setLoading(true);
