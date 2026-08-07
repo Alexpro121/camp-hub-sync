@@ -88,8 +88,12 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     setExpanded(false);
     setState(next);
     setPayload(p);
-    autoHideMs.current = autoHide ?? null;
-    if (autoHide) timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, autoHide);
+    // Non-persistent states always collapse on their own — never leave a stuck pill.
+    const ttl = autoHide ?? (next === 'OFFLINE' || next === 'HIDDEN' || next === 'LOADING_ONLY' || next === 'EXCEL_IMPORT'
+      ? null
+      : AUTO_HIDE_MS);
+    autoHideMs.current = ttl;
+    if (ttl) timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, ttl);
   }, []);
 
   const hide = useCallback(() => { clearTimer(); setExpanded(false); setState('HIDDEN'); }, []);
