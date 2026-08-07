@@ -52,7 +52,7 @@ const TabDock = ({ items, value, onChange }: Props) => {
         <Icon className={compact ? 'w-[20px] h-[20px]' : 'w-[18px] h-[18px]'} strokeWidth={1.9} />
         {!compact && <span className="truncate">{item.label}</span>}
         {item.isNew && (
-          <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-warning animate-ping-slow shadow-glow" />
+          <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-warning animate-pulse" />
         )}
         {!!item.badge && item.badge > 0 && (
           <span className="absolute -top-1 right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
