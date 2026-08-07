@@ -109,6 +109,70 @@ export type Database = {
           },
         ]
       }
+      coupe_swap_requests: {
+        Row: {
+          created_at: string
+          id: string
+          requester_child_id: string
+          shift_id: string | null
+          status: string
+          target_child_id: string | null
+          target_coupe_number: number
+          target_seat_number: number
+          team_number: number
+          trip_number: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          requester_child_id: string
+          shift_id?: string | null
+          status?: string
+          target_child_id?: string | null
+          target_coupe_number: number
+          target_seat_number: number
+          team_number: number
+          trip_number?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          requester_child_id?: string
+          shift_id?: string | null
+          status?: string
+          target_child_id?: string | null
+          target_coupe_number?: number
+          target_seat_number?: number
+          team_number?: number
+          trip_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupe_swap_requests_requester_child_id_fkey"
+            columns: ["requester_child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupe_swap_requests_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupe_swap_requests_target_child_id_fkey"
+            columns: ["target_child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fair_payments: {
         Row: {
           amount: number
@@ -323,7 +387,9 @@ export type Database = {
       }
       shifts: {
         Row: {
+          allow_coupe_swaps: boolean
           assigned_teams: number[]
+          auto_approve_swaps: boolean
           created_at: string
           deleted_at: string | null
           end_date: string
@@ -340,7 +406,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_coupe_swaps?: boolean
           assigned_teams?: number[]
+          auto_approve_swaps?: boolean
           created_at?: string
           deleted_at?: string | null
           end_date: string
@@ -357,7 +425,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_coupe_swaps?: boolean
           assigned_teams?: number[]
+          auto_approve_swaps?: boolean
           created_at?: string
           deleted_at?: string | null
           end_date?: string
@@ -469,6 +539,8 @@ export type Database = {
           seat_number: number | null
           shift_id: string | null
           team_number: number
+          trip_name: string
+          trip_number: number
           updated_at: string
         }
         Insert: {
@@ -482,6 +554,8 @@ export type Database = {
           seat_number?: number | null
           shift_id?: string | null
           team_number: number
+          trip_name?: string
+          trip_number?: number
           updated_at?: string
         }
         Update: {
@@ -495,6 +569,8 @@ export type Database = {
           seat_number?: number | null
           shift_id?: string | null
           team_number?: number
+          trip_name?: string
+          trip_number?: number
           updated_at?: string
         }
         Relationships: [
@@ -616,6 +692,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      execute_coupe_swap: { Args: { p_request_id: string }; Returns: boolean }
       increment_iron_dollars: {
         Args: {
           p_amount: number

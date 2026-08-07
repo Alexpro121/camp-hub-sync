@@ -9,6 +9,7 @@ import { Loader2, MapPin, Pencil, Plus, RotateCcw, Train, Trash2, User } from 'l
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { groupByCoupe, coupeOf } from '@/lib/coupes';
+import { tripName } from '@/lib/trips';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 export interface CoupeRecord {
@@ -36,10 +37,12 @@ const CoupeManager = ({
   myTeam,
   editable = true,
   refreshKey = 0,
+  trip = 1,
 }: {
   myTeam: number | null;
   editable?: boolean;
   refreshKey?: number;
+  trip?: number;
 }) => {
   const island = useDynamicIsland();
   const [rows, setRows] = useState<CoupeRecord[]>([]);
@@ -49,11 +52,11 @@ const CoupeManager = ({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const q = supabase.from('train_coupes').select('*').order('coupe_number').order('seat_number');
+    const q = supabase.from('train_coupes').select('*').eq('trip_number', trip).order('coupe_number').order('seat_number');
     const { data } = myTeam !== null ? await q.eq('team_number', myTeam) : await q;
     setRows((data || []) as unknown as CoupeRecord[]);
     setLoading(false);
-  }, [myTeam]);
+  }, [myTeam, trip]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
@@ -76,6 +79,8 @@ const CoupeManager = ({
         const { error } = await supabase.from('train_coupes').insert({
           ...patch,
           shift_id: rows[0]?.shift_id ?? null,
+          trip_number: trip,
+          trip_name: tripName(trip),
           seat_number: null,
           is_staff: false,
         });

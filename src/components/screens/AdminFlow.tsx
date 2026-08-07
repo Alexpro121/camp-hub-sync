@@ -82,8 +82,6 @@ const ShiftsTab = () => {
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [teams, setTeams] = useState<number[]>([]);
-  const [travelStart, setTravelStart] = useState('');
-  const [hotelStart, setHotelStart] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [creating, setCreating] = useState(false);
   const [sheetUrl, setSheetUrl] = useState('');
@@ -100,6 +98,12 @@ const ShiftsTab = () => {
   };
   useEffect(() => { load(); }, []);
 
+  const addDays = (iso: string, days: number) => {
+    const d = new Date(iso);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
   const computeEnd = (startStr: string, t: ShiftType) => {
     if (!startStr || t === 'international') return '';
     // Auto-suggest +1 extra day vs nominal length (e.g. long shift = 12 days → start + 12)
@@ -109,9 +113,16 @@ const ShiftsTab = () => {
     return d.toISOString().slice(0, 10);
   };
 
+  /** Short shifts ride along with the long shift — dates come from it automatically. */
+  const baseLong = shifts.find((s) => (s.shift_category ?? s.shift_type) === 'long' && !s.deleted_at) ?? null;
+
   const onTypeChange = (t: ShiftType) => {
     setType(t);
-    if (t !== 'long') { setTravelStart(''); setHotelStart(''); }
+    if (t === 'short' && baseLong) {
+      setStart(baseLong.start_date);
+      setEnd(baseLong.end_date);
+      return;
+    }
     const e = computeEnd(start, t);
     if (e) setEnd(e);
   };
@@ -130,7 +141,7 @@ const ShiftsTab = () => {
   const reset = () => {
     setName(''); setStart(''); setEnd(''); setFile(null); setSheetUrl('');
     setPreview(null); setSourceLabel('');
-    setTravelStart(''); setHotelStart(''); setTeams([]);
+    setTeams([]);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -141,8 +152,9 @@ const ShiftsTab = () => {
       shift_type: type,
       shift_category: type,
       assigned_teams: teams,
-      travel_start_date: type === 'long' ? (travelStart || start || null) : null,
-      hotel_start_date: type === 'long' ? (hotelStart || null) : null,
+      // Phase dates are derived from the entry period — no manual fields needed.
+      travel_start_date: start || null,
+      hotel_start_date: start ? addDays(start, 1) : null,
       start_date: start,
       end_date: end,
       team_offset: 0,
@@ -176,6 +188,15 @@ const ShiftsTab = () => {
     }
   };
 
+  /** Long shift is the anchor: short shifts follow its entry period. */
+  const syncShortShifts = async (startDate: string, endDate: string) => {
+    await supabase
+      .from('shifts')
+      .update({ start_date: startDate, end_date: endDate, travel_start_date: startDate, hotel_start_date: addDays(startDate, 1) })
+      .eq('shift_category', 'short')
+      .is('deleted_at', null);
+  };
+
   const createOnly = async () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
@@ -188,6 +209,7 @@ const ShiftsTab = () => {
         .select()
         .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
+      if (type === 'long') await syncShortShifts(start, end);
       toast.success('Зміну створено');
       reset();
       load();
@@ -206,6 +228,7 @@ const ShiftsTab = () => {
     try {
       const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
+      if (type === 'long') await syncShortShifts(start, end);
 
       const valid = preview.rows.filter(r => r.full_name && r.team_number);
       const dbRows = valid.map(r => toDbRow(r, shift.id));
@@ -303,11 +326,11 @@ const ShiftsTab = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Початок</Label>
-              <Input type="date" value={start} onChange={e => onStartChange(e.target.value)} className="h-11" />
+              <Input type="date" value={start} disabled={type === 'short' && !!baseLong} onChange={e => onStartChange(e.target.value)} className="h-11" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Кінець <span className="text-primary/70">(авто)</span></Label>
-              <Input type="date" value={end} onChange={e => setEnd(e.target.value)} className="h-11" />
+              <Input type="date" value={end} disabled={type === 'short' && !!baseLong} onChange={e => setEnd(e.target.value)} className="h-11" />
             </div>
           </div>
 
@@ -333,17 +356,11 @@ const ShiftsTab = () => {
             </p>
           </div>
 
-          {type === 'long' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Старт подорожі</Label>
-                <Input type="date" value={travelStart} onChange={e => setTravelStart(e.target.value)} className="h-11" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Заїзд у Буковель</Label>
-                <Input type="date" value={hotelStart} onChange={e => setHotelStart(e.target.value)} className="h-11" />
-              </div>
-            </div>
+          {type === 'short' && baseLong && (
+            <p className="text-[10px] text-muted-foreground rounded-lg border border-border/40 bg-muted/25 p-2.5">
+              Дати короткої зміни синхронізовано з довгою зміною «{baseLong.name}»
+              ({baseLong.start_date} → {baseLong.end_date}). Фази подорожі рахуються автоматично.
+            </p>
           )}
 
           {/* File upload area */}
