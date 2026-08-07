@@ -143,12 +143,21 @@ const ChildFlow = ({ onBack }: Props) => {
       : [];
 
     return (
-      <div className="min-h-screen px-4 py-4 max-w-md mx-auto safe-top safe-bottom">
+      <div className="relative min-h-screen px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom">
         <button
           onClick={() => { haptics.impact('light'); handleExit(); }}
-          className="flex items-center gap-2 text-sm text-muted-foreground mb-3 hover:text-foreground transition-smooth active:scale-[0.98]"
+          className="flex items-center gap-2 text-sm text-muted-foreground mb-3 min-h-[44px] hover:text-foreground transition-smooth active:scale-[0.98]"
         >
           <ArrowLeft className="w-4 h-4" strokeWidth={1.75} /> Вийти
+        </button>
+
+        {/* Quick close (X) */}
+        <button
+          onClick={() => { haptics.impact('light'); handleExit(); }}
+          aria-label="Закрити профіль"
+          className="absolute top-4 right-4 w-10 h-10 rounded-full bg-foreground/10 hover:bg-foreground/20 text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition active:scale-90 z-20"
+        >
+          <X className="w-5 h-5" strokeWidth={2} />
         </button>
 
         {/* Identity card */}
@@ -218,6 +227,8 @@ const ChildFlow = ({ onBack }: Props) => {
               <ChildFairCard balance={child.iron_dollars} />
             )}
             {(!phase || phase.currentPhase !== 'PREPARING') && <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />}
+
+            <TransactionHistory childId={child.id} />
 
             <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
               <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground mb-3">
