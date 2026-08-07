@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ const emptyRow = (): AiScheduleItem => ({
 });
 
 const ScheduleAdmin = () => {
+  const TEAMS = useAllTeams();
   const island = useDynamicIsland();
   const [raw, setRaw] = useState('');
   const [date, setDate] = useState(todayISO());
