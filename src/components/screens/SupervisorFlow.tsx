@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2, Train } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2, Train, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
+import { useFairActive } from '@/hooks/useFairActive';
+import SupervisorFairView from '@/components/fair/SupervisorFairView';
 
 interface Props {
   onBack: () => void;
@@ -43,6 +45,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [bankOpen, setBankOpen] = useState(false);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
+  const fair = useFairActive();
   const isMobile = useIsMobile();
   const { status: phase } = useTeamPhase(authedTeam);
 
@@ -50,6 +53,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
     ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
+    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag } as DockItem] : []),
     { value: 'coupes', label: 'Потяг', icon: Train },
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
@@ -256,6 +260,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         {talent.active && (
           <TabsContent value="talent" className="mt-3 animate-fade-in">
             <TalentTeamView myTeam={authedTeam} />
+          </TabsContent>
+        )}
+        {fair.active && (
+          <TabsContent value="fair" className="mt-3 animate-fade-in">
+            <SupervisorFairView myTeam={authedTeam} />
           </TabsContent>
         )}
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
