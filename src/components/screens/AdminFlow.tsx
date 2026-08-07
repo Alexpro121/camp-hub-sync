@@ -305,14 +305,23 @@ const ShiftsTab = () => {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Команди зміни</Label>
-            <Input
-              value={teamsInput}
-              onChange={e => setTeamsInput(e.target.value)}
-              placeholder="1-6 або 7, 8"
-              className="h-11"
-            />
+            <TeamTagInput value={teams} onChange={setTeams} />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!preview?.detectedTeams.length}
+              onClick={() => {
+                const detected = preview?.detectedTeams ?? [];
+                setTeams(detected);
+                toast.success(`Визначено команди: ${detected.map((t) => `№${t}`).join(', ')}`);
+              }}
+              className="h-9 text-xs"
+            >
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" /> Автовизначити команди з файлу
+            </Button>
             <p className="text-[10px] text-muted-foreground">
-              Діти цих команд автоматично прив'язуються до зміни. За замовчуванням: Коротка — 1-6, Довга — 7-8.
+              Діти цих команд автоматично прив'язуються до зміни. Команди беруться лише з таблиці або з введених вручну чипсів.
             </p>
           </div>
 
