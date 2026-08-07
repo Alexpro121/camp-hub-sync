@@ -16,9 +16,6 @@ import {
 } from '@/lib/schedule';
 import { type ReminderEvent } from '@/hooks/useEventReminders';
 
-/** Fallback duration when the source table has no end time. */
-const DEFAULT_DURATION = 60;
-
 interface Props {
   myTeam?: number | null;
   /** Child mode: only the own team's schedule is visible and reminders fire. */
@@ -273,6 +270,26 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
         </div>
         )}
       </Card>
+
+      {currentEvent && (
+        <Card className="flex items-center gap-2.5 p-2.5 bg-card/80 backdrop-blur-md border-primary/40 ring-1 ring-primary/20">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-primary/60 animate-ping" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-primary font-semibold">Зараз триває</p>
+            <p className="text-sm font-semibold truncate">{sentenceCase(currentEvent.item.title)}</p>
+            <div className="mt-1 h-[3px] rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-1000"
+                style={{ width: `${Math.min(100, Math.max(0, ((nowRel - currentEvent.startMin) / Math.max(1, currentEvent.endMin - currentEvent.startMin)) * 100))}%` }}
+              />
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold tabular-nums text-muted-foreground shrink-0">{currentEvent.range}</span>
+        </Card>
+      )}
 
       {nextUp && (
         <Card className="flex items-center gap-2.5 p-2.5 bg-card/80 backdrop-blur-md border-border/40">
