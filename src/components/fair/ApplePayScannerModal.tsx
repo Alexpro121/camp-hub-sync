@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import {
   decodeFairCode,
   formatFairCode,
@@ -118,9 +119,12 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [manualCode, setManualCode] = useState('');
   const haptics = useHaptics();
+  const island = useDynamicIsland();
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
+    const video = videoRef.current;
+    if (video) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; }
     streamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
     streamRef.current = null;
   }, []);
@@ -137,12 +141,23 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
 
     let lastError: unknown = null;
     for (let attempt = 0; attempt < RPC_RETRIES; attempt++) {
-      const { data, error } = await supabase.rpc('pay_fair_purchase', {
-        p_tx_id: payload.tx_id,
-        p_amount: payload.amount,
-        p_supervisor_id: payload.supervisor_id,
-        p_supervisor_team: payload.supervisor_team,
-      });
+      let data: unknown = null;
+      let error: unknown = null;
+      try {
+        const res = await withTimeout(
+          supabase.rpc('pay_fair_purchase', {
+            p_tx_id: payload.tx_id,
+            p_amount: payload.amount,
+            p_supervisor_id: payload.supervisor_id,
+            p_supervisor_team: payload.supervisor_team,
+          }),
+          RPC_TIMEOUT_MS,
+        );
+        data = res.data;
+        error = res.error;
+      } catch (e) {
+        error = e;
+      }
 
       if (!error) {
         const res = (data ?? {}) as { status?: string; balance?: number; balance_after?: number };
@@ -152,6 +167,8 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
         }
         if (res.status === 'ok' || res.status === 'duplicate') {
           if (typeof res.balance_after === 'number') onPaid?.(res.balance_after);
+          // Free the camera the moment the payment lands.
+          stopCamera();
           setReceipt({
             merchant: payload.supervisor_name || 'Ярмарок · Залізна зміна',
             amount: payload.amount,
@@ -173,16 +190,23 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
       if (/tx_already_used/.test(msg)) { showFailure('Цей QR-код вже використано'); return; }
       if (/invalid_amount/.test(msg)) { showFailure('Недійсна сума в QR-коді'); return; }
       if (/not_a_child|not_authenticated/.test(msg)) { showFailure('Сесію втрачено, увійди знову'); return; }
+      // Idempotent retry — the same tx_id can never be charged twice.
+      island.showError('Повторна спроба зʼєднання…', 'Списання не подвоїться');
       await sleep(700 * (attempt + 1));
     }
 
     showFailure(lastError ? 'Немає звʼязку. Спробуй ще раз — списання не подвоїться' : 'Не вдалося провести оплату');
-  }, [balance, haptics, onPaid, showFailure]);
+  }, [balance, haptics, island, onPaid, showFailure, stopCamera]);
 
   const handleDecoded = useCallback((raw: string) => {
     if (lockedRef.current) return;
     lockedRef.current = true;
     setTimeout(() => { lockedRef.current = false; }, SCAN_LOCK_MS);
+
+    // Freeze the frame + haptic instantly: perceived latency stays under 50 ms.
+    cancelAnimationFrame(rafRef.current);
+    try { videoRef.current?.pause(); } catch { /* ignore */ }
+    haptics.impact('medium');
 
     const parsed = parseFairQr(raw);
     if (!parsed.ok) {
@@ -191,7 +215,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
         : 'Недійсний QR-код ярмарку');
       return;
     }
-    haptics.impact('medium');
     charge(parsed.payload);
   }, [charge, haptics, showFailure]);
 
@@ -201,10 +224,13 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
     let cancelled = false;
     mountedRef.current = true;
 
-    const scan = () => {
+    let lastDecode = 0;
+    const scan = (now: number) => {
       const video = videoRef.current;
       const canvas = frameRef.current;
-      if (!cancelled && video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+      const due = now - lastDecode >= SCAN_INTERVAL_MS;
+      if (!cancelled && due && video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+        lastDecode = now;
         const w = 320;
         const h = Math.max(1, Math.round((video.videoHeight / (video.videoWidth || 1)) * w)) || 320;
         canvas.width = w;
