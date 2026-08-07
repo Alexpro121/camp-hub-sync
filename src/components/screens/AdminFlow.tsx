@@ -444,6 +444,9 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
         <p className="text-xs text-muted-foreground">
           {SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
         </p>
+        <p className="text-[11px] text-muted-foreground">
+          Команди {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
+        </p>
         <p className="text-[11px] text-primary mt-0.5 flex items-center gap-1">
           <FileSpreadsheet className="w-3 h-3" /> {count ?? '...'} дітей
         </p>
