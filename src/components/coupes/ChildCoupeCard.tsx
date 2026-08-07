@@ -1,43 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Train, User } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowLeftRight, Check, Loader2, MapPin, Train, User, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import TripSelector from '@/components/coupes/TripSelector';
+import ChildSwapDialog, { type SwapRow } from '@/components/coupes/ChildSwapDialog';
+import { useTrainSettings } from '@/hooks/useTrainSettings';
+import { useSwapRequests } from '@/hooks/useSwapRequests';
+import { tripShort } from '@/lib/trips';
 
-interface Row {
-  id: string;
-  coupe_number: number;
-  passenger_name: string;
+interface Row extends SwapRow {
   boarding_city: string | null;
-  child_id: string | null;
-  is_staff: boolean | null;
+  trip_number: number;
 }
 
-/** "Твоє купе в потязі" — coupe number, neighbours and boarding city only. */
+/** "Твоє купе в потязі" — coupe, neighbours, trips and optional seat swapping. */
 const ChildCoupeCard = ({ childId }: { childId: string }) => {
+  const { settings } = useTrainSettings();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
+  const [trip, setTrip] = useState(1);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const { incoming, respond, busy } = useSwapRequests(childId, settings.autoApprove);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('train_coupes')
+      .select('id, coupe_number, seat_number, passenger_name, boarding_city, child_id, is_staff, trip_number')
+      .order('seat_number');
+    setRows((data || []) as unknown as Row[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      const { data } = await supabase
-        .from('train_coupes')
-        .select('id, coupe_number, passenger_name, boarding_city, child_id, is_staff')
-        .order('seat_number');
-      if (!alive) return;
-      setRows((data || []) as unknown as Row[]);
-      setLoading(false);
-    })();
-    return () => { alive = false; };
-  }, [childId]);
+    const ch = supabase
+      .channel(`child-coupes-${childId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'train_coupes' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [childId, load]);
 
   if (loading || !rows.length) return null;
 
-  const mine = rows.find((r) => r.child_id === childId);
-  if (!mine) return null;
+  const counts = rows.reduce<Record<number, number>>((acc, r) => {
+    acc[r.trip_number] = (acc[r.trip_number] ?? 0) + 1;
+    return acc;
+  }, {});
+  const tripRows = rows.filter((r) => r.trip_number === trip);
+  const mine = tripRows.find((r) => r.child_id === childId);
+  const hasAnyTrip = Object.keys(counts).length > 1;
 
-  const neighbours = rows.filter((r) => r.coupe_number === mine.coupe_number && r.id !== mine.id);
+  // Service coupes (staff, speakers, guests) are hidden from children entirely.
+  const neighbours = mine
+    ? tripRows.filter((r) => r.coupe_number === mine.coupe_number && r.id !== mine.id && r.is_staff !== true && !!r.child_id)
+    : [];
 
   return (
     <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
@@ -48,6 +67,36 @@ const ChildCoupeCard = ({ childId }: { childId: string }) => {
         </p>
       </div>
 
+      {hasAnyTrip && (
+        <div className="mb-3">
+          <TripSelector value={trip} onChange={setTrip} counts={counts} />
+        </div>
+      )}
+
+      {incoming.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {incoming.map((r) => (
+            <div key={r.id} className="rounded-xl border border-primary/40 bg-primary/10 p-3 space-y-2">
+              <p className="text-sm leading-snug break-words">
+                <span className="font-medium">{r.requester?.full_name ?? 'Хтось'}</span> пропонує помінятися купе
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" className="h-9 text-xs" disabled={busy === r.id} onClick={() => respond(r.id, true)}>
+                  {busy === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Прийняти</>}
+                </Button>
+                <Button size="sm" variant="secondary" className="h-9 text-xs" disabled={busy === r.id} onClick={() => respond(r.id, false)}>
+                  <X className="w-3.5 h-3.5 mr-1" /> Відхилити
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!mine ? (
+        <p className="text-sm text-muted-foreground">Для «{tripShort(trip)}» місце ще не призначене</p>
+      ) : (
+      <>
       <div className="flex items-baseline gap-2">
         <span className="text-4xl font-semibold tabular-nums leading-none">№{mine.coupe_number}</span>
         <span className="text-xs text-muted-foreground">купе</span>
@@ -80,6 +129,27 @@ const ChildCoupeCard = ({ childId }: { childId: string }) => {
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">Поки ти єдиний у цьому купе</p>
+      )}
+
+      {settings.allowSwaps && (
+        <>
+          <Button variant="secondary" className="w-full h-11 mt-3" onClick={() => setSwapOpen(true)}>
+            <ArrowLeftRight className="w-4 h-4 mr-2" /> Хочу помінятися купе
+          </Button>
+          <ChildSwapDialog
+            open={swapOpen}
+            onOpenChange={setSwapOpen}
+            childId={childId}
+            teamNumber={0}
+            tripNumber={trip}
+            shiftId={settings.shiftId}
+            rows={tripRows}
+            autoApprove={settings.autoApprove}
+            onDone={load}
+          />
+        </>
+      )}
+      </>
       )}
     </Card>
   );
