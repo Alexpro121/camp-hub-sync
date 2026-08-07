@@ -4,7 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Coins, Loader2, Save, Minus, Plus } from 'lucide-react';
+import { Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TransactionHistory from '@/components/fair/TransactionHistory';
 import type { Child } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -104,7 +106,15 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       >
         {/* Sticky header */}
         <DialogHeader className="sticky top-0 z-10 px-5 pt-5 pb-3 bg-gradient-card border-b border-border/40 backdrop-blur-sm">
-          <DialogTitle className="text-lg sm:text-xl font-black uppercase pr-8 leading-tight">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрити"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-foreground/10 hover:bg-foreground/20 text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition active:scale-90 z-20"
+          >
+            <X className="w-5 h-5" strokeWidth={2} />
+          </button>
+          <DialogTitle className="text-lg sm:text-xl font-black uppercase pr-14 leading-tight">
             {child.full_name}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
@@ -112,6 +122,19 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
           </p>
         </DialogHeader>
 
+        <Tabs defaultValue="edit" className="w-full">
+          <div className="px-5 pt-4">
+            <TabsList className="grid grid-cols-2 w-full h-11">
+              <TabsTrigger value="edit" className="text-xs min-h-[44px]">Дані</TabsTrigger>
+              <TabsTrigger value="history" className="text-xs min-h-[44px]">Історія транзакцій</TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="history" className="mt-0 px-5 py-4 pb-32 sm:pb-5">
+            <TransactionHistory childId={child.id} bare />
+          </TabsContent>
+
+          <TabsContent value="edit" className="mt-0">
         <div className="space-y-4 px-5 py-4 pb-32 sm:pb-5">
           {/* Iron dollars with +/- */}
           <div className="p-4 rounded-xl bg-gradient-primary">
@@ -182,9 +205,11 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
             </div>
           )}
         </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Sticky save bar (mobile-friendly) */}
-        <div className="sticky bottom-0 left-0 right-0 px-5 py-3 bg-gradient-card border-t border-border/40 backdrop-blur-sm">
+        <div className="sticky bottom-0 left-0 right-0 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-gradient-card border-t border-border/40 backdrop-blur-sm">
           <Button onClick={handleSave} className="w-full h-12 font-bold uppercase" disabled={saving}>
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Зберегти</>}
           </Button>
