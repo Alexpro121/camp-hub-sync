@@ -22,21 +22,13 @@ export const CATEGORY_LABELS: Record<ShiftCategory, string> = {
   international: 'Міжнародна зміна',
 };
 
-/** Default team ranges used when an admin does not type them manually. */
-export const DEFAULT_TEAMS: Record<ShiftCategory, number[]> = {
-  short: [1, 2, 3, 4, 5, 6],
-  long: [7, 8],
-  international: [],
-};
-
 export function shiftCategoryOf(s: Shift): ShiftCategory {
   return (s.shift_category || s.shift_type || 'short') as ShiftCategory;
 }
 
+/** Teams come exclusively from the shift's dynamic assigned_teams array — no templates. */
 export function teamsOf(s: Shift): number[] {
-  return Array.isArray(s.assigned_teams) && s.assigned_teams.length
-    ? s.assigned_teams
-    : DEFAULT_TEAMS[shiftCategoryOf(s)];
+  return Array.isArray(s.assigned_teams) && s.assigned_teams.length ? s.assigned_teams : [];
 }
 
 export function parseTeamsInput(raw: string): number[] {

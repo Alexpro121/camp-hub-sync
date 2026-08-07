@@ -15,7 +15,8 @@ import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import { shiftStatus } from '@/lib/shift';
-import { CATEGORY_LABELS, DEFAULT_TEAMS, parseTeamsInput, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
+import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
+import TeamTagInput from '@/components/admin/TeamTagInput';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
@@ -80,7 +81,7 @@ const ShiftsTab = () => {
   const [type, setType] = useState<ShiftType>('long');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const [teamsInput, setTeamsInput] = useState(DEFAULT_TEAMS.long.join(', '));
+  const [teams, setTeams] = useState<number[]>([]);
   const [travelStart, setTravelStart] = useState('');
   const [hotelStart, setHotelStart] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -110,7 +111,6 @@ const ShiftsTab = () => {
 
   const onTypeChange = (t: ShiftType) => {
     setType(t);
-    setTeamsInput(DEFAULT_TEAMS[t].join(', '));
     if (t !== 'long') { setTravelStart(''); setHotelStart(''); }
     const e = computeEnd(start, t);
     if (e) setEnd(e);
@@ -130,18 +130,17 @@ const ShiftsTab = () => {
   const reset = () => {
     setName(''); setStart(''); setEnd(''); setFile(null); setSheetUrl('');
     setPreview(null); setSourceLabel('');
-    setTravelStart(''); setHotelStart(''); setTeamsInput(DEFAULT_TEAMS[type].join(', '));
+    setTravelStart(''); setHotelStart(''); setTeams([]);
     if (fileRef.current) fileRef.current.value = '';
   };
 
   /** Fields shared by both create paths — category, team range and phase dates. */
   const shiftPayload = () => {
-    const teams = parseTeamsInput(teamsInput);
     return {
       name,
       shift_type: type,
       shift_category: type,
-      assigned_teams: teams.length ? teams : DEFAULT_TEAMS[type],
+      assigned_teams: teams,
       travel_start_date: type === 'long' ? (travelStart || start || null) : null,
       hotel_start_date: type === 'long' ? (hotelStart || null) : null,
       start_date: start,
@@ -164,6 +163,8 @@ const ShiftsTab = () => {
       if (!res.rows.length) { island.hide(); toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
       setSourceLabel(file ? file.name : sheetUrl.trim());
       setPreview(res);
+      // Teams are derived from the file itself — never from a template.
+      if (res.detectedTeams.length) setTeams(res.detectedTeams);
       setPreviewOpen(true);
       island.showExcelProgress(100, file ? file.name : 'Google Sheets');
       setTimeout(() => island.hide(), 700);
@@ -179,7 +180,13 @@ const ShiftsTab = () => {
     if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
     setCreating(true);
     try {
-      const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
+      const detected = preview.detectedTeams;
+      const finalTeams = [...new Set([...teams, ...detected])].sort((a, b) => a - b);
+      const { data: shift, error: shErr } = await supabase
+        .from('shifts')
+        .insert({ ...shiftPayload(), assigned_teams: finalTeams })
+        .select()
+        .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       toast.success('Зміну створено');
       reset();
@@ -306,14 +313,23 @@ const ShiftsTab = () => {
 
           <div className="space-y-1.5">
             <Label className="text-xs">Команди зміни</Label>
-            <Input
-              value={teamsInput}
-              onChange={e => setTeamsInput(e.target.value)}
-              placeholder="1-6 або 7, 8"
-              className="h-11"
-            />
+            <TeamTagInput value={teams} onChange={setTeams} />
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!preview?.detectedTeams.length}
+              onClick={() => {
+                const detected = preview?.detectedTeams ?? [];
+                setTeams(detected);
+                toast.success(`Визначено команди: ${detected.map((t) => `№${t}`).join(', ')}`);
+              }}
+              className="h-9 text-xs"
+            >
+              <Wand2 className="w-3.5 h-3.5 mr-1.5" /> Автовизначити команди з файлу
+            </Button>
             <p className="text-[10px] text-muted-foreground">
-              Діти цих команд автоматично прив'язуються до зміни. За замовчуванням: Коротка — 1-6, Довга — 7-8.
+              Діти цих команд автоматично прив'язуються до зміни. Команди беруться лише з таблиці або з введених вручну чипсів.
             </p>
           </div>
 

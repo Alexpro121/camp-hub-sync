@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import {
-  buildRows, detectHeaderIndex, localHeaderMap, matrixFromCsv, matrixFromFile,
+  buildRows, detectHeaderIndex, detectTeams, localHeaderMap, matrixFromCsv, matrixFromFile,
   type ImportResult, type StdKey,
 } from '@/lib/importer';
 
@@ -20,7 +20,9 @@ async function aiHeaderMap(headers: string[], samples: any[][]): Promise<Record<
 }
 
 export async function analyzeMatrix(matrix: any[][]): Promise<ImportResult> {
-  if (!matrix.length) return { rows: [], headers: [], headerMap: {}, mapSource: 'local', skipped: 0 };
+  if (!matrix.length) {
+    return { rows: [], headers: [], headerMap: {}, mapSource: 'local', skipped: 0, detectedTeams: [] };
+  }
   const headerIdx = detectHeaderIndex(matrix);
   const headers = (matrix[headerIdx] || []).map((h: any) => String(h ?? '').trim()).filter(Boolean);
   const local = localHeaderMap(headers);
@@ -41,7 +43,7 @@ export async function analyzeMatrix(matrix: any[][]): Promise<ImportResult> {
   }
 
   const { rows, skipped } = buildRows(matrix, headerIdx, headerMap);
-  return { rows, headers, headerMap, mapSource, skipped };
+  return { rows, headers, headerMap, mapSource, skipped, detectedTeams: detectTeams(rows) };
 }
 
 export async function analyzeFile(file: File): Promise<ImportResult> {

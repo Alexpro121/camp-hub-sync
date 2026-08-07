@@ -24,6 +24,14 @@ export interface ImportResult {
   headerMap: Record<string, StdKey>;
   mapSource: 'ai' | 'local';
   skipped: number;
+  /** Unique team numbers discovered in the source file — no static assumptions. */
+  detectedTeams: number[];
+}
+
+/** Extracts every distinct team number present in the parsed rows. */
+export function detectTeams(rows: ImportRow[]): number[] {
+  return [...new Set(rows.map((r) => r.team_number).filter((n): n is number => !!n))]
+    .sort((a, b) => a - b);
 }
 
 /* ---------- Google Sheets URL ---------- */

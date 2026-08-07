@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Bell, CalendarDays, ChevronLeft, ChevronRight, Users } from 'lucide-react';
@@ -18,7 +19,7 @@ interface Props {
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 const DAY_START = 7 * 60;
 const DAY_END = 22 * 60;
 const PX_PER_MIN = 1.25;
@@ -36,6 +37,7 @@ const slotsOf = (i: ScheduleItem): ScheduleSubSlot[] =>
   Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time) : [];
 
 const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
+  const TEAMS = useAllTeams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);

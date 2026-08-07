@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const TEAMS = [1, 2, 3, 4, 5, 6, 7, 8];
+
 
 const CATEGORIES = CATEGORY_LIST;
 
@@ -29,6 +30,7 @@ const emptyRow = (): AiScheduleItem => ({
 });
 
 const ScheduleAdmin = () => {
+  const TEAMS = useAllTeams();
   const island = useDynamicIsland();
   const [raw, setRaw] = useState('');
   const [date, setDate] = useState(todayISO());
