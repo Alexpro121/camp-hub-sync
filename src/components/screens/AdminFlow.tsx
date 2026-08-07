@@ -693,6 +693,7 @@ const StatsTab = () => {
 
 const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) => (
   <Card className="p-3 bg-gradient-card">
+  <Card className="p-3 bg-gradient-card">
     <div className="flex items-center gap-1 text-muted-foreground">
       {icon}
       <p className="text-[10px] uppercase tracking-wider">{label}</p>
