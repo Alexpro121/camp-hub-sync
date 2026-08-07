@@ -142,16 +142,18 @@ LiveReceiptsFeed.displayName = 'LiveReceiptsFeed';
 interface SuccessToast { id: string; name: string; team: number; amount: number }
 
 const PaymentSuccessCard = memo(({ toast }: { toast: SuccessToast | null }) => (
-  <div className="pointer-events-none fixed inset-x-4 top-4 z-[90] flex justify-center">
+  <div className="pointer-events-none fixed inset-x-4 top-6 z-[100] flex justify-center">
     {toast && (
       <div
         key={toast.id}
-        className="animate-scale-in rounded-2xl border border-primary/30 bg-card/95 backdrop-blur-xl px-4 py-3 shadow-lg flex items-center gap-3"
+        className="animate-scale-in flex items-center gap-3 rounded-3xl border border-success/50 bg-success/15 px-4 py-3 text-success-foreground shadow-[0_10px_40px_hsl(var(--success)/0.3)] backdrop-blur-2xl"
       >
-        <span className="text-xl">🎉</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success">
+          <Check className="h-5 w-5 text-success-foreground" strokeWidth={3} />
+        </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold tabular-nums text-primary">+{toast.amount} 💰</p>
-          <p className="text-[11px] text-muted-foreground truncate">
+          <p className="text-sm font-semibold tabular-nums">+{toast.amount} 💰</p>
+          <p className="truncate text-[11px] opacity-80">
             {toast.name} (Команда №{toast.team})
           </p>
         </div>
