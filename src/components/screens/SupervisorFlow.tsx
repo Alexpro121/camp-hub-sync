@@ -20,6 +20,8 @@ import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
 import CoupeManager from '@/components/coupes/CoupeManager';
 import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
+import TripSelector from '@/components/coupes/TripSelector';
+import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -43,6 +45,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [activeTab, setActiveTab] = useState('teams');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
+  const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
   const fair = useFairActive();
@@ -270,7 +273,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
           <div className="space-y-3">
             <TrainPublishStatus />
-            <CoupeManager myTeam={authedTeam} />
+            <TripSelector value={trip} onChange={setTrip} />
+            <CoupeSwapSettings myTeam={authedTeam} />
+            <CoupeManager myTeam={authedTeam} trip={trip} />
           </div>
         </TabsContent>
         <TabsContent value="transfers" className="mt-3 animate-fade-in">
