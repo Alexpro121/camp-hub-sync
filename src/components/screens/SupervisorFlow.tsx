@@ -239,11 +239,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             <p className="text-lg font-black text-primary leading-none">#{authedTeam}</p>
           </div>
         </div>
-        {phase && (
-          <div className="mt-2">
-            <PhaseBanner status={phase} teamNumber={authedTeam} compact />
-          </div>
-        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3">
