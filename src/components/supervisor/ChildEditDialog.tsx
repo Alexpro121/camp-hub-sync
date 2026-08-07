@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { queuedIronDollarChange } from '@/lib/offline';
 
 interface Props {
   child: Child;
@@ -25,8 +26,12 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   const [saving, setSaving] = useState(false);
   const haptics = useHaptics();
   const island = useDynamicIsland();
+  /** Last balance known to be persisted — deltas are computed against it. */
+  const baseline = useRef(child.iron_dollars);
 
-  // Auto-save with debounce
+  useEffect(() => { baseline.current = child.iron_dollars; }, [child.id, child.iron_dollars]);
+
+  // Auto-save with debounce (profile fields only — the balance is atomic, see below)
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(async () => {
@@ -35,12 +40,11 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
         phone: phone || null,
         telegram_username: telegram || null,
         supervisor_notes: notes || null,
-        iron_dollars: parseInt(iron, 10) || 0,
       }).eq('id', child.id);
       setSaving(false);
     }, 800);
     return () => clearTimeout(t);
-  }, [phone, telegram, notes, iron, open, child.id]);
+  }, [phone, telegram, notes, open, child.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -48,15 +52,31 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       phone: phone || null,
       telegram_username: telegram || null,
       supervisor_notes: notes || null,
-      iron_dollars: parseInt(iron, 10) || 0,
     }).eq('id', child.id);
+    if (error) { setSaving(false); toast.error('Помилка'); return; }
+
+    // Balance goes through the atomic server function: concurrent supervisors
+    // can never overwrite each other, and a retry can never double-credit.
+    const delta = (parseInt(iron, 10) || 0) - baseline.current;
+    let queued = false;
+    if (delta !== 0) {
+      const { data: auth } = await supabase.auth.getUser();
+      const res = await queuedIronDollarChange({
+        childId: child.id,
+        amount: delta,
+        reason: 'Кабінет супроводу',
+        supervisorId: auth?.user?.id ?? null,
+        label: `${delta > 0 ? '+' : ''}${delta} IRON · ${child.full_name}`,
+      });
+      queued = res.queued;
+      baseline.current = parseInt(iron, 10) || 0;
+    }
     setSaving(false);
-    if (error) { toast.error('Помилка'); return; }
-    const delta = (parseInt(iron, 10) || 0) - child.iron_dollars;
+
     if (delta !== 0) {
       island.showSuccess(
         `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} Iron Dollars!`,
-        child.full_name,
+        queued ? `${child.full_name} · збережено офлайн` : child.full_name,
       );
     } else {
       toast.success('Збережено');
