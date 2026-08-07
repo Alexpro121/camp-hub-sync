@@ -109,6 +109,53 @@ export type Database = {
           },
         ]
       }
+      fair_payments: {
+        Row: {
+          amount: number
+          balance_after: number | null
+          child_id: string
+          child_name: string
+          created_at: string
+          id: string
+          supervisor_team: number | null
+          supervisor_user_id: string | null
+          team_number: number
+          tx_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after?: number | null
+          child_id: string
+          child_name: string
+          created_at?: string
+          id?: string
+          supervisor_team?: number | null
+          supervisor_user_id?: string | null
+          team_number: number
+          tx_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number | null
+          child_id?: string
+          child_name?: string
+          created_at?: string
+          id?: string
+          supervisor_team?: number | null
+          supervisor_user_id?: string | null
+          team_number?: number
+          tx_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fair_payments_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       iron_dollar_transactions: {
         Row: {
           amount_change: number
@@ -578,6 +625,15 @@ export type Database = {
           p_supervisor_id?: string
         }
         Returns: number
+      }
+      pay_fair_purchase: {
+        Args: {
+          p_amount: number
+          p_supervisor_id?: string
+          p_supervisor_team?: number
+          p_tx_id: string
+        }
+        Returns: Json
       }
     }
     Enums: {
