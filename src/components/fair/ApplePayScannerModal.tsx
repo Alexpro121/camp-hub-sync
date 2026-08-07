@@ -29,6 +29,8 @@ interface Receipt {
   at: Date;
 }
 
+interface FrameBox { x: number; y: number; w: number; h: number }
+
 const SCAN_LOCK_MS = 3000;
 const RPC_RETRIES = 3;
 /** Decode at ~10 FPS instead of 60 — same responsiveness, ~70% less CPU/GPU load. */
@@ -118,6 +120,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
   const [failure, setFailure] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [manualCode, setManualCode] = useState('');
+  const [box, setBox] = useState<FrameBox | null>(null);
   const haptics = useHaptics();
   const island = useDynamicIsland();
 
@@ -187,6 +190,11 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
 
       lastError = error;
       const msg = String((error as any)?.message || '');
+      const restricted = msg.match(/RESTRICTED_TEAM_PAYMENT:?(\d+)?/);
+      if (restricted) {
+        showFailure(`Оплата доступна лише для дітей Команди №${restricted[1] ?? payload.supervisor_team ?? ''}!`);
+        return;
+      }
       if (/tx_already_used/.test(msg)) { showFailure('Цей QR-код вже використано'); return; }
       if (/invalid_amount/.test(msg)) { showFailure('Недійсна сума в QR-коді'); return; }
       if (/not_a_child|not_authenticated/.test(msg)) { showFailure('Сесію втрачено, увійди знову'); return; }
@@ -241,6 +249,27 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
             ctx.drawImage(video, 0, 0, w, h);
             const img = ctx.getImageData(0, 0, w, h);
             const code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
+            if (code?.location) {
+              // Map the decoded corners onto the displayed (object-cover) video box.
+              const rw = video.clientWidth || w;
+              const rh = video.clientHeight || h;
+              const s = Math.max(rw / w, rh / h);
+              const offX = (rw - w * s) / 2;
+              const offY = (rh - h * s) / 2;
+              const pts = [
+                code.location.topLeftCorner,
+                code.location.topRightCorner,
+                code.location.bottomRightCorner,
+                code.location.bottomLeftCorner,
+              ].map((p) => ({ x: offX + p.x * s, y: offY + p.y * s }));
+              const xs = pts.map((p) => p.x);
+              const ys = pts.map((p) => p.y);
+              const minX = Math.min(...xs);
+              const minY = Math.min(...ys);
+              setBox({ x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY });
+            } else {
+              setBox(null);
+            }
             if (code?.data) handleDecoded(code.data);
           } catch { /* frame not ready */ }
         }
@@ -282,6 +311,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
       setFailure(null);
       setReceipt(null);
       setManualCode('');
+      setBox(null);
       lockedRef.current = false;
     } else {
       mountedRef.current = false;
@@ -326,8 +356,8 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
   const close = () => { stopCamera(); onClose(); };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="pay-sheet relative w-full sm:max-w-sm mx-auto rounded-t-[28px] sm:rounded-[28px] border border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl p-5 pb-8 overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4">
+      <div className="pay-sheet relative w-full sm:max-w-sm mx-auto mt-0 rounded-[28px] border border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl p-5 pb-8 overflow-hidden">
         <canvas ref={confettiRef} className="pointer-events-none absolute inset-0 w-full h-full z-20" />
 
         <div className="flex items-center justify-between mb-4 relative z-10">
@@ -347,6 +377,16 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
           <div className={`scanner-viewport relative mx-auto overflow-hidden rounded-3xl bg-black ${stage === 'processing' ? 'is-collapsing' : ''}`}>
             <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
             <canvas ref={frameRef} className="hidden" />
+            {box && (
+              <span
+                className="scan-frame"
+                style={{
+                  transform: `translate3d(${box.x}px, ${box.y}px, 0)`,
+                  width: `${box.w}px`,
+                  height: `${box.h}px`,
+                }}
+              />
+            )}
             <span className="scan-corner tl" /><span className="scan-corner tr" />
             <span className="scan-corner bl" /><span className="scan-corner br" />
             {stage === 'scanning' && <span className="scan-laser" />}
