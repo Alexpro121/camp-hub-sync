@@ -15,9 +15,10 @@ import {
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { tripName } from '@/lib/trips';
 
 /** Admin: paste or upload a train seating list, verify it, then store it. */
-const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
+const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: number } = {}) => {
   const island = useDynamicIsland();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftId, setShiftId] = useState<string>('');
@@ -106,12 +107,14 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
     setSaving(true);
     try {
       const teams = Array.from(new Set(rows.map((r) => r.team_number)));
-      let del = supabase.from('train_coupes').delete().in('team_number', teams);
+      let del = supabase.from('train_coupes').delete().eq('trip_number', trip).in('team_number', teams);
       del = shiftId ? del.eq('shift_id', shiftId) : del.is('shift_id', null);
       await del;
 
       const payload = rows.map((r) => ({
         shift_id: shiftId || null,
+        trip_number: trip,
+        trip_name: tripName(trip),
         team_number: r.team_number,
         coupe_number: r.coupe_number,
         seat_number: r.seat_number,
@@ -123,7 +126,7 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
       const { error } = await supabase.from('train_coupes').insert(payload);
       if (error) throw error;
       const teamLabel = teams.filter(Boolean).join(', ') || '—';
-      island.showSuccess(`Розселення команди №${teamLabel} збережено`, `${payload.length} пасажирів`);
+      island.showSuccess(`${tripName(trip)} · команда №${teamLabel}`, `${payload.length} пасажирів збережено`);
       toast.success(`Збережено ${payload.length} пасажирів`);
       setRows(null);
       setText('');
@@ -146,7 +149,7 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
       <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-3">
         <div className="flex items-center gap-2">
           <Train className="w-4 h-4 text-primary" strokeWidth={1.75} />
-          <p className="text-sm font-semibold">Розселення по купе</p>
+          <p className="text-sm font-semibold">Розселення по купе · {tripName(trip)}</p>
         </div>
 
         <div className="space-y-1.5">
