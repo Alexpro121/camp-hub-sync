@@ -356,21 +356,25 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid }: Props) => {
   const close = () => { stopCamera(); onClose(); };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-[calc(6.5rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      {/* Floating glass HUD — Apple Pay style, always on top of the sheet */}
+      <div className="fixed top-4 left-4 right-4 z-[110] bg-black/60 backdrop-blur-3xl border border-white/15 rounded-3xl p-4 shadow-2xl flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-tight text-white">Оплата Айрон-доларами</p>
+          <p className="text-[11px] text-white/50 tabular-nums mt-0.5">Баланс: {balance} 💰</p>
+        </div>
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Закрити"
+          className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center cursor-pointer transition active:scale-90 shrink-0"
+        >
+          <X className="w-5 h-5" strokeWidth={2} />
+        </button>
+      </div>
+
       <div className="pay-sheet relative w-full sm:max-w-sm mx-auto mt-0 rounded-[28px] border border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl p-5 pb-8 overflow-hidden">
         <canvas ref={confettiRef} className="pointer-events-none absolute inset-0 w-full h-full z-20" />
-
-        <div className="flex items-center justify-between mb-4 relative z-10">
-          <p className="text-[13px] font-semibold tracking-tight text-white/70">Оплата Айрон-доларами</p>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Закрити"
-            className="w-8 h-8 rounded-full bg-white/10 text-white/70 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <X className="w-4 h-4" strokeWidth={2} />
-          </button>
-        </div>
 
         {/* Scanner viewport */}
         {(stage === 'scanning' || stage === 'processing') && (
