@@ -14,6 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
+import { useTalentEventActive } from '@/hooks/useTalentEventActive';
+import TalentTeamView from '@/components/talent/TalentTeamView';
+import { Mic2 } from 'lucide-react';
 
 interface Props { onBack: () => void; }
 
@@ -33,6 +36,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [showAllFields, setShowAllFields] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
+  const talent = useTalentEventActive();
 
   // App-wide schedule alerts: the island pops on any screen once logged in.
   useScheduleNotifier(child?.team_number ?? null, !!child);
@@ -186,10 +190,20 @@ const ChildFlow = ({ onBack }: Props) => {
           </div>
         </Card>
 
-        <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid grid-cols-2 w-full h-10 mb-3">
-            <TabsTrigger value="profile" className="text-xs">Профіль</TabsTrigger>
-            <TabsTrigger value="schedule" className="text-xs">Розклад</TabsTrigger>
+        <Tabs
+          defaultValue="profile"
+          className="w-full"
+          onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
+        >
+          <TabsList className={`grid ${talent.active ? 'grid-cols-3' : 'grid-cols-2'} w-full h-11 mb-3`}>
+            <TabsTrigger value="profile" className="text-xs min-h-[40px]">Профіль</TabsTrigger>
+            <TabsTrigger value="schedule" className="text-xs min-h-[40px]">Розклад</TabsTrigger>
+            {talent.active && (
+              <TabsTrigger value="talent" className="text-xs min-h-[40px] relative animate-fade-in gap-1.5">
+                <Mic2 className="w-4 h-4" strokeWidth={1.9} /> Таланти
+                {talent.isNew && <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-warning animate-pulse" />}
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
@@ -244,6 +258,11 @@ const ChildFlow = ({ onBack }: Props) => {
           <TabsContent value="schedule" className="mt-0">
             <ScheduleView myTeam={child.team_number} lockTeam />
           </TabsContent>
+          {talent.active && (
+            <TabsContent value="talent" className="mt-0">
+              <TalentTeamView myTeam={child.team_number} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     );

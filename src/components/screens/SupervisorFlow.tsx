@@ -20,6 +20,9 @@ import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
 import CoupeManager from '@/components/coupes/CoupeManager';
 import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
+import TabDock, { type DockItem } from '@/components/nav/TabDock';
+import { useTalentEventActive } from '@/hooks/useTalentEventActive';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Props {
   onBack: () => void;
@@ -37,6 +40,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
   const haptics = useHaptics();
+  const talent = useTalentEventActive();
+  const isMobile = useIsMobile();
+
+  const tabItems: DockItem[] = [
+    { value: 'teams', label: 'Команди', icon: Users },
+    { value: 'schedule', label: 'Розклад', icon: CalendarDays },
+    ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
+    { value: 'coupes', label: 'Потяг', icon: Train },
+    { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
+    { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
+  ];
+
+  const handleTabChange = (v: string) => {
+    if (v === 'talent') talent.markSeen();
+    setActiveTab(v);
+  };
 
   // Restore session (only if a real backend session is still valid)
   useEffect(() => {
@@ -199,7 +218,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   }
 
   return (
-    <div className="min-h-screen max-w-3xl mx-auto pb-32 safe-bottom">
+    <div className="min-h-[100dvh] max-w-3xl mx-auto pb-32 safe-bottom overflow-x-hidden">
       <div className="app-bar px-4 py-3 safe-top -mx-0 border-b border-border/40">
         <div className="flex items-center justify-between">
           <button onClick={logout} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
@@ -212,34 +231,13 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-3">
-        <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
-          <TabsList className="grid w-full grid-cols-6 h-[54px] p-1">
-            <TabsTrigger value="teams" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <Users className="w-[18px] h-[18px]" /> <span>Команди</span>
-            </TabsTrigger>
-            <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span>
-            </TabsTrigger>
-            <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span>
-            </TabsTrigger>
-            <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <Train className="w-[18px] h-[18px]" /> <span>Потяг</span>
-            </TabsTrigger>
-            <TabsTrigger value="transfers" className="flex-col gap-0.5 h-full text-[11px] leading-none">
-              <ArrowLeftRight className="w-[18px] h-[18px]" /> <span>Трансфери</span>
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="flex-col gap-0.5 h-full text-[11px] leading-none relative">
-              <Bell className="w-[18px] h-[18px]" /> <span>Сповіщення</span>
-              {unreadCount > 0 && (
-                <span className="absolute top-0.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-glow animate-pulse-glow">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3">
+        {!isMobile && (
+          <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
+            <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />
+          </div>
+        )}
+        {isMobile && <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />}
 
         <TabsContent value="teams" className="mt-3 animate-fade-in">
           <TeamsView myTeam={authedTeam} />
@@ -247,9 +245,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         <TabsContent value="schedule" className="mt-3 animate-fade-in">
           <ScheduleView myTeam={authedTeam} />
         </TabsContent>
-        <TabsContent value="talent" className="mt-3 animate-fade-in">
-          <TalentTeamView myTeam={authedTeam} />
-        </TabsContent>
+        {talent.active && (
+          <TabsContent value="talent" className="mt-3 animate-fade-in">
+            <TalentTeamView myTeam={authedTeam} />
+          </TabsContent>
+        )}
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
           <div className="space-y-3">
             <TrainPublishStatus />
@@ -265,7 +265,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       </Tabs>
 
       {/* Floating actions */}
-      <div className="fixed right-4 fab-bottom flex flex-col gap-3 animate-slide-in-right z-40">
+      <div className={`fixed right-4 ${isMobile ? 'bottom-[calc(5.5rem+env(safe-area-inset-bottom))]' : 'fab-bottom'} flex flex-col gap-3 animate-slide-in-right z-40`}>
 
         <Button
           onClick={() => setBankOpen(true)}
