@@ -54,7 +54,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
     ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
-    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag } as DockItem] : []),
+    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag, accent: 'gold' } as DockItem] : []),
     { value: 'coupes', label: 'Потяг', icon: Train },
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
