@@ -1,4 +1,5 @@
 /** Deterministic train seating parser (Stage 1 — Smart Regex, no AI). */
+import { detectPassengerRole, type PassengerRole } from '@/lib/passengerRoles';
 
 export interface ParsedPassenger {
   seatNumber: number;
@@ -6,6 +7,8 @@ export interface ParsedPassenger {
   name: string;
   boardingCity: string | null;
   teamNumber?: number;
+  /** Auto-detected from keywords in the source line. */
+  passengerRole: PassengerRole;
 }
 
 /** Numbered seat line: "5. Ім'я", "5) Ім'я", "5<TAB>Ім'я". */
@@ -48,7 +51,13 @@ export function parseSeatLine(rawLine: string): ParsedPassenger | null {
 
   if (name.length < 2) return null;
 
-  return { seatNumber, coupeNumber: Math.ceil(seatNumber / 4), name, boardingCity };
+  return {
+    seatNumber,
+    coupeNumber: Math.ceil(seatNumber / 4),
+    name,
+    boardingCity,
+    passengerRole: detectPassengerRole(content),
+  };
 }
 
 /** Parse a whole seating list. Headers and service markers are ignored. */
@@ -113,6 +122,7 @@ export function parseInlineTeamRoster(rawText: string): Required<ParsedPassenger
       coupeNumber: Math.ceil(seatNumber / 4),
       name: titleCaseName(rawName),
       boardingCity: null,
+      passengerRole: detectPassengerRole(rawName),
     });
   }
 
@@ -259,6 +269,7 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
       coupeNumber: Math.ceil(seatCounter / 4),
       name,
       boardingCity,
+      passengerRole: detectPassengerRole(body),
     });
   }
 
