@@ -18,6 +18,7 @@ import { pushIsland } from '@/lib/islandBus';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import type { Schedule, ScheduleItem, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
+import { broadcastScheduleUpdated, itemKey } from '@/lib/schedule';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -187,7 +188,17 @@ const ScheduleAdmin = () => {
         .single();
       if (error || !sch) throw error;
 
-      const rows = draft.map((it, i) => ({
+      // Merge with what already exists for this date: identical events (start + title)
+      // are updated in place instead of being duplicated on the timeline.
+      const { data: sameDay } = await supabase.from('schedules').select('id').eq('date', date);
+      const dayIds = (sameDay || []).map((s: { id: string }) => s.id).filter((id) => id !== sch.id);
+      let byKey = new Map<string, ScheduleItem>();
+      if (dayIds.length) {
+        const { data: prevItems } = await supabase.from('schedule_items').select('*').in('schedule_id', dayIds);
+        byKey = new Map(((prevItems || []) as unknown as ScheduleItem[]).map((i) => [itemKey(i), i]));
+      }
+
+      const all = draft.map((it, i) => ({
         schedule_id: sch.id,
         time_start: it.time_start,
         time_end: it.time_end,
@@ -199,11 +210,25 @@ const ScheduleAdmin = () => {
         has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
         sub_slots: it.sub_slots as unknown as any,
       }));
-      const { error: itErr } = await supabase.from('schedule_items').insert(rows);
-      if (itErr) throw itErr;
+      const rows: typeof all = [];
+      for (const row of all) {
+        const dup = byKey.get(itemKey(row));
+        if (dup) {
+          const { schedule_id: _ignored, ...values } = row;
+          const { error: upErr } = await supabase.from('schedule_items').update(values).eq('id', dup.id);
+          if (upErr) throw upErr;
+        } else {
+          rows.push(row);
+        }
+      }
+      if (rows.length) {
+        const { error: itErr } = await supabase.from('schedule_items').insert(rows);
+        if (itErr) throw itErr;
+      }
 
       toast.success(isPublished ? 'Розклад опубліковано' : 'Чернетку збережено');
       if (isPublished) pushIsland('Новий розклад опубліковано', 'success');
+      await broadcastScheduleUpdated({ date, action: 'publish' });
       setDraft(null);
       setSource(null);
       setRaw('');
