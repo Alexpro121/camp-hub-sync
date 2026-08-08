@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
 
     const session = await issueSession(`staff-team-${team}@ironhelp.local`, 'supervisor', { team_number: team });
     return json({ role: 'supervisor', team, session });
-  } catch (_e) {
+  } catch (e) {
+    console.error('staff-login failed:', e instanceof Error ? e.message : e);
     return json({ error: 'login_failed' }, 500);
   }
 });
