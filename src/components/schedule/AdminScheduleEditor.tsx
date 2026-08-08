@@ -5,13 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays } from 'lucide-react';
+import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { CATEGORY_LIST, shiftTime, sentenceCase } from '@/lib/scheduleCategories';
 import { broadcastScheduleUpdated, dedupeItems } from '@/lib/schedule';
-import type { Schedule, ScheduleItem, Shift } from '@/types/app';
+import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -129,15 +129,22 @@ const AdminScheduleEditor = () => {
     toast.success('Подію видалено');
   };
 
-  /** Shift this event and every later event of the day by ±delta minutes. */
+  /** Shift this event and every later event of the day by ±delta minutes,
+   *  moving start, end AND every team sub-slot proportionally. */
   const shiftFrom = async (from: ScheduleItem, delta: number) => {
     const affected = sorted.filter((i) => (i.time_start || '') >= (from.time_start || ''));
     setBusy(true);
     try {
       for (const i of affected) {
+        const slots = Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]) : [];
+        const nextSlots = slots.map((s) => ({ ...s, time: shiftTime(s.time, delta) ?? s.time }));
         const { error } = await supabase
           .from('schedule_items')
-          .update({ time_start: shiftTime(i.time_start, delta), time_end: shiftTime(i.time_end, delta) })
+          .update({
+            time_start: shiftTime(i.time_start, delta),
+            time_end: shiftTime(i.time_end, delta),
+            sub_slots: nextSlots as unknown as any,
+          })
           .eq('id', i.id);
         if (error) throw error;
       }
@@ -146,6 +153,30 @@ const AdminScheduleEditor = () => {
       toast.success(`Зсув ${delta > 0 ? '+' : ''}${delta} хв для ${affected.length} подій`);
     } catch (e: any) {
       toast.error(e?.message || 'Помилка зсуву');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Remove events that repeat the same start time + title on this date. */
+  const cleanDuplicates = async () => {
+    setBusy(true);
+    try {
+      const seen = new Set<string>();
+      const trash: string[] = [];
+      for (const i of sorted) {
+        const key = `${(i.time_start || '').trim()}|${(i.title || '').trim().toLowerCase()}`;
+        if (seen.has(key)) trash.push(i.id);
+        else seen.add(key);
+      }
+      if (!trash.length) { toast.success('Дублікатів не знайдено'); return; }
+      const { error } = await supabase.from('schedule_items').delete().in('id', trash);
+      if (error) throw error;
+      await load();
+      await broadcastScheduleUpdated({ date, action: 'dedupe' });
+      toast.success(`Видалено дублікатів: ${trash.length}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка очищення');
     } finally {
       setBusy(false);
     }
@@ -175,6 +206,15 @@ const AdminScheduleEditor = () => {
 
       <Button onClick={() => setForm(emptyForm())} className="w-full h-10 text-xs font-bold uppercase">
         <Plus className="w-4 h-4 mr-1.5" /> Додати подію
+      </Button>
+
+      <Button
+        variant="outline"
+        disabled={busy || !sorted.length}
+        onClick={cleanDuplicates}
+        className="w-full h-10 text-xs font-bold uppercase"
+      >
+        <Eraser className="w-4 h-4 mr-1.5" /> Очистити дублікати розкладу
       </Button>
 
       {loading ? (

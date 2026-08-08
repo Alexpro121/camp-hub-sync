@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import type { Schedule, ScheduleItem, ScheduleSubSlot } from '@/types/app';
+import type { Schedule, ScheduleItem } from '@/types/app';
 import { fromMinutes, sentenceCase, toMinutes } from '@/lib/scheduleCategories';
+import { slotsOf } from '@/components/schedule/ScheduleCard';
 
 const KEY = 'helpsuprov:event-reminders';
 const LEAD_MIN = 5;
@@ -13,9 +14,6 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const readFired = (): Record<string, number> => {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
 };
-
-const slotsOf = (i: ScheduleItem): ScheduleSubSlot[] =>
-  Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time) : [];
 
 interface Alert {
   id: string;
