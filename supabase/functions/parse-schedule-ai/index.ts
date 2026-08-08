@@ -1,8 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders, json, SUPABASE_URL, ANON_KEY } from '../_shared/accounts.ts';
+import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for a Ukrainian youth camp.
@@ -89,45 +89,20 @@ Deno.serve(async (req) => {
     if (!parsedBody.success) return json({ error: 'invalid_body' }, 400);
     const { rawText } = parsedBody.data;
 
-    const key = Deno.env.get('GROQ_API_KEY');
-    if (!key) return json({ source: 'fallback', reason: 'no_api_key', items: [] }, 200);
+    if (!hasGroqKeys()) return json({ source: 'local_fallback', reason: 'no_api_key', items: [] }, 200);
 
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
     try {
-      const res = await fetch(GROQ_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: MODEL,
-          temperature: 0.1,
-          max_tokens: 2048,
-          stream: false,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: rawText },
-          ],
-        }),
+      const { data: payload, keyUsedIndex } = await fetchGroqWithFallback({
+        model: MODEL,
+        temperature: 0.1,
+        max_tokens: 2048,
+        stream: false,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: rawText },
+        ],
       });
-      if (!res.ok) {
-        const bodyText = await res.text();
-        let providerMessage = '';
-        try { providerMessage = JSON.parse(bodyText)?.error?.message ?? JSON.parse(bodyText)?.detail ?? ''; } catch { /* raw */ }
-        return json({
-          source: 'fallback',
-          reason: `groq_${res.status}`,
-          items: [],
-          error: {
-            code: `GROQ_HTTP_${res.status}`,
-            status: res.status,
-            model: MODEL,
-            message: providerMessage || res.statusText || 'Groq API error',
-            raw: bodyText.slice(0, 300),
-          },
-        }, 200);
-      }
-      const payload = await res.json();
+      console.log(`[parse-schedule-ai] served by key #${keyUsedIndex}`);
       const content: string = payload?.choices?.[0]?.message?.content ?? '';
       let candidate: unknown;
       try {
@@ -177,21 +152,19 @@ Deno.serve(async (req) => {
       }));
       return json({ source: 'ai', items }, 200);
     } catch (e) {
-      const aborted = (e as Error)?.name === 'AbortError';
+      // Whole key pool exhausted → silent switch to the local Smart Regex parser.
       return json({
-        source: 'fallback',
-        reason: aborted ? 'timeout' : 'network_error',
+        source: 'local_fallback',
+        reason: 'pool_exhausted',
         items: [],
         error: {
-          code: aborted ? 'TIMEOUT_8S' : 'NETWORK_ERROR',
+          code: 'GROQ_POOL_EXHAUSTED',
           status: 0,
           model: MODEL,
-          message: (e as Error)?.message ?? 'Unknown network error',
+          message: (e as Error)?.message ?? 'All Groq keys failed',
           raw: '',
         },
       }, 200);
-    } finally {
-      clearTimeout(timer);
     }
   } catch (e) {
     return json({
