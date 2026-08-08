@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { normalizeName } from '@/lib/normalize';
 import { pickActiveShift } from '@/lib/shift';
 import { InlineLoader } from '@/components/ui/loader';
+import { pushIsland } from '@/lib/islandBus';
 
 interface Props { myTeam: number; }
 
@@ -30,6 +31,8 @@ const TransfersView = ({ myTeam }: Props) => {
   const [swapA, setSwapA] = useState<Child | null>(null);
   const [swapQuery, setSwapQuery] = useState('');
   const [swapB, setSwapB] = useState<Child | null>(null);
+  const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number }[]>([]);
+  const [availableTeams, setAvailableTeams] = useState<number[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -44,6 +47,12 @@ const TransfersView = ({ myTeam }: Props) => {
       if (active?.id) q = q.eq('shift_id', active.id);
       const { data } = await q;
       setChildren((data || []) as Child[]);
+
+      const { data: teams } = await supabase.rpc('get_available_transfer_teams', {
+        p_shift_id: active?.id ?? null,
+        p_my_team: myTeam,
+      });
+      setAvailableTeams(((teams || []) as { team_number: number }[]).map((t) => t.team_number));
       setInitialLoading(false);
     };
     load();
@@ -51,22 +60,32 @@ const TransfersView = ({ myTeam }: Props) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [myTeam]);
 
   const myKids = useMemo(() => children.filter((c) => c.team_number === myTeam), [children, myTeam]);
+  const otherTeams = availableTeams;
   const existingTeams = useMemo(
-    () => Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b),
-    [children],
+    () => Array.from(new Set([...children.map((c) => c.team_number), ...availableTeams])).sort((a, b) => a - b),
+    [children, availableTeams],
   );
-  const otherTeams = existingTeams.filter((t) => t !== myTeam);
 
-  const swapMatches = useMemo(() => {
-    const q = normalizeName(swapQuery);
-    if (!q) return [];
-    return children
-      .filter((c) => c.team_number !== myTeam && normalizeName(c.full_name).includes(q))
-      .slice(0, 8);
-  }, [swapQuery, children, myTeam]);
+  // Server-side search for swap partner (other teams)
+  useEffect(() => {
+    const q = swapQuery.trim();
+    if (q.length < 2) { setSwapMatches([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('search_child_for_transfer', {
+        p_query: q,
+        p_shift_id: shiftId,
+        p_my_team: myTeam,
+      });
+      if (cancelled) return;
+      if (error) { setSwapMatches([]); return; }
+      setSwapMatches((data || []) as { id: string; full_name: string; team_number: number }[]);
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [swapQuery, shiftId, myTeam]);
 
   /* ---- TRANSFER ---- */
   const performTransfer = async () => {
@@ -79,18 +98,14 @@ const TransfersView = ({ myTeam }: Props) => {
     }
     setLoading(true);
     const fromTeam = selected.team_number;
-    const { error } = await supabase.from('children').update({ team_number: tn }).eq('id', selected.id);
-    if (error) { toast.error('Помилка'); setLoading(false); return; }
-    await supabase.from('transfers').insert({
-      child_id: selected.id, child_full_name: selected.full_name,
-      from_team: fromTeam, to_team: tn, performed_by: `Команда #${myTeam}`,
+    const { error } = await supabase.rpc('execute_child_transfer', {
+      p_child_id: selected.id,
+      p_target_team: tn,
+      p_performed_by: `Команда #${myTeam}`,
     });
-    await supabase.from('notifications').insert({
-      type: 'transfer', title: 'Переведення',
-      message: `${selected.full_name}: команда #${fromTeam} → #${tn}`,
-      metadata: { child_id: selected.id, from_team: fromTeam, to_team: tn },
-    });
+    if (error) { toast.error('Помилка переведення'); setLoading(false); return; }
     toast.success('Переведено');
+    pushIsland(`${selected.full_name}: #${fromTeam} → #${tn}`, 'success', 'Переведення');
     setSelected(null); setTargetTeam(''); setCustomTeam(''); setAllowCustomTeam(false);
     setLoading(false);
   };
@@ -101,26 +116,15 @@ const TransfersView = ({ myTeam }: Props) => {
     if (swapA.team_number === swapB.team_number) { toast.error('Та сама команда'); return; }
     setLoading(true);
     const teamA = swapA.team_number, teamB = swapB.team_number;
-    // Two-step: A → temp impossible without unique team; do sequential updates
-    const { error: e1 } = await supabase.from('children').update({ team_number: teamB }).eq('id', swapA.id);
-    if (e1) { toast.error('Помилка'); setLoading(false); return; }
-    const { error: e2 } = await supabase.from('children').update({ team_number: teamA }).eq('id', swapB.id);
-    if (e2) {
-      // rollback A
-      await supabase.from('children').update({ team_number: teamA }).eq('id', swapA.id);
-      toast.error('Помилка'); setLoading(false); return;
-    }
-    await supabase.from('transfers').insert([
-      { child_id: swapA.id, child_full_name: swapA.full_name, from_team: teamA, to_team: teamB, performed_by: `Заміна · #${myTeam}` },
-      { child_id: swapB.id, child_full_name: swapB.full_name, from_team: teamB, to_team: teamA, performed_by: `Заміна · #${myTeam}` },
-    ]);
-    await supabase.from('notifications').insert({
-      type: 'swap', title: 'Заміна',
-      message: `${swapA.full_name} (#${teamA}) ⇄ ${swapB.full_name} (#${teamB})`,
-      metadata: { a: swapA.id, b: swapB.id, team_a: teamA, team_b: teamB },
+    const { error } = await supabase.rpc('execute_child_swap', {
+      p_child_1_id: swapA.id,
+      p_child_2_id: swapB.id,
+      p_performed_by: `Заміна · #${myTeam}`,
     });
+    if (error) { toast.error('Помилка заміни'); setLoading(false); return; }
     toast.success('Заміна виконана');
-    setSwapA(null); setSwapB(null); setSwapQuery('');
+    pushIsland(`${swapA.full_name} (#${teamA}) ⇄ ${swapB.full_name} (#${teamB})`, 'success', 'Заміна');
+    setSwapA(null); setSwapB(null); setSwapQuery(''); setSwapMatches([]);
     setLoading(false);
   };
 
