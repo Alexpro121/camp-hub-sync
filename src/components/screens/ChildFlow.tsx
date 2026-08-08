@@ -324,11 +324,7 @@ const ChildFlow = ({ onBack }: Props) => {
               <ScheduleView
                 myTeam={child.team_number}
                 lockTeam
-                onFairAction={
-                  fair.active && (!phase || phase.currentPhase !== 'PREPARING')
-                    ? () => setScannerOpen(true)
-                    : undefined
-                }
+                onFairAction={fair.active ? () => setScannerOpen(true) : undefined}
               />
             )}
           </TabsContent>
