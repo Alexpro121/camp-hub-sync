@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import {
   FileSpreadsheet, AlertTriangle, Coins, AlertCircle, Megaphone, Siren, Sparkles, Utensils, X,
-  Clock, ChevronDown,
+  Clock, ChevronDown, WifiOff, Train, ArrowLeftRight, Bell, Activity, ShoppingBag, Navigation,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useDynamicIsland, type BroadcastColor } from '@/context/DynamicIslandContext';
+import {
+  useDynamicIsland,
+  type BroadcastColor,
+  type IslandPayload,
+  type IslandState,
+} from '@/context/DynamicIslandContext';
 import { getEventCategoryIcon } from '@/lib/eventIcons';
 
 const BASE =
@@ -28,6 +33,34 @@ const BroadcastIcon = ({ color }: { color: BroadcastColor }) => {
   if (color === 'purple') return <Sparkles className={cls} />;
   return <Utensils className={cls} />;
 };
+
+/** Context-aware icon — never the same coin for every notification. */
+function renderIslandIcon(state: IslandState, payload: IslandPayload) {
+  const cls = 'w-4 h-4 shrink-0';
+  if (state === 'OFFLINE') return <WifiOff className={`${cls} text-amber-400`} />;
+  if (state === 'EXCEL_IMPORT') return <FileSpreadsheet className={`${cls} text-teal-400`} />;
+  if (state === 'BROADCAST') return <Megaphone className={`${cls} text-red-400`} />;
+  if (payload.type === 'TRAIN') return <Train className={`${cls} text-sky-400`} />;
+  if (payload.type === 'COUPES_SWAP') return <ArrowLeftRight className={`${cls} text-purple-400`} />;
+
+  const text = `${payload.title || ''} ${payload.subtitle || ''} ${payload.eventTitle || ''}`.toLowerCase();
+
+  if (state === 'EVENT_ALERT' || payload.isSchedule) {
+    if (/обід|сніданок|вечеря|чай|смаколики|їдальня|харчування/.test(text)) return <Utensils className={`${cls} text-amber-400`} />;
+    if (/йога|зарядка|спорт|футбол|турнір|активн/.test(text)) return <Activity className={`${cls} text-emerald-400`} />;
+    if (/ярмарок|ярмарка|покупк/.test(text)) return <ShoppingBag className={`${cls} text-amber-400`} />;
+    if (/таланти|концерт|свічка|дискотека|ватра/.test(text)) return <Sparkles className={`${cls} text-purple-400`} />;
+    if (/виїзд|буковель|потяг|трансфер|автобус/.test(text)) return <Navigation className={`${cls} text-sky-400`} />;
+    const Fallback = getEventCategoryIcon(payload.eventTitle ?? '', payload.category);
+    return <Fallback className={`${cls} text-amber-400`} />;
+  }
+
+  if (payload.type === 'COINS' || /долар|монет|баланс|оплат|нарахова|списан/.test(text)) {
+    return <Coins className={`${cls} text-emerald-400`} />;
+  }
+  if (state === 'ERROR_TOAST') return <AlertCircle className={`${cls} text-rose-400`} />;
+  return <Bell className={`${cls} text-blue-400`} />;
+}
 
 const DynamicIsland = () => {
   const { state, payload, expanded, hide, toggleExpanded, pauseAutoHide, resumeAutoHide } = useDynamicIsland();
@@ -69,7 +102,7 @@ const DynamicIsland = () => {
   const teamsLabel = payload.myTeams?.length
     ? `(Команд${payload.myTeams.length > 1 ? 'и' : 'а'} ${payload.myTeams.join(' і ')})`
     : '';
-  const EventIcon = getEventCategoryIcon(payload.eventTitle ?? '', payload.category);
+  const islandIcon = renderIslandIcon(state, payload);
 
   return (
     <div className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none safe-top top-0">
@@ -116,7 +149,7 @@ const DynamicIsland = () => {
           {state === 'OFFLINE' && (
             <div className="w-full flex items-center justify-between text-xs font-medium">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                {islandIcon}
                 <span>{payload.queued ? `Офлайн — ${payload.queued} дій у черзі` : 'Офлайн'}</span>
               </div>
               <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/30 font-mono">OFFLINE</span>
@@ -127,7 +160,7 @@ const DynamicIsland = () => {
             <div className="w-full flex items-center justify-between gap-2">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <Coins className="w-4 h-4 text-emerald-400" />
+                  {islandIcon}
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-emerald-300 truncate">{payload.title}</div>
@@ -144,7 +177,7 @@ const DynamicIsland = () => {
             <div className="w-full flex items-center justify-between gap-2">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-4 h-4 text-rose-400" />
+                  {islandIcon}
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-rose-300 truncate">{payload.title}</div>
@@ -191,7 +224,7 @@ const DynamicIsland = () => {
           {state === 'EVENT_ALERT' && !expanded && (
             <div className="w-full flex items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2 min-w-0">
-                <EventIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                {islandIcon}
                 <span className="font-semibold text-white truncate">
                   {payload.phase === 'pre' ? 'Скоро' : 'Зараз'}: {payload.eventTitle}
                   {payload.myTime && (
@@ -212,7 +245,7 @@ const DynamicIsland = () => {
             <div className="w-full h-full flex flex-col gap-2 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-start gap-2">
-                  <EventIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <span className="mt-0.5 shrink-0">{islandIcon}</span>
                   <div className="min-w-0">
                   <div className="text-[9px] font-bold tracking-[0.18em] text-amber-400/80 uppercase">
                     {payload.phase === 'pre' ? 'За 5 хвилин' : 'Починається'}
