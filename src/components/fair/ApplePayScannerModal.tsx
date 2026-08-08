@@ -365,13 +365,16 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     haptics.impact('medium');
     setStage('processing');
 
-    const { data, error } = await supabase
-      .from('fair_short_codes')
-      .select('code, supervisor_user_id, supervisor_team, amount, tx_id, expires_at')
-      .eq('code', code)
-      .maybeSingle();
+    const { data: raw2, error } = await supabase.rpc('resolve_fair_code', { p_code: code });
 
     if (error) { showFailure('Немає звʼязку. Спробуй ще раз'); return; }
+    const data = raw2 as unknown as {
+      tx_id: string;
+      amount: number;
+      supervisor_user_id: string | null;
+      supervisor_team: number | null;
+      expires_at: string;
+    } | null;
     if (!data) { showFailure('Код не знайдено або він застарів'); return; }
     if (new Date(data.expires_at).getTime() < Date.now()) {
       showFailure('Код застарів, попросіть новий у вожатого');
@@ -388,7 +391,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         : 'Ярмарок · Залізна зміна',
       amount: data.amount,
       timestamp: Date.now(),
-      code: data.code,
+      code,
     });
   }, [manualCode, charge, haptics, showFailure]);
 

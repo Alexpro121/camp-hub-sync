@@ -766,6 +766,7 @@ export type Database = {
         }
         Returns: Json
       }
+      resolve_fair_code: { Args: { p_code: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "supervisor" | "child"
