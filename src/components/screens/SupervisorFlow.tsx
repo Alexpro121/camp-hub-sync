@@ -48,7 +48,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
-  const fair = useFairAccess(true);
+  const fair = useFairAccess(authedTeam !== null);
   const isMobile = useIsMobile();
 
   const tabItems: DockItem[] = [

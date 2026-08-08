@@ -48,7 +48,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const haptics = useHaptics();
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
-  const fair = useFairAccess(true);
+  const fair = useFairAccess(!!child);
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // App-wide schedule alerts: the island pops on any screen once logged in.
