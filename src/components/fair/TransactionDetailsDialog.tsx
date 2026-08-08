@@ -47,7 +47,7 @@ const Row = ({ label, value, mono }: { label: string; value: string; mono?: bool
 
 const TransactionDetailsDialog = memo(({ tx, onClose }: Props) => (
   <Dialog open={!!tx} onOpenChange={(v) => !v && onClose()}>
-    <DialogContent className="p-0 gap-0 overflow-hidden rounded-[28px] sm:max-w-sm border-border/50 bg-card/95 backdrop-blur-2xl">
+    <DialogContent className="p-0 gap-0 overflow-hidden rounded-[28px] sm:max-w-sm border-border/50 bg-card/95 backdrop-blur-2xl [&>button]:hidden">
       {tx && (
         <div className="relative">
           <button
