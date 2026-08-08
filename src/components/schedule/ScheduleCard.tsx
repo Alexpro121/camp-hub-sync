@@ -14,8 +14,35 @@ const ACCENT: Record<string, string> = {
   general: 'border-l-slate-500',
 };
 
+const toMin = (t?: string | null): number | null => {
+  if (!t) return null;
+  const [h, m] = String(t).split(':').map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+};
+
+/**
+ * A sub-slot is only valid when its time sits inside [time_start .. time_end]
+ * of its parent event (cross-midnight aware). Broken rows are never rendered.
+ */
+export const slotInsideEvent = (slotTime: string, item: ScheduleItem): boolean => {
+  const s = toMin(item.time_start);
+  const t = toMin(slotTime);
+  if (t == null) return false;
+  if (s == null) return true;
+  let e = toMin(item.time_end);
+  if (e == null) return t >= s;
+  let tt = t;
+  if (e < s) e += 1440;            // event crosses midnight
+  if (tt < s) tt += 1440;
+  return tt >= s && tt <= e;
+};
+
 export const slotsOf = (i: ScheduleItem): ScheduleSubSlot[] =>
-  Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time) : [];
+  i.has_sub_slots === false
+    ? []
+    : Array.isArray(i.sub_slots)
+      ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time && slotInsideEvent(s.time, i))
+      : [];
 
 interface Props {
   event: NormalizedScheduleItem;

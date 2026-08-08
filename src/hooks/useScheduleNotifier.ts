@@ -14,8 +14,7 @@ const readFired = (): Record<string, number> => {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
 };
 
-const slotsOf = (i: ScheduleItem): ScheduleSubSlot[] =>
-  Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]).filter((s) => s && s.time) : [];
+import { slotsOf } from '@/components/schedule/ScheduleCard';
 
 interface Alert {
   id: string;
