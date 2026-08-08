@@ -260,7 +260,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
-            {fair.active && (!phase || phase.currentPhase !== 'PREPARING') && (
+            {fair.active && child && (!phase || phase.currentPhase !== 'PREPARING') && (
               <ChildFairCard
                 balance={child.iron_dollars}
                 childName={child.full_name}
