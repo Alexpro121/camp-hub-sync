@@ -478,6 +478,8 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         <QrDisplay payload={payload} amount={amount} stale={stale} />
       </Card>
 
+      <FairHowTo variant="supervisor" />
+
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-start gap-2 min-w-0">
