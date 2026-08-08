@@ -1,4 +1,5 @@
 import { parseScheduleText, extractDate, extractTeams, type ParsedScheduleItem } from './scheduleParser';
+import { toMinutes } from './scheduleCategories';
 
 export type ScheduleCategory = 'sports' | 'meal' | 'gathering' | 'entertainment' | 'transfer' | 'general';
 
