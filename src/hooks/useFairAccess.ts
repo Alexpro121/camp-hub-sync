@@ -87,7 +87,6 @@ export function useFairAccess(enabled = true): FairAccess {
       clearInterval(ticker);
       clearInterval(refresh);
       window.removeEventListener('focus', onFocus);
-      window.removeEventListener('focus', onFocus);
       supabase.removeChannel(channel);
       supabase.removeChannel(live);
     };
