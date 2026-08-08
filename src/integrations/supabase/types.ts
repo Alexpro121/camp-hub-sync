@@ -181,6 +181,8 @@ export type Database = {
           child_name: string
           created_at: string
           id: string
+          label: string | null
+          preset_code_id: string | null
           supervisor_team: number | null
           supervisor_user_id: string | null
           team_number: number
@@ -193,6 +195,8 @@ export type Database = {
           child_name: string
           created_at?: string
           id?: string
+          label?: string | null
+          preset_code_id?: string | null
           supervisor_team?: number | null
           supervisor_user_id?: string | null
           team_number: number
@@ -205,6 +209,8 @@ export type Database = {
           child_name?: string
           created_at?: string
           id?: string
+          label?: string | null
+          preset_code_id?: string | null
           supervisor_team?: number | null
           supervisor_user_id?: string | null
           team_number?: number
@@ -216,6 +222,44 @@ export type Database = {
             columns: ["child_id"]
             isOneToOne: false
             referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fair_preset_codes: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          is_reusable: boolean
+          label: string
+          shift_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_reusable?: boolean
+          label: string
+          shift_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_reusable?: boolean
+          label?: string
+          shift_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fair_preset_codes_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
         ]
@@ -760,6 +804,8 @@ export type Database = {
       pay_fair_purchase: {
         Args: {
           p_amount: number
+          p_code_id?: string
+          p_label?: string
           p_supervisor_id?: string
           p_supervisor_team?: number
           p_tx_id: string

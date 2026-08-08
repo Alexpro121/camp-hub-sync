@@ -29,6 +29,7 @@ interface Receipt {
   amount: number;
   txId: string;
   at: Date;
+  label?: string | null;
 }
 
 interface FrameBox { x: number; y: number; w: number; h: number }
@@ -155,6 +156,10 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             p_amount: payload.amount,
             p_supervisor_id: payload.supervisor_id,
             p_supervisor_team: payload.supervisor_team,
+            // Printed reusable tag: the server re-reads price + label from the tag row
+            // and skips the one-time tx_id lock entirely.
+            p_code_id: payload.is_reusable ? payload.code_id ?? null : null,
+            p_label: payload.label ?? null,
           }),
           RPC_TIMEOUT_MS,
         );
@@ -165,7 +170,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
       }
 
       if (!error) {
-        const res = (data ?? {}) as { status?: string; balance?: number; balance_after?: number };
+        const res = (data ?? {}) as { status?: string; balance?: number; balance_after?: number; label?: string | null; tx_id?: string };
         if (res.status === 'insufficient_funds') {
           showFailure(`Недостатньо Айрон-доларів (Баланс: ${res.balance ?? balance} 💰, Сума: ${payload.amount} 💰)`);
           return;
@@ -203,8 +208,9 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
           setReceipt({
             merchant: payload.supervisor_name || 'Ярмарок · Залізна зміна',
             amount: payload.amount,
-            txId: payload.tx_id,
+            txId: res.tx_id || payload.tx_id,
             at: new Date(),
+            label: res.label ?? payload.label ?? null,
           });
           if (!mountedRef.current) return;
           setStage('success');
@@ -223,6 +229,8 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         showFailure(`Оплата доступна лише для дітей Команди №${restricted[1] ?? payload.supervisor_team ?? ''}!`);
         return;
       }
+      if (/double_scan_guard/.test(msg)) { showFailure('Захист від подвійного сканування'); return; }
+      if (/unknown_preset/.test(msg)) { showFailure('Цінник більше не діє'); return; }
       if (/tx_already_used/.test(msg)) { showFailure('Цей QR-код вже використано'); return; }
       if (/invalid_amount/.test(msg)) { showFailure('Недійсна сума в QR-коді'); return; }
       if (/not_a_child|not_authenticated/.test(msg)) { showFailure('Сесію втрачено, увійди знову'); return; }
@@ -516,9 +524,16 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
               </svg>
             </div>
             <p className="mt-2 text-[20px] font-bold text-white tracking-tight">Оплачено</p>
-            <p className="text-[13px] text-white/50">{receipt.amount} Айрон-доларів</p>
+            <p className="text-[13px] text-white/50">
+              {receipt.label ? `${receipt.label} • ${receipt.amount} 💰` : `${receipt.amount} Айрон-доларів`}
+            </p>
 
             <div className="w-full mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-[13px] space-y-1.5">
+              {receipt.label && (
+                <div className="flex justify-between text-white/55">
+                  <span>Товар</span><span className="text-white font-semibold text-right">{receipt.label}</span>
+                </div>
+              )}
               <div className="flex justify-between text-white/55">
                 <span>Магазин</span><span className="text-white font-semibold text-right">{receipt.merchant}</span>
               </div>
