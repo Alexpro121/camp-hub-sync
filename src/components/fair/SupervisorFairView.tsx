@@ -18,7 +18,11 @@ import {
   type FairQrPayload,
 } from '@/lib/fair';
 
-interface Props { myTeam: number | null }
+interface Props {
+  myTeam: number | null;
+  /** Trading hours are open right now; when false the view is a day summary. */
+  isLive?: boolean;
+}
 
 interface FeedRow {
   id: string;
@@ -171,7 +175,7 @@ PaymentSuccessCard.displayName = 'PaymentSuccessCard';
 
 /* ---------------------------------- Screen ---------------------------------- */
 
-const SupervisorFairView = ({ myTeam }: Props) => {
+const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
   const [amount, setAmount] = useState<number>(FAIR_PRESETS[2]);
   const [custom, setCustom] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -453,18 +457,27 @@ const SupervisorFairView = ({ myTeam }: Props) => {
   return (
     <div className="space-y-3">
       <PaymentSuccessCard toast={toast} />
+      {!isLive && (
+        <Card className="p-4 border-amber-500/30 bg-amber-500/10">
+          <p className="text-sm font-semibold tracking-tight">Торгівлю на ярмарку завершено</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Нижче — підсумкова каса стенду та повний журнал чеків за день.
+          </p>
+        </Card>
+      )}
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Wallet className="w-4 h-4 text-primary shrink-0" strokeWidth={1.75} />
             <div className="min-w-0">
               <p className="text-sm font-semibold tracking-tight">Каса стенду</p>
-              <p className="text-[11px] text-muted-foreground">Зароблено на ярмарку</p>
+              <p className="text-[11px] text-muted-foreground">Усього зароблено на ярмарку</p>
             </div>
           </div>
           <p className="text-2xl font-bold tabular-nums tracking-tight text-primary">{standTotal} 💰</p>
         </div>
       </Card>
+      {isLive && (
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center gap-2 mb-3">
           <ShoppingBag className="w-4 h-4 text-primary" strokeWidth={1.75} />
@@ -494,9 +507,11 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
         <QrDisplay payload={payload} amount={amount} stale={stale} />
       </Card>
+      )}
 
-      <FairHowTo variant="supervisor" />
+      {isLive && <FairHowTo variant="supervisor" />}
 
+      {isLive && (
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-start gap-2 min-w-0">
@@ -520,6 +535,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
           />
         </div>
       </Card>
+      )}
 
       <LiveReceiptsFeed feed={feed} />
     </div>
