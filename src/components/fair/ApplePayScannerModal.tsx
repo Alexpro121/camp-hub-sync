@@ -460,6 +460,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             >
               <KeyRound className="w-3.5 h-3.5" strokeWidth={1.9} /> Ввести код вручну
             </button>
+            <FairHowTo variant="child" className="mt-4 text-left" />
           </div>
         )}
 
