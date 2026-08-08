@@ -13,7 +13,7 @@ export interface AiScheduleItem extends ParsedScheduleItem {
   sub_slots: SubSlot[];
 }
 
-export const TIME_RE = /(\d{1,2}:\d{2})\s*(?:-\s*(\d{1,2}:\d{2}))?/;
+export const TIME_RE = /(\d{1,2}[:.]\d{2})\s*(?:(?:-|–|—|до)\s*(\d{1,2}[:.]\d{2}))?/;
 export const TEAM_RE = /(\d+)(?:\s*,|\s*і|\s*та)*\s*команда/g;
 
 const RULES: Array<[ScheduleCategory, RegExp]> = [
@@ -29,11 +29,7 @@ export function detectCategory(text: string): ScheduleCategory {
   return 'general';
 }
 
-const toMin = (t?: string | null) => {
-  if (!t) return null;
-  const [h, m] = t.split(':').map(Number);
-  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
-};
+const toMin = (t?: string | null) => toMinutes(t);
 
 /** A line like "16:45 - 3 і 4 команда" carries teams but no real activity name. */
 const isTeamOnly = (title: string, description: string | null, teams: number[]) => {
