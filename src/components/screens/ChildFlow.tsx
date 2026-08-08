@@ -334,6 +334,14 @@ const ChildFlow = ({ onBack }: Props) => {
             </TabsContent>
           )}
         </Tabs>
+
+        <ApplePayScannerModal
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          balance={child.iron_dollars}
+          childName={child.full_name}
+          childTeam={child.team_number}
+        />
       </div>
     );
   }
