@@ -10,8 +10,27 @@ export const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// New-style secret keys (sb_secret_...) are opaque: they must go in `apikey`,
+// never as a Bearer JWT, otherwise PostgREST treats the client as anonymous.
+function serviceFetch(key: string): typeof fetch {
+  return (input, init) => {
+    const headers = new Headers(
+      typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
+    );
+    if (init?.headers) new Headers(init.headers).forEach((v, k) => headers.set(k, v));
+    if (key.startsWith('sb_secret_') && headers.get('Authorization') === `Bearer ${key}`) {
+      headers.delete('Authorization');
+    }
+    headers.set('apikey', key);
+    return fetch(input, { ...init, headers });
+  };
+}
+
 export const admin = () =>
-  createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: serviceFetch(SERVICE_KEY) },
+  });
 
 /** Deterministic, server-only password for an internal account identity. */
 export async function derivePassword(identity: string): Promise<string> {
@@ -57,14 +76,34 @@ export async function issueSession(
   }
   if (!userId) throw new Error('account_unavailable');
 
-  await svc.from('user_roles').delete().eq('user_id', userId);
-  const { error: roleErr } = await svc.from('user_roles').insert({
-    user_id: userId,
-    role,
-    team_number: extra.team_number ?? null,
-    child_id: extra.child_id ?? null,
-  });
-  if (roleErr) throw new Error('role_assignment_failed');
+  // Idempotent: concurrent logins for the same identity must not race each other.
+  const { data: existing } = await svc
+    .from('user_roles')
+    .select('id, role, team_number, child_id')
+    .eq('user_id', userId);
+
+  const match = (existing ?? []).find(
+    (r) =>
+      r.role === role &&
+      (r.team_number ?? null) === (extra.team_number ?? null) &&
+      (r.child_id ?? null) === (extra.child_id ?? null),
+  );
+
+  const staleIds = (existing ?? []).filter((r) => r.id !== match?.id).map((r) => r.id);
+  if (staleIds.length) await svc.from('user_roles').delete().in('id', staleIds);
+
+  if (!match) {
+    const { error: roleErr } = await svc.from('user_roles').insert({
+      user_id: userId,
+      role,
+      team_number: extra.team_number ?? null,
+      child_id: extra.child_id ?? null,
+    });
+    // A concurrent request may have inserted the same row first — that's fine.
+    if (roleErr && roleErr.code !== '23505') {
+      throw new Error(`role_assignment_failed: ${roleErr.message}`);
+    }
+  }
 
   const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
   const { data: signIn, error: signInErr } = await pub.auth.signInWithPassword({ email, password });
