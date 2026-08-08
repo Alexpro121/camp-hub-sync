@@ -130,7 +130,7 @@ export function parseInlineTeamRoster(rawText: string): Required<ParsedPassenger
 }
 
 // Accepts both "Команда 5" / "Загін №5" and the common inverted "5 команда".
-const TEAM_REGEX = /^(?:(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})|(\d{1,3})\s*[-–—]?\s*(?:команда|команди|загін|отряд|team)\b)/i;
+const TEAM_REGEX = /^(?:(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})|(\d{1,3})\s*[-–—]?\s*(?:команда|команди|загін|отряд|team)(?![\p{L}]))/i;
 const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
 
 /** Frequent boarding points — an instant match, no heuristics needed. */
