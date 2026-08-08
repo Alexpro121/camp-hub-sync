@@ -108,7 +108,10 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
   }, [activeDay, loading]);
 
   /** One tab per date — several schedule batches of the same day are merged. */
-  const days = useMemo(() => [...new Set(schedules.map((s) => s.date))].sort(), [schedules]);
+  const days = useMemo(
+    () => [...new Set([...schedules.map((s) => s.date), todayISO()])].sort(),
+    [schedules],
+  );
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
     [schedules],
@@ -255,7 +258,14 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       )}
 
       {visibleEvents.length === 0 && (
-        <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Подій немає</p></Card>
+        <Card className="p-6 text-center bg-card/50">
+          <CalendarDays className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">
+            {idsForDate(activeDay).length
+              ? 'Подій на цей день немає'
+              : 'Розклад на цей день готується оргкомітетом табору'}
+          </p>
+        </Card>
       )}
 
       {/* Chronological timeline */}
