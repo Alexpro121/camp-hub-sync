@@ -1,6 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Check, Coins, RefreshCw, ShoppingBag, Receipt, Users, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import FairHowTo from './FairHowTo';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
