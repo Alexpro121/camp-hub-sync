@@ -63,3 +63,9 @@ export const isEventLive = (
   const t = now.getTime();
   return t >= event.startAt.getTime() && t < event.endAt.getTime();
 };
+
+/** Convenience check straight from raw schedule rows of the current day(s). */
+export const isFairCurrentlyActive = (
+  itemsByDate: { date: string; items: ScheduleItem[] }[],
+  now: Date = new Date(),
+): boolean => resolveFairWindowFromItems(itemsByDate, now).active;

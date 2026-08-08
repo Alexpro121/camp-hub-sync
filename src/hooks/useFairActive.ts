@@ -69,7 +69,7 @@ export const useFairActive = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, () => load())
       .subscribe();
     // Time-driven ticks keep the window exact to the minute without refetching.
-    const tick = setInterval(recompute, 15000);
+    const tick = setInterval(recompute, 3000);
     const refresh = setInterval(load, 300000);
 
     return () => { mounted = false; supabase.removeChannel(ch); clearInterval(tick); clearInterval(refresh); };
