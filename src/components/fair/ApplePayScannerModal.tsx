@@ -502,7 +502,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         {stage === 'processing' && (
           <div className="mt-5 flex flex-col items-center relative z-10">
             <span className="ios-spinner" aria-hidden="true" />
-            <p className="mt-3 text-[15px] font-semibold text-white tracking-tight">Підтвердження Apple Pay…</p>
+            <p className="mt-3 text-[15px] font-semibold text-white tracking-tight">Підтвердження оплати…</p>
           </div>
         )}
 
