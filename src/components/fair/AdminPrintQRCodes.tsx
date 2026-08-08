@@ -56,14 +56,13 @@ const AdminPrintQRCodes = () => {
 
   const create = async () => {
     const value = parseInt(amount.trim(), 10);
-    if (!label.trim()) { toast.error('Вкажи назву товару'); return; }
     if (!Number.isInteger(value) || value < 1 || value > FAIR_MAX_AMOUNT) {
       toast.error('Ціна має бути цілим числом більше 0'); return;
     }
     setBusy(true);
     const { error } = await supabase
       .from('fair_preset_codes')
-      .insert({ label: label.trim(), amount: value, is_reusable: true });
+      .insert({ label: label.trim() || `${value} Айрон-доларів`, amount: value, is_reusable: true });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     setLabel(''); setAmount('');
@@ -99,8 +98,10 @@ const AdminPrintQRCodes = () => {
 
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1.5 flex-1 min-w-[140px]">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва товару</Label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Лимонад" className="h-10 text-sm" />
+            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Назва товару <span className="normal-case tracking-normal">(необовʼязково)</span>
+            </Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Лимонад (необовʼязково)" className="h-10 text-sm" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Ціна</Label>
