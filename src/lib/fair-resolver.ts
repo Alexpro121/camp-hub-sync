@@ -20,6 +20,13 @@ export interface FairLike {
 export const isFairEvent = (i: FairLike | null | undefined): boolean =>
   !!i && FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`);
 
+/** Alias used by access hooks: a raw schedule row that represents a fair. */
+export const isFairScheduleItem = isFairEvent;
+
+/** Realtime channel that announces fair schedule changes to every client. */
+export const FAIR_STATUS_CHANNEL = 'fair_global_status';
+export const FAIR_STATUS_UPDATED = 'FAIR_STATUS_UPDATED';
+
 export interface FairWindow {
   active: boolean;
   /** Timestamp when the running fair ends (null when none is running). */
