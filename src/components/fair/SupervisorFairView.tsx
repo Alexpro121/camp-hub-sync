@@ -311,21 +311,25 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         const tx = p.new as {
           id: string; child_id: string; amount_change: number; created_at: string;
         };
-        // Resolve the child's full name and team for the success HUD.
-        const { data: child } = await supabase
-          .from('children')
-          .select('full_name, team_number')
-          .eq('id', tx.child_id)
-          .maybeSingle();
-        if (!mounted) return;
+        try {
+          // Resolve the child's full name and team for the success HUD.
+          const { data: child } = await supabase
+            .from('children')
+            .select('full_name, team_number')
+            .eq('id', tx.child_id)
+            .maybeSingle();
+          if (!mounted) return;
 
-        pushReceipt({
-          id: tx.id,
-          child_name: child?.full_name ?? 'Дитина',
-          team_number: child?.team_number ?? 0,
-          amount: Math.abs(tx.amount_change),
-          created_at: tx.created_at,
-        });
+          pushReceipt({
+            id: tx.id,
+            child_name: child?.full_name ?? 'Дитина',
+            team_number: child?.team_number ?? 0,
+            amount: Math.abs(tx.amount_change),
+            created_at: tx.created_at,
+          });
+        } catch (err) {
+          console.error('Error fetching child details for receipt:', err);
+        }
       })
       .subscribe();
 
@@ -339,6 +343,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         table: 'fair_payments',
         filter: `team_number=eq.${myTeam}`,
       }, (p) => {
+        if (!mounted) return;
         const r = p.new as FeedRow & { supervisor_user_id: string | null };
         if (r.supervisor_user_id && r.supervisor_user_id !== userId) return;
         pushReceipt({
@@ -356,6 +361,7 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     const broadcastCh = supabase
       .channel(`supervisor_fair_${userId}`)
       .on('broadcast', { event: 'FAIR_PAYMENT_SUCCESS' }, (e) => {
+        if (!mounted) return;
         const b = (e.payload ?? {}) as {
           childName?: string; teamNumber?: number; amount?: number; txId?: string;
         };
