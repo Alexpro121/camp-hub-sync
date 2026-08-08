@@ -16,10 +16,10 @@ import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import TalentTeamView from '@/components/talent/TalentTeamView';
-import { Mic2 } from 'lucide-react';
+import { Mic2, ShoppingBag } from 'lucide-react';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
-import { useFairActive } from '@/hooks/useFairActive';
+import { useFairAccess } from '@/hooks/useFairAccess';
 import ChildFairCard from '@/components/fair/ChildFairCard';
 import ApplePayScannerModal from '@/components/fair/ApplePayScannerModal';
 import TransactionHistory from '@/components/fair/TransactionHistory';
@@ -48,7 +48,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const haptics = useHaptics();
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
-  const fair = useFairActive();
+  const fair = useFairAccess(true);
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // App-wide schedule alerts: the island pops on any screen once logged in.
