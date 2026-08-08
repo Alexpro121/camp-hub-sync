@@ -30,7 +30,7 @@ const TransfersView = ({ myTeam }: Props) => {
   // Swap state
   const [swapA, setSwapA] = useState<Child | null>(null);
   const [swapQuery, setSwapQuery] = useState('');
-  const [swapB, setSwapB] = useState<Child | null>(null);
+  const [swapB, setSwapB] = useState<{ id: string; full_name: string; team_number: number } | null>(null);
   const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number }[]>([]);
   const [availableTeams, setAvailableTeams] = useState<number[]>([]);
 
