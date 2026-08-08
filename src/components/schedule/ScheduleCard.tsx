@@ -1,10 +1,9 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { QrCode, ShoppingBag, Users } from 'lucide-react';
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
-
-const FAIR_RE = /(ярмарок|ярмарка|ярмарки|ярмарков|fair|market)/i;
+import { isEventLive, isFairEvent } from '@/lib/fair-resolver';
 
 /** Left accent rail per category — deliberately restrained, four families only. */
 const ACCENT: Record<string, string> = {
@@ -65,9 +64,23 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
-  const isFair = FAIR_RE.test(`${item.title ?? ''} ${item.description ?? ''}`);
-  /** The fair extras (tip + register button) only exist while the fair runs. */
-  const fairLive = isFair && isNow;
+  const isFair = isFairEvent(item);
+
+  /**
+   * The fair CTA lives strictly inside the OVERALL event range (e.g. 18:26–18:56).
+   * It is time-driven, so it never blinks when parents re-render or notifications
+   * are dismissed, and sub-slots never shorten it.
+   */
+  const [live, setLive] = useState(() => isFair && isEventLive(event));
+  useEffect(() => {
+    if (!isFair) { setLive(false); return; }
+    const check = () => setLive(isEventLive(event));
+    check();
+    const t = setInterval(check, 10000);
+    return () => clearInterval(t);
+  }, [isFair, event]);
+
+  const fairLive = isFair && (live || isNow);
 
   return (
     <article
@@ -92,10 +105,10 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
       </header>
 
       <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
-        {isFair && isNow ? 'Розпочалася Ярмарка!' : sentenceCase(item.title)}
+        {fairLive ? 'Розпочалася Ярмарка!' : sentenceCase(item.title)}
       </h3>
 
-      {isFair && isNow && (
+      {fairLive && (
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.35)]">
           🛍️ Касу відкрито
         </span>
@@ -116,7 +129,7 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
           {isStaff ? (
             <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду та QR-код</>
           ) : (
-            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-сканер камери</>
+            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-Сканер та сплатити</>
           )}
         </button>
       )}

@@ -260,7 +260,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <ScheduleView
             myTeam={authedTeam}
             isStaff
-            onFairAction={fair.active ? () => handleTabChange('fair') : undefined}
+            onFairAction={() => handleTabChange('fair')}
           />
         </TabsContent>
         {talent.active && (
