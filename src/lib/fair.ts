@@ -35,6 +35,12 @@ export interface FairQrPayload {
   amount: number;
   timestamp: number;
   code: string;
+  /** Printed price tag: may be scanned an unlimited number of times. */
+  is_reusable?: boolean;
+  /** Row id in `fair_preset_codes` — the server re-reads amount/label from it. */
+  code_id?: string | null;
+  /** Product name, e.g. "Морозиво". */
+  label?: string | null;
 }
 
 /** Length of the human-typed fair code. Short, numeric, keypad-friendly. */
@@ -80,6 +86,21 @@ export const createFairPayload = (opts: {
   };
 };
 
+/** Payload printed on a permanent paper price tag (never expires). */
+export const createReusableFairPayload = (opts: {
+  codeId: string;
+  amount: number;
+  label: string;
+  supervisorId?: string | null;
+}) => ({
+  type: FAIR_QR_TYPE,
+  is_reusable: true as const,
+  code_id: opts.codeId,
+  amount: Math.round(opts.amount),
+  label: opts.label,
+  supervisor_id: opts.supervisorId ?? null,
+});
+
 export interface FairParseOk { ok: true; payload: FairQrPayload; reason?: undefined }
 export interface FairParseFail { ok: false; payload?: undefined; reason: 'invalid' | 'expired' }
 export type FairParseResult = FairParseOk | FairParseFail;
@@ -96,6 +117,34 @@ export const parseFairQr = (raw: string): FairParseResult => {
   }
   if (!data || typeof data !== 'object') return { ok: false, reason: 'invalid' };
   if (data.type !== FAIR_QR_TYPE) return { ok: false, reason: 'invalid' };
+
+  // Printed reusable price tag: no tx_id, no timestamp, never expires.
+  if (data.is_reusable === true) {
+    if (typeof data.code_id !== 'string' || !UUID_RE.test(data.code_id)) {
+      return { ok: false, reason: 'invalid' };
+    }
+    const amt = Number(data.amount);
+    if (!Number.isInteger(amt) || amt < FAIR_MIN_AMOUNT || amt > FAIR_MAX_AMOUNT) {
+      return { ok: false, reason: 'invalid' };
+    }
+    return {
+      ok: true,
+      payload: {
+        type: FAIR_QR_TYPE,
+        tx_id: randomUuid(),
+        supervisor_id: typeof data.supervisor_id === 'string' ? data.supervisor_id : null,
+        supervisor_team: Number.isFinite(Number(data.supervisor_team)) ? Number(data.supervisor_team) : null,
+        supervisor_name: typeof data.supervisor_name === 'string' ? data.supervisor_name : null,
+        amount: amt,
+        timestamp: Date.now(),
+        code: '',
+        is_reusable: true,
+        code_id: data.code_id,
+        label: typeof data.label === 'string' ? data.label : null,
+      },
+    };
+  }
+
   if (typeof data.tx_id !== 'string' || !UUID_RE.test(data.tx_id)) return { ok: false, reason: 'invalid' };
 
   const amount = Number(data.amount);
