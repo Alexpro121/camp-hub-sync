@@ -1,10 +1,9 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { QrCode, ShoppingBag, Users } from 'lucide-react';
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
-
-const FAIR_RE = /(ярмарок|ярмарка|ярмарки|ярмарков|fair|market)/i;
+import { isEventLive, isFairEvent } from '@/lib/fair-resolver';
 
 /** Left accent rail per category — deliberately restrained, four families only. */
 const ACCENT: Record<string, string> = {
@@ -65,9 +64,23 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
-  const isFair = FAIR_RE.test(`${item.title ?? ''} ${item.description ?? ''}`);
-  /** The fair extras (tip + register button) only exist while the fair runs. */
-  const fairLive = isFair && isNow;
+  const isFair = isFairEvent(item);
+
+  /**
+   * The fair CTA lives strictly inside the OVERALL event range (e.g. 18:26–18:56).
+   * It is time-driven, so it never blinks when parents re-render or notifications
+   * are dismissed, and sub-slots never shorten it.
+   */
+  const [live, setLive] = useState(() => isFair && isEventLive(event));
+  useEffect(() => {
+    if (!isFair) { setLive(false); return; }
+    const check = () => setLive(isEventLive(event));
+    check();
+    const t = setInterval(check, 10000);
+    return () => clearInterval(t);
+  }, [isFair, event]);
+
+  const fairLive = isFair && (live || isNow);
 
   return (
     <article
