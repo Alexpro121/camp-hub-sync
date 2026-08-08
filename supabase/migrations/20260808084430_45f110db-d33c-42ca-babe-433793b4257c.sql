@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.guard_shift_staff_update() FROM PUBLIC, anon, authenticated;

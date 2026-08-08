@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import ChildSwapDialog, { type SwapRow } from '@/components/coupes/ChildSwapDial
 import { useTrainSettings } from '@/hooks/useTrainSettings';
 import { useSwapRequests } from '@/hooks/useSwapRequests';
 import { tripShort } from '@/lib/trips';
+import { pushIsland } from '@/lib/islandBus';
 
 interface Row extends SwapRow {
   boarding_city: string | null;
@@ -23,6 +24,16 @@ const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: 
   const [trip, setTrip] = useState(1);
   const [swapOpen, setSwapOpen] = useState(false);
   const { incoming, respond, busy } = useSwapRequests(childId, settings.autoApprove);
+
+  // Live feedback when the supervisor enables swaps.
+  const prevAllow = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (prevAllow.current === null) { prevAllow.current = settings.allowSwaps; return; }
+    if (!prevAllow.current && settings.allowSwaps) {
+      pushIsland('Увімкнено можливість обміну купе!', 'gradient', 'Потяг');
+    }
+    prevAllow.current = settings.allowSwaps;
+  }, [settings.allowSwaps]);
 
   const load = useCallback(async () => {
     const { data } = await supabase
