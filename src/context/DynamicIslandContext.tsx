@@ -67,8 +67,15 @@ interface IslandApi {
 
 const Ctx = createContext<IslandApi | null>(null);
 
-/** Every notification collapses on its own after 6 seconds of no interaction. */
+/** Every notification collapses on its own after 6–12 seconds. */
 const AUTO_HIDE_MS = 6000;
+
+/** Smart duration scale: 12s critical, 8s expanded/offline, 6s default. */
+function getSmartDuration(state: IslandState, expanded = false): number {
+  if (state === 'BROADCAST' || state === 'ERROR_TOAST') return 12000;
+  if (expanded || state === 'OFFLINE' || state === 'EVENT_ALERT') return 8000;
+  return AUTO_HIDE_MS;
+}
 
 const TONE_TO_COLOR: Record<string, BroadcastColor> = {
   danger: 'red',
@@ -89,18 +96,26 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
 
   const clearTimer = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
 
-  const set = useCallback((next: IslandState, p: IslandPayload = {}, autoHide?: number) => {
+  /** Unified, unconditional auto-dismiss timer. */
+  const startAutoDismissTimer = useCallback((next: IslandState, expandedNow = false, override?: number) => {
     clearTimer();
+    if (next === 'HIDDEN') { autoHideMs.current = null; return; }
+    const duration = override ?? getSmartDuration(next, expandedNow);
+    autoHideMs.current = duration;
+    timer.current = setTimeout(() => {
+      setState('HIDDEN');
+      setExpanded(false);
+      timer.current = null;
+    }, duration);
+  }, []);
+
+  const set = useCallback((next: IslandState, p: IslandPayload = {}, autoHide?: number) => {
     setExpanded(false);
     setState(next);
     setPayload(p);
-    // Non-persistent states always collapse on their own — never leave a stuck pill.
-    const ttl = autoHide ?? (next === 'OFFLINE' || next === 'HIDDEN' || next === 'LOADING_ONLY' || next === 'EXCEL_IMPORT'
-      ? null
-      : AUTO_HIDE_MS);
-    autoHideMs.current = ttl;
-    if (ttl) timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, ttl);
-  }, []);
+    // Every state auto-dismisses — never leave a stuck pill.
+    startAutoDismissTimer(next, false, autoHide);
+  }, [startAutoDismissTimer]);
 
   const hide = useCallback(() => { clearTimer(); setExpanded(false); setState('HIDDEN'); }, []);
 
@@ -115,11 +130,11 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const toggleExpanded = useCallback(() => {
     setExpanded((v) => {
       const next = !v;
-      if (next) clearTimer();
-      else resumeAutoHide();
+      // Expanding restarts an 8s countdown; it always collapses and hides after it.
+      setState((s) => { startAutoDismissTimer(s, next); return s; });
       return next;
     });
-  }, [resumeAutoHide]);
+  }, [startAutoDismissTimer]);
 
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {
@@ -128,19 +143,19 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const showOffline = useCallback((queued: number) => set('OFFLINE', { queued }), [set]);
   const showSuccess = useCallback((title: string, subtitle?: string) => {
     haptics.notification('success');
-    set('SUCCESS_TOAST', { title, subtitle }, AUTO_HIDE_MS);
+    set('SUCCESS_TOAST', { title, subtitle });
   }, [set, haptics]);
   const showError = useCallback((title: string, subtitle?: string, errorDetails?: string) => {
     haptics.notification('error');
-    set('ERROR_TOAST', { title, subtitle, errorDetails }, AUTO_HIDE_MS);
+    set('ERROR_TOAST', { title, subtitle, errorDetails });
   }, [set, haptics]);
   const showBroadcast = useCallback((color: BroadcastColor, message: string, author: string) => {
     haptics.impact('heavy');
-    set('BROADCAST', { color, message, author }, AUTO_HIDE_MS);
+    set('BROADCAST', { color, message, author });
   }, [set, haptics]);
   const showEventAlert = useCallback((alert: EventAlert) => {
     haptics.notification('warning');
-    set('EVENT_ALERT', { ...alert }, AUTO_HIDE_MS);
+    set('EVENT_ALERT', { ...alert });
   }, [set, haptics]);
 
   // 1. Network detector — offline persists, online shows a short toast
