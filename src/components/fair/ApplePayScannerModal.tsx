@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import FairHowTo from './FairHowTo';
 import {
   FAIR_CODE_LENGTH,
   normalizeFairCode,
@@ -460,6 +461,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             >
               <KeyRound className="w-3.5 h-3.5" strokeWidth={1.9} /> Ввести код вручну
             </button>
+            <FairHowTo variant="child" className="mt-4 text-left" />
           </div>
         )}
 

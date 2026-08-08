@@ -1,6 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { Check, Coins, RefreshCw, ShoppingBag, Receipt, Users, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import FairHowTo from './FairHowTo';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -477,6 +478,8 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
         <QrDisplay payload={payload} amount={amount} stale={stale} />
       </Card>
+
+      <FairHowTo variant="supervisor" />
 
       <Card className="p-4 border-border/50 bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3">

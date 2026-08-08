@@ -23,7 +23,10 @@ interface Alert {
   myTime: string | null;
   myTeams: number[] | null;
   category: string | null;
+  isFair: boolean;
 }
+
+const FAIR_RE = /(ярмарок|ярмарка|ярмарки|ярмарков|fair|market)/i;
 
 /**
  * App-wide background watcher: regardless of the screen the child is on, it
@@ -83,6 +86,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
           myTime: slotMin != null ? fromMinutes(slotMin) : null,
           myTeams: slot?.teams ?? null,
           category: i.category ?? null,
+          isFair: FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`),
         });
       });
       setAlerts(built);
@@ -120,7 +124,8 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
             fired[key] = Date.now();
             dirty = true;
             showEventAlert({
-              eventTitle: ev.title,
+              eventTitle: ev.isFair && c.kind === 'start' ? 'Розпочалася Ярмарка!' : ev.title,
+              subtitle: ev.isFair && c.kind === 'start' ? 'Торгівлю та каси стендів відкрито' : undefined,
               range: ev.range,
               myTime: ev.myTime,
               myTeams: ev.myTeams,
