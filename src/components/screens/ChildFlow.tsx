@@ -50,6 +50,22 @@ const ChildFlow = ({ onBack }: Props) => {
   // App-wide schedule alerts: the island pops on any screen once logged in.
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
+  // Auto-login: restore the profile when a saved session is still valid.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const savedId = getSavedRole() === 'child' ? getSavedChildId() : null;
+      if (!savedId) return;
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session || cancelled) return;
+      const { data: row } = await supabase.from('children').select('*').eq('id', savedId).maybeSingle();
+      if (cancelled || !row) return;
+      setChild(row as Child);
+      setStep('profile');
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Realtime updates for the logged-in child
   useEffect(() => {
     if (!child) return;
@@ -110,6 +126,7 @@ const ChildFlow = ({ onBack }: Props) => {
       setChild(row as Child);
       setStep('profile');
       setSuggestions([]);
+      saveSession('child', { childId: candidate.id, teamNumber: (row as Child).team_number ?? null });
       haptics.notification('success');
       toast.success(`Привіт, ${String((row as Child).full_name || '').split(' ')[0]}!`);
     } catch (e: any) {
@@ -122,6 +139,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
   const handleExit = async () => {
     await supabase.auth.signOut();
+    clearSavedSession();
     onBack();
   };
 
