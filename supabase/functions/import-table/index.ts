@@ -1,4 +1,4 @@
-import { corsHeaders } from '../_shared/accounts.ts';
+import { corsHeaders, requireUser } from '../_shared/accounts.ts';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
@@ -96,6 +96,9 @@ async function mapHeaders(headers: string[], samples: any[][]) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
+
     const body = await req.json();
     if (body.action === 'fetch_sheet') return await fetchSheet(String(body.url ?? ''));
     if (body.action === 'map_headers') return await mapHeaders(body.headers ?? [], body.samples ?? []);
