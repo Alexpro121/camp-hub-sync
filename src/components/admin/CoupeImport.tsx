@@ -75,11 +75,13 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
       // 2. Fallback to Groq AI only when the regex found nothing
       if (!list.length) {
         try {
+          island.showLoading?.('Groq AI аналізує текст потяга…', 'Локальний парсер не знайшов пасажирів');
           const { data, error } = await supabase.functions.invoke('parse-coupes-ai', { body: { text } });
           if (error) throw error;
           if (data?.error) throw new Error(data.message || data.error);
           list = (data?.passengers || []) as CoupePassenger[];
           src = 'ai';
+          if (list.length) toast.success('Розпізнано за допомогою Groq AI');
         } catch (e: any) {
           toast.error('Не вдалося розпізнати текст', { description: e?.message || 'Перевірте формат або завантажте файл повторно' });
           return;
