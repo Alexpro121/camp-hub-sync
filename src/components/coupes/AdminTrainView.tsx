@@ -8,6 +8,8 @@ import { Loader2, MapPin, Pencil, Train, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import CoupeManager from '@/components/coupes/CoupeManager';
 import { groupByTeamThenCoupe } from '@/lib/coupes';
+import PassengerRoleBadge from '@/components/coupes/PassengerRoleBadge';
+import { PASSENGER_ROLE_CHANNEL } from '@/lib/passengerRoles';
 
 interface Row {
   id: string;
@@ -17,6 +19,7 @@ interface Row {
   passenger_name: string;
   boarding_city: string | null;
   is_staff: boolean | null;
+  passenger_role: string | null;
 }
 
 /** Admin train allocation grouped by team, each team editable in its own dialog. */
@@ -29,7 +32,7 @@ const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; tri
     setLoading(true);
     const { data } = await supabase
       .from('train_coupes')
-      .select('id, team_number, coupe_number, seat_number, passenger_name, boarding_city, is_staff')
+      .select('id, team_number, coupe_number, seat_number, passenger_name, boarding_city, is_staff, passenger_role')
       .eq('trip_number', trip)
       .order('coupe_number')
       .order('seat_number');
@@ -38,6 +41,17 @@ const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; tri
   }, [trip]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  // Role badges stay in sync across every open device.
+  useEffect(() => {
+    const channel = supabase
+      .channel(PASSENGER_ROLE_CHANNEL)
+      .on('broadcast', { event: 'role_changed' }, ({ payload }) => {
+        setRows((prev) => prev.map((r) => (r.id === payload?.id ? { ...r, passenger_role: payload.passenger_role } : r)));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   if (loading) {
     return <Card className="p-8 text-center bg-card/60"><Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" /></Card>;
@@ -93,6 +107,14 @@ const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; tri
                     {c.passengers.map((p) => (
                       <div key={p.id} className="flex items-center gap-2 text-sm">
                         <span className="flex-1 min-w-0 break-words">{p.passenger_name}</span>
+                        <PassengerRoleBadge
+                          passengerId={p.id}
+                          role={(p as any).passenger_role}
+                          editable
+                          onChanged={(role) =>
+                            setRows((prev) => prev.map((r) => (r.id === p.id ? { ...r, passenger_role: role } : r)))
+                          }
+                        />
                         {p.boarding_city && (
                           <Badge variant="outline" className="text-[9px] gap-1 shrink-0">
                             <MapPin className="w-2.5 h-2.5" strokeWidth={2} />{p.boarding_city}

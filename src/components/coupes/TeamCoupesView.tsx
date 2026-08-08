@@ -4,6 +4,7 @@ import { Loader2, Train } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { groupByCoupe } from '@/lib/coupes';
 import CoupeCard, { type CoupeRow } from './CoupeCard';
+import { PASSENGER_ROLE_CHANNEL } from '@/lib/passengerRoles';
 
 /** Train disposition for one team — coupes and neighbours only, no seat numbers. */
 const TeamCoupesView = ({ myTeam }: { myTeam: number | null }) => {
@@ -22,6 +23,16 @@ const TeamCoupesView = ({ myTeam }: { myTeam: number | null }) => {
     })();
     return () => { alive = false; };
   }, [myTeam]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(PASSENGER_ROLE_CHANNEL)
+      .on('broadcast', { event: 'role_changed' }, ({ payload }) => {
+        setRows((prev) => prev.map((r) => (r.id === payload?.id ? { ...r, passenger_role: payload.passenger_role } : r)));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   if (loading) {
     return <Card className="p-8 text-center bg-card/60"><Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" /></Card>;
