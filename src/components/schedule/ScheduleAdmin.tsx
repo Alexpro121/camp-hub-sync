@@ -97,8 +97,8 @@ const ScheduleAdmin = () => {
         return;
       }
       const mapped: AiScheduleItem[] = items.map((it) => ({
-        time_start: it.time_start ?? null,
-        time_end: it.time_end ?? null,
+        time_start: normalizeTime(it.time_start) ?? it.time_start ?? null,
+        time_end: normalizeTime(it.time_end) ?? it.time_end ?? null,
         title: it.title,
         description: null,
         target_teams: Array.isArray(it.target_teams) ? it.target_teams : [],
@@ -293,7 +293,16 @@ const ScheduleAdmin = () => {
             {draft.map((it, i) => (
               <div key={i} className="rounded-xl border border-border/50 bg-surface-1 p-3 space-y-2 transition-colors hover:border-primary/40">
                 <div className="flex gap-2">
-                  <Input value={it.time_start ?? ''} onChange={(e) => patch(i, { time_start: e.target.value || null })} placeholder="09:00" className="h-9 w-[86px] text-xs tabular-nums" />
+                  <Input
+                    value={it.time_start ?? ''}
+                    onChange={(e) => patch(i, { time_start: e.target.value || null })}
+                    onBlur={(e) => {
+                      const { start, end } = normalizeTimeRange(e.target.value);
+                      patch(i, { time_start: start ?? it.time_start, ...(end ? { time_end: end } : {}) });
+                    }}
+                    placeholder="09:00 або 9.00"
+                    className="h-9 w-[86px] text-xs tabular-nums"
+                  />
                   <Input value={it.time_end ?? ''} onChange={(e) => patch(i, { time_end: e.target.value || null })} placeholder="10:00" className="h-9 w-[86px] text-xs tabular-nums" />
                   <Button size="icon" variant="ghost" className="h-9 w-9 ml-auto shrink-0" onClick={() => setDraft((p) => p!.filter((_, k) => k !== i))}>
                     <Trash2 className="w-4 h-4 text-destructive" />
