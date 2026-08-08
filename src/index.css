@@ -477,23 +477,75 @@
 }
 
 @media print {
+  @page { size: A4 portrait; margin: 6mm; }
   body * { visibility: hidden !important; }
   #fair-print-sheet,
   #fair-print-sheet * { visibility: visible !important; }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   #fair-print-sheet {
     position: absolute;
     inset: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10mm;
-    padding: 12mm;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6mm !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
     background: #ffffff;
   }
-  .fair-price-tag {
-    break-inside: avoid;
-    border: 1px solid #d4d4d4 !important;
+  .print-price-card {
+    border: 1.5px dashed #333333 !important;
+    border-radius: 12px !important;
+    padding: 10px 8px !important;
     background: #ffffff !important;
     color: #000000 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    height: 82mm !important;
+  }
+  .print-card-header {
+    font-size: 8pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.5px !important;
+    color: #555555 !important;
+    text-transform: uppercase !important;
+  }
+  .print-card-title {
+    font-size: 10pt !important;
+    font-weight: 700 !important;
+    color: #000000 !important;
+    line-height: 1.1 !important;
+    margin-top: 2px !important;
+  }
+  .print-card-amount {
+    font-size: 20pt !important;
+    font-weight: 900 !important;
+    color: #000000 !important;
+    line-height: 1 !important;
+    margin: 4px 0 !important;
+  }
+  .print-qr-svg, .print-qr-svg svg {
+    width: 110px !important;
+    height: 110px !important;
+  }
+  .print-qr-svg { margin: 4px 0 !important; }
+  .print-card-footer {
+    font-size: 7pt !important;
+    font-weight: 600 !important;
+    color: #666666 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
   }
   .no-print { display: none !important; }
 }
