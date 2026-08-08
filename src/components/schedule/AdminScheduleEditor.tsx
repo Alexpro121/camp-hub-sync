@@ -263,7 +263,21 @@ const AdminScheduleEditor = () => {
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : sorted.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Подій на цю дату немає</p>
+        <div className="rounded-2xl border border-dashed border-border/70 bg-surface-1 p-5 text-center space-y-3">
+          <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/50" strokeWidth={1.5} />
+          <p className="text-sm font-semibold">На {humanDate(date)} розклад ще не створено.</p>
+          <div className="space-y-2">
+            <Button
+              className="w-full h-11 text-xs font-bold uppercase"
+              onClick={() => document.getElementById('schedule-text-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <FileDown className="w-4 h-4 mr-1.5" /> Імпортувати розклад з тексту
+            </Button>
+            <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => setForm(emptyForm())}>
+              <Plus className="w-4 h-4 mr-1.5" /> Додати першу подію вручну
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
           {sorted.map((i) => (
