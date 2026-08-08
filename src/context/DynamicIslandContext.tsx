@@ -41,6 +41,7 @@ export interface IslandPayload {
 export interface EventAlert {
   eventTitle: string;
   range: string;
+  subtitle?: string;
   myTime?: string | null;
   myTeams?: number[] | null;
   phase?: 'pre' | 'start';
