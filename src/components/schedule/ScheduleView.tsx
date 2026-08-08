@@ -17,6 +17,7 @@ import {
   type NormalizedScheduleItem,
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
+import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 
 interface Props {
   myTeam?: number | null;
@@ -28,7 +29,7 @@ interface Props {
   onFairAction?: () => void;
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localISO();
 
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -55,6 +56,9 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
   const team = lockTeam ? myTeam ?? null : filterTeam;
   const [now, setNow] = useState(new Date());
   const activeDayRef = useRef<HTMLButtonElement>(null);
+
+  // Live midnight rollover: yesterday's tab jumps to today automatically.
+  useAutoTodayDate(activeDay, setActiveDay);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
