@@ -253,6 +253,11 @@ const DynamicIsland = () => {
                   <div className="text-sm font-semibold text-white break-words leading-snug">
                     {payload.eventTitle}
                   </div>
+                  {payload.subtitle && (
+                    <div className="text-[11px] text-amber-200/80 break-words leading-snug">
+                      {payload.subtitle}
+                    </div>
+                  )}
                   </div>
                 </div>
                 <button
