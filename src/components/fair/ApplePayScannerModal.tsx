@@ -42,6 +42,8 @@ const SCAN_FPS = 10;
 const SCAN_INTERVAL_MS = 1000 / SCAN_FPS;
 /** Hard network timeout for a single payment attempt. */
 const RPC_TIMEOUT_MS = 5000;
+/** Tracking frame repaints at ~15 FPS — the compositor interpolates the rest. */
+const BOX_UPDATE_MS = 65;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -113,6 +115,9 @@ const triggerConfetti = (canvas: HTMLCanvasElement | null) => {
 const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, childTeam }: Props) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLSpanElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const lastBoxUpdateRef = useRef(0);
   const confettiRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
@@ -124,9 +129,27 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
   const [failure, setFailure] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [manualCode, setManualCode] = useState('');
-  const [box, setBox] = useState<FrameBox | null>(null);
   const haptics = useHaptics();
   const island = useDynamicIsland();
+
+  /**
+   * Moves the tracking frame straight through the DOM — no React re-render per
+   * camera frame, so the video layer never repaints and cannot flicker.
+   */
+  const applyBox = useCallback((next: FrameBox | null, now: number) => {
+    const el = boxRef.current;
+    if (!el) return;
+    if (!next) {
+      if (el.style.opacity !== '0') el.style.opacity = '0';
+      return;
+    }
+    if (now - lastBoxUpdateRef.current < BOX_UPDATE_MS) return;
+    lastBoxUpdateRef.current = now;
+    el.style.transform = `translate3d(${next.x}px, ${next.y}px, 0)`;
+    el.style.width = `${next.w}px`;
+    el.style.height = `${next.h}px`;
+    el.style.opacity = '1';
+  }, []);
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -251,6 +274,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     // Freeze the frame + haptic instantly: perceived latency stays under 50 ms.
     cancelAnimationFrame(rafRef.current);
     try { videoRef.current?.pause(); } catch { /* ignore */ }
+    viewportRef.current?.classList.add('is-locked');
     haptics.impact('medium');
 
     const parsed = parseFairQr(raw);
@@ -283,6 +307,8 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
           try {
+            // Sharp edges beat smooth ones for jsQR's binarizer.
+            ctx.imageSmoothingEnabled = false;
             ctx.drawImage(video, 0, 0, w, h);
             const img = ctx.getImageData(0, 0, w, h);
             const code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
@@ -303,9 +329,9 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
               const ys = pts.map((p) => p.y);
               const minX = Math.min(...xs);
               const minY = Math.min(...ys);
-              setBox({ x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY });
+              applyBox({ x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY }, now);
             } else {
-              setBox(null);
+              applyBox(null, now);
             }
             if (code?.data) handleDecoded(code.data);
           } catch { /* frame not ready */ }
@@ -317,12 +343,33 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     const start = async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('no-camera');
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+        const constraints: MediaStreamConstraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            // Hardware continuous autofocus on phones that expose it.
+            // @ts-expect-error non-standard WebRTC constraint
+            advanced: [{ focusMode: 'continuous' }],
+          },
           audio: false,
-        });
+        };
+        const stream = await navigator.mediaDevices
+          .getUserMedia(constraints)
+          .catch(() => navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false,
+          }));
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
+        // Second chance at continuous focus for browsers that ignore it in getUserMedia.
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track?.getCapabilities?.() as { focusMode?: string[] } | undefined;
+          if (caps?.focusMode?.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as never] });
+          }
+        } catch { /* focus stays on the browser default */ }
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
@@ -338,7 +385,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
 
     start();
     return () => { cancelled = true; stopCamera(); };
-  }, [open, stage, handleDecoded, stopCamera]);
+  }, [open, stage, handleDecoded, stopCamera, applyBox]);
 
   // Reset everything each time the sheet opens.
   useEffect(() => {
@@ -348,7 +395,9 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
       setFailure(null);
       setReceipt(null);
       setManualCode('');
-      setBox(null);
+      lastBoxUpdateRef.current = 0;
+      if (boxRef.current) boxRef.current.style.opacity = '0';
+      viewportRef.current?.classList.remove('is-locked');
       lockedRef.current = false;
     } else {
       mountedRef.current = false;
