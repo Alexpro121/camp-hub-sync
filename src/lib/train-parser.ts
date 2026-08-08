@@ -129,7 +129,8 @@ export function parseInlineTeamRoster(rawText: string): Required<ParsedPassenger
   return out;
 }
 
-const TEAM_REGEX = /^(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})/i;
+// Accepts both "Команда 5" / "Загін №5" and the common inverted "5 команда".
+const TEAM_REGEX = /^(?:(?:команда|загін|отряд|team)\s*[№#:]?\s*(\d{1,3})|(\d{1,3})\s*[-–—]?\s*(?:команда|команди|загін|отряд|team)(?![\p{L}]))/iu;
 const PLACEHOLDER = /^(\.{1,3}|-{1,3}|—|–|ss|сс|вільно|free)$/i;
 
 /** Frequent boarding points — an instant match, no heuristics needed. */
@@ -221,7 +222,7 @@ export function parseSequentialTrainText(rawText: string): Required<ParsedPassen
 
     const teamMatch = line.match(TEAM_REGEX);
     if (teamMatch) {
-      currentTeam = parseInt(teamMatch[1], 10);
+      currentTeam = parseInt(teamMatch[1] ?? teamMatch[2], 10);
       seatCounter = 0; // seats restart at 1 for every team (own carriage)
       isParsingSeats = false;
       continue;
