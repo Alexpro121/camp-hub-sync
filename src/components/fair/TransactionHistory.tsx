@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, History, Loader2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, ChevronDown, History, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -10,12 +10,15 @@ interface Props {
   /** Rendered without the outer Card wrapper (e.g. inside a dialog tab). */
   bare?: boolean;
   limit?: number;
+  /** Render collapsed behind a trigger, expanding into a fixed-height scroll area. */
+  collapsible?: boolean;
 }
 
-const TransactionHistory = ({ childId, bare = false, limit = 30 }: Props) => {
+const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = false }: Props) => {
   const [rows, setRows] = useState<IronTx[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<IronTx | null>(null);
+  const [open, setOpen] = useState(false);
   const haptics = useHaptics();
 
   useEffect(() => {
@@ -40,15 +43,8 @@ const TransactionHistory = ({ childId, bare = false, limit = 30 }: Props) => {
     return () => { mounted = false; supabase.removeChannel(ch); };
   }, [childId, limit]);
 
-  const body = (
+  const list = (
     <>
-      <div className="flex items-center gap-2 mb-3">
-        <History className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-        <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-          Історія транзакцій
-        </span>
-      </div>
-
       {loading ? (
         <div className="py-6 flex justify-center">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -93,6 +89,49 @@ const TransactionHistory = ({ childId, bare = false, limit = 30 }: Props) => {
         </ul>
       )}
 
+    </>
+  );
+
+  if (collapsible) {
+    return (
+      <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
+        <button
+          type="button"
+          onClick={() => { haptics.impact('light'); setOpen((v) => !v); }}
+          className="w-full flex items-center justify-between gap-2 min-h-[44px] text-left transition-smooth active:scale-[0.98]"
+        >
+          <span className="flex items-center gap-2">
+            <History className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              {open ? 'Приховати історію транзакцій' : 'Показати історію транзакцій'}
+            </span>
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
+            strokeWidth={1.75}
+          />
+        </button>
+
+        {open && (
+          <div className="mt-3 max-h-[260px] overflow-y-auto space-y-2 pr-1 custom-scrollbar rounded-2xl bg-slate-900/60 p-3 border border-slate-800 animate-fade-in">
+            {list}
+          </div>
+        )}
+
+        <TransactionDetailsDialog tx={selected} onClose={() => setSelected(null)} />
+      </Card>
+    );
+  }
+
+  const body = (
+    <>
+      <div className="flex items-center gap-2 mb-3">
+        <History className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+        <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          Історія транзакцій
+        </span>
+      </div>
+      {list}
       <TransactionDetailsDialog tx={selected} onClose={() => setSelected(null)} />
     </>
   );
