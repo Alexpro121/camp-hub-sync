@@ -67,6 +67,12 @@ export function useFairAccess(enabled = true): FairAccess {
     const ticker = setInterval(recompute, 3000);
     const refresh = setInterval(load, 300000);
 
+    // RLS returns nothing before the session exists — reload as soon as the
+    // user is authenticated, otherwise the fair tab would stay hidden forever.
+    const { data: authSub } = supabase.auth.onAuthStateChange(() => { void load(); });
+    // Safety net for the first seconds after login on slow connections.
+    const warmup = [800, 2500, 6000].map((ms) => setTimeout(() => void load(), ms));
+
     const channel = supabase
       .channel('fair_global_status')
       .on('broadcast', { event: FAIR_STATUS_UPDATED }, () => load())
@@ -86,6 +92,8 @@ export function useFairAccess(enabled = true): FairAccess {
       mounted = false;
       clearInterval(ticker);
       clearInterval(refresh);
+      warmup.forEach(clearTimeout);
+      authSub.subscription.unsubscribe();
       window.removeEventListener('focus', onFocus);
       supabase.removeChannel(channel);
       supabase.removeChannel(live);
