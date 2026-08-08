@@ -230,13 +230,35 @@
 .animate-admin-reveal { animation: admin-reveal 1s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .animate-check-pop { animation: check-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-/* Keep the Excel export action visible for 14s, then fade it out and disable it. */
+/* Keep the Excel export action visible for 14s, then gracefully collapse it so
+   the Iron Bank FAB glides down into its place instead of hanging mid-screen. */
 @keyframes export-button-auto-hide {
-  0%, 95.2% { opacity: 1; visibility: visible; }
-  100% { opacity: 0; visibility: hidden; }
+  0%, 95.2% {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+    height: 3rem;
+    margin-top: 0;
+  }
+  97.5% {
+    opacity: 0;
+    transform: scale(0.6) translateY(6px);
+    height: 3rem;
+    margin-top: 0;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.6) translateY(6px);
+    height: 0;
+    margin-top: -0.75rem; /* cancels the parent flex gap */
+    pointer-events: none;
+  }
 }
 .export-button-auto-hide {
-  animation: export-button-auto-hide 14.7s ease-out forwards;
+  animation: export-button-auto-hide 14.7s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 /* Stagger helper — children fade up with slight delay each */
