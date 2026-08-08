@@ -152,22 +152,22 @@ const AdminPrintQRCodes = () => {
         )}
       </Card>
 
-      <div id="fair-print-sheet" className="fair-print-sheet grid grid-cols-2 gap-3">
+      <div id="fair-print-sheet" className="fair-print-sheet print-grid-container grid grid-cols-2 gap-3">
         {toPrint.map((c) => {
           const value = JSON.stringify(createReusableFairPayload({ codeId: c.id, amount: c.amount, label: c.label }));
           return (
             <div
               key={c.id}
-              className="fair-price-tag rounded-2xl border border-border/60 bg-white text-black p-4 flex flex-col items-center"
+              className="fair-price-tag print-price-card rounded-2xl border border-border/60 bg-white text-black p-4 flex flex-col items-center"
             >
-              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-neutral-500">
+              <p className="print-card-header text-[10px] font-medium uppercase tracking-[0.24em] text-neutral-500">
                 Залізна зміна · Ярмарок
               </p>
-              <p className="mt-1 text-lg font-semibold tracking-tight text-center">{c.label}</p>
-              <p className="text-4xl font-bold tabular-nums tracking-tight">{c.amount}</p>
-              <p className="text-[11px] text-neutral-500 mb-2">Айрон-доларів</p>
-              <QrSvg value={value} size={150} />
-              <p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-neutral-500">Багаторазовий цінник</p>
+              <p className="print-card-title mt-1 text-lg font-semibold tracking-tight text-center">{c.label}</p>
+              <p className="print-card-amount text-4xl font-bold tabular-nums tracking-tight">{c.amount}</p>
+              <p className="print-card-footer text-[11px] text-neutral-500 mb-2">Айрон-доларів</p>
+              <div className="print-qr-svg"><QrSvg value={value} size={150} /></div>
+              <p className="print-card-footer mt-2 text-[10px] uppercase tracking-[0.16em] text-neutral-500">Багаторазовий цінник</p>
             </div>
           );
         })}
