@@ -11,6 +11,8 @@ export interface DockItem {
   isNew?: boolean;
   /** Highlights a live, time-critical tab (e.g. the fair cash register). */
   accent?: 'gold';
+  /** Pulsing golden indicator: the fair cash register is open right now. */
+  live?: boolean;
 }
 
 interface Props {
@@ -40,12 +42,14 @@ const TabDock = ({ items, value, onChange }: Props) => {
         aria-label={item.label}
         aria-current={activeTab ? 'page' : undefined}
         onClick={() => select(item.value)}
+        title={item.live ? 'Каса відкрита' : item.label}
         className={cn(
           'relative flex items-center justify-center gap-1.5 rounded-xl active:scale-90 transition-transform',
           EASE,
           compact
             ? 'flex-1 min-w-[44px] min-h-[44px] h-11'
             : 'flex-1 min-h-[44px] px-3 py-2 text-xs font-medium',
+          item.live && 'ring-1 ring-amber-400/60 shadow-[0_0_14px_rgba(245,158,11,0.35)]',
           activeTab
             ? 'bg-primary/15 text-primary border border-primary/30 shadow-sm'
             : 'text-muted-foreground border border-transparent hover:text-foreground hover:bg-muted/40',
@@ -59,6 +63,9 @@ const TabDock = ({ items, value, onChange }: Props) => {
           strokeWidth={1.9}
         />
         {!compact && <span className="truncate">{item.label}</span>}
+        {item.live && (
+          <span className="absolute -top-1 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.9)] animate-pulse" />
+        )}
         {item.isNew && (
           <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-warning animate-pulse" />
         )}

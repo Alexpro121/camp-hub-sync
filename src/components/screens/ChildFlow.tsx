@@ -16,10 +16,10 @@ import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import TalentTeamView from '@/components/talent/TalentTeamView';
-import { Mic2 } from 'lucide-react';
+import { Mic2, ShoppingBag } from 'lucide-react';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
-import { useFairActive } from '@/hooks/useFairActive';
+import { useFairAccess } from '@/hooks/useFairAccess';
 import ChildFairCard from '@/components/fair/ChildFairCard';
 import ApplePayScannerModal from '@/components/fair/ApplePayScannerModal';
 import TransactionHistory from '@/components/fair/TransactionHistory';
@@ -48,7 +48,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const haptics = useHaptics();
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
-  const fair = useFairActive();
+  const fair = useFairAccess(true);
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // App-wide schedule alerts: the island pops on any screen once logged in.
@@ -248,9 +248,26 @@ const ChildFlow = ({ onBack }: Props) => {
           className="w-full"
           onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
         >
-          <TabsList className={`grid ${talent.active ? 'grid-cols-3' : 'grid-cols-2'} w-full h-11 mb-3`}>
+          <TabsList
+            className={`grid w-full h-11 mb-3 ${
+              ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][
+                (talent.active ? 1 : 0) + (fair.hasFairAccess ? 1 : 0)
+              ]
+            }`}
+          >
             <TabsTrigger value="profile" className="text-xs min-h-[40px]">Профіль</TabsTrigger>
             <TabsTrigger value="schedule" className="text-xs min-h-[40px]">Розклад</TabsTrigger>
+            {fair.hasFairAccess && (
+              <TabsTrigger value="fair" className="text-xs min-h-[40px] relative animate-fade-in gap-1.5">
+                <ShoppingBag
+                  className={`w-4 h-4 ${fair.isLiveFairRunning ? 'text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.7)]' : ''}`}
+                  strokeWidth={1.9}
+                /> Ярмарок
+                {fair.isLiveFairRunning && (
+                  <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                )}
+              </TabsTrigger>
+            )}
             {talent.active && (
               <TabsTrigger value="talent" className="text-xs min-h-[40px] relative animate-fade-in gap-1.5">
                 <Mic2 className="w-4 h-4" strokeWidth={1.9} /> Таланти
@@ -260,7 +277,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-3 mt-0">
-            {fair.active && child && (!phase || phase.currentPhase !== 'PREPARING') && (
+            {fair.isLiveFairRunning && child && (!phase || phase.currentPhase !== 'PREPARING') && (
               <ChildFairCard
                 balance={child.iron_dollars}
                 childName={child.full_name}
@@ -321,6 +338,33 @@ const ChildFlow = ({ onBack }: Props) => {
               Дані оновлюються в реальному часі
             </p>
           </TabsContent>
+
+          {fair.hasFairAccess && (
+            <TabsContent value="fair" className="mt-0 space-y-3">
+              {fair.isLiveFairRunning ? (
+                <ChildFairCard
+                  balance={child.iron_dollars}
+                  childName={child.full_name}
+                  childTeam={child.team_number}
+                />
+              ) : (
+                <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <ShoppingBag className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+                    <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                      Ярмарок
+                    </span>
+                  </div>
+                  <p className="font-mono text-3xl font-semibold tabular-nums leading-none">
+                    {child.iron_dollars}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Айрон-доларів на балансі</p>
+                  <p className="mt-3 text-sm">Торгівлю на ярмарку завершено. Дякуємо за покупки!</p>
+                </Card>
+              )}
+              <TransactionHistory childId={child.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="schedule" className="mt-0">
             {phase?.currentPhase === 'PREPARING' ? (
