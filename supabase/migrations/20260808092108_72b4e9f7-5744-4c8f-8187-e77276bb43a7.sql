@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.pay_fair_purchase(uuid, integer, uuid, integer);

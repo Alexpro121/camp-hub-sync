@@ -801,27 +801,17 @@ export type Database = {
         }
         Returns: number
       }
-      pay_fair_purchase:
-        | {
-            Args: {
-              p_amount: number
-              p_supervisor_id?: string
-              p_supervisor_team?: number
-              p_tx_id: string
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_amount: number
-              p_code_id?: string
-              p_label?: string
-              p_supervisor_id?: string
-              p_supervisor_team?: number
-              p_tx_id: string
-            }
-            Returns: Json
-          }
+      pay_fair_purchase: {
+        Args: {
+          p_amount: number
+          p_code_id?: string
+          p_label?: string
+          p_supervisor_id?: string
+          p_supervisor_team?: number
+          p_tx_id: string
+        }
+        Returns: Json
+      }
       resolve_fair_code: { Args: { p_code: string }; Returns: Json }
     }
     Enums: {
