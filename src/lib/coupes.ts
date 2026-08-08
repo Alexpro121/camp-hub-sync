@@ -1,4 +1,5 @@
 import { normalizeName } from '@/lib/normalize';
+import type { PassengerRole } from '@/lib/passengerRoles';
 import { normalizeLine, parseSeatLine, parseSequentialTrainText } from '@/lib/train-parser';
 
 export const SEATS_PER_COUPE = 4;
@@ -13,6 +14,7 @@ export interface CoupePassenger {
   /** Filled by the verification step. */
   child_id?: string | null;
   matched?: boolean;
+  passenger_role?: PassengerRole;
 }
 
 export interface CoupeParseResult {
@@ -60,6 +62,7 @@ export function parseCoupesDeterministic(text: string, defaultTeam = 0): CoupePa
       boarding_city: city,
       coupe_number: coupeOf(seat),
       team_number: team,
+      passenger_role: parsed.passengerRole,
     });
   }
 
@@ -86,6 +89,7 @@ export function parseCoupes(text: string, defaultTeam = 0): CoupeParseResult {
     boarding_city: p.boardingCity,
     coupe_number: p.coupeNumber,
     team_number: p.teamNumber || defaultTeam,
+    passenger_role: p.passengerRole,
   }));
   return {
     passengers,

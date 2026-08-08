@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { groupByCoupe, coupeOf } from '@/lib/coupes';
 import { tripName } from '@/lib/trips';
+import PassengerRoleBadge from '@/components/coupes/PassengerRoleBadge';
+import { PASSENGER_ROLE_CHANNEL } from '@/lib/passengerRoles';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 export interface CoupeRecord {
@@ -22,6 +24,7 @@ export interface CoupeRecord {
   boarding_city: string | null;
   is_staff: boolean | null;
   child_id: string | null;
+  passenger_role?: string | null;
 }
 
 type Draft = {
@@ -59,6 +62,16 @@ const CoupeManager = ({
   }, [myTeam, trip]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(PASSENGER_ROLE_CHANNEL)
+      .on('broadcast', { event: 'role_changed' }, ({ payload }) => {
+        setRows((prev) => prev.map((r) => (r.id === payload?.id ? { ...r, passenger_role: payload.passenger_role } : r)));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const saveDraft = async () => {
     if (!draft) return;
@@ -173,7 +186,14 @@ const CoupeManager = ({
               <div key={p.id} className="flex items-center gap-2.5 rounded-lg px-3 py-2 border border-border/40 bg-muted/30">
                 <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
                 <span className="text-sm break-words flex-1 min-w-0">{p.passenger_name}</span>
-                {p.is_staff && <Badge variant="secondary" className="text-[9px] shrink-0">Супровід</Badge>}
+                <PassengerRoleBadge
+                  passengerId={p.id}
+                  role={p.passenger_role}
+                  editable={editable}
+                  onChanged={(role) =>
+                    setRows((prev) => prev.map((r) => (r.id === p.id ? { ...r, passenger_role: role } : r)))
+                  }
+                />
                 {p.boarding_city && (
                   <Badge variant="outline" className="text-[9px] gap-1 shrink-0">
                     <MapPin className="w-2.5 h-2.5" strokeWidth={2} />{p.boarding_city}

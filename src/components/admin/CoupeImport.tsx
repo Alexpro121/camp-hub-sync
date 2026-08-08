@@ -128,6 +128,7 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
         child_id: r.child_id ?? null,
         passenger_name: r.name,
         boarding_city: r.boarding_city,
+        passenger_role: r.passenger_role ?? 'participant',
         is_staff: !r.matched,
       }));
       const { error } = await supabase.from('train_coupes').insert(payload);

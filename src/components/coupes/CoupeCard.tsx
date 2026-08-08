@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Train, User } from 'lucide-react';
+import PassengerRoleBadge from './PassengerRoleBadge';
 
 export interface CoupeRow {
   id?: string;
@@ -10,6 +11,7 @@ export interface CoupeRow {
   is_staff?: boolean | null;
   child_id?: string | null;
   seat_number?: number | null;
+  passenger_role?: string | null;
 }
 
 /** One coupe with its passengers. Seat numbers and berth types are never shown. */
@@ -17,10 +19,14 @@ const CoupeCard = ({
   coupeNumber,
   passengers,
   highlightId,
+  editableRoles = false,
+  onRoleChanged,
 }: {
   coupeNumber: number;
   passengers: CoupeRow[];
   highlightId?: string | null;
+  editableRoles?: boolean;
+  onRoleChanged?: (id: string, role: string) => void;
 }) => (
   <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50">
     <div className="flex items-center gap-2 mb-3">
@@ -48,9 +54,12 @@ const CoupeCard = ({
           >
             <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
             <span className="text-sm break-words flex-1 min-w-0">{p.passenger_name}</span>
-            {p.is_staff && (
-              <Badge variant="secondary" className="text-[9px] shrink-0">Супровід</Badge>
-            )}
+            <PassengerRoleBadge
+              passengerId={p.id}
+              role={p.passenger_role}
+              editable={editableRoles}
+              onChanged={(r) => p.id && onRoleChanged?.(p.id, r)}
+            />
             {p.boarding_city && (
               <Badge variant="outline" className="text-[9px] gap-1 shrink-0">
                 <MapPin className="w-2.5 h-2.5" strokeWidth={2} />
