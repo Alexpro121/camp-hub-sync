@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Coins, User, Phone, Hash, Users, FileText, Loader2, Shield, Check, ChevronDown, HelpCircle, X } from 'lucide-react';
+import { ArrowLeft, Coins, User, Phone, Hash, Users, FileText, Loader2, Shield, Check, ChevronDown, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
