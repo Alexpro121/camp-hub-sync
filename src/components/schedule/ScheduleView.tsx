@@ -86,7 +86,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       } else {
         setItems([]);
       }
-      setActiveDay((cur) => cur ?? list.find((s) => s.date >= todayISO())?.date ?? list[0]?.date ?? null);
+      setActiveDay((cur) => cur ?? todayISO());
       setLoading(false);
     };
     load();
