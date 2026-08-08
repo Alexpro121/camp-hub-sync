@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowRight, Search, Loader2, Repeat, ArrowRightLeft, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { normalizeName } from '@/lib/normalize';
 import { pickActiveShift } from '@/lib/shift';
 import { InlineLoader } from '@/components/ui/loader';
 import { pushIsland } from '@/lib/islandBus';
