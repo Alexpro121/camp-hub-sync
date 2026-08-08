@@ -256,7 +256,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TeamsView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="schedule" className="mt-3 animate-fade-in">
-          <ScheduleView myTeam={authedTeam} />
+          <ScheduleView
+            myTeam={authedTeam}
+            isStaff
+            onFairAction={fair.active ? () => handleTabChange('fair') : undefined}
+          />
         </TabsContent>
         {talent.active && (
           <TabsContent value="talent" className="mt-3 animate-fade-in">
