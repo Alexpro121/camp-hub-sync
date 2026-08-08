@@ -74,6 +74,13 @@ const DynamicIsland = () => {
     return () => clearTimeout(t);
   }, [state, payload, expanded]);
 
+  // Fail-safe: nothing may ever stay on screen longer than 12.5s.
+  useEffect(() => {
+    if (state === 'HIDDEN') return;
+    const maxTimeout = setTimeout(() => hide(), 12500);
+    return () => clearTimeout(maxTimeout);
+  }, [state, payload, expanded, hide]);
+
   const shape = (() => {
     switch (state) {
       case 'LOADING_ONLY':
