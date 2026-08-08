@@ -3,6 +3,7 @@ import { Coins, QrCode, ShoppingBag } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ApplePayScannerModal from './ApplePayScannerModal';
+import FairHowTo from './FairHowTo';
 import { useHaptics } from '@/hooks/useHaptics';
 
 interface Props {
@@ -42,6 +43,8 @@ const ChildFairCard = ({ balance, onPaid, childName, childTeam }: Props) => {
           <QrCode className="w-5 h-5 mr-2" strokeWidth={1.9} /> Оплатити покупку (QR)
         </Button>
       </Card>
+
+      <FairHowTo variant="child" className="mb-3" />
 
       <ApplePayScannerModal
         open={open}
