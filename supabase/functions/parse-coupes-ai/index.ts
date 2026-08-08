@@ -1,6 +1,6 @@
 import { corsHeaders } from '../_shared/accounts.ts';
+import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `You are a Ukrainian train seating parsing assistant for a youth camp.
@@ -28,30 +28,21 @@ Deno.serve(async (req) => {
     const { text = '', team = null } = await req.json();
     if (!String(text).trim()) return json({ error: 'EMPTY', passengers: [] }, 400);
 
-    const key = Deno.env.get('GROQ_API_KEY');
-    if (!key) return json({ error: 'NO_KEY', passengers: [] }, 200);
+    if (!hasGroqKeys()) return json({ error: 'NO_KEY', source: 'local_fallback', passengers: [] }, 200);
 
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
     try {
-      const res = await fetch(GROQ_URL, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: MODEL,
-          temperature: 0,
-          max_tokens: 4000,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `DEFAULT TEAM: ${team ?? 'unknown'}\n\n${String(text).slice(0, 12000)}` },
-          ],
-        }),
+      const { data, keyUsedIndex } = await fetchGroqWithFallback({
+        model: MODEL,
+        temperature: 0,
+        max_tokens: 4000,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `DEFAULT TEAM: ${team ?? 'unknown'}\n\n${String(text).slice(0, 12000)}` },
+        ],
       });
-      const raw = await res.text();
-      if (!res.ok) return json({ error: `GROQ_HTTP_${res.status}`, message: raw.slice(0, 400), passengers: [] }, 200);
-      const content = JSON.parse(raw)?.choices?.[0]?.message?.content ?? '{}';
+      console.log(`[parse-coupes-ai] served by key #${keyUsedIndex}`);
+      const content = data?.choices?.[0]?.message?.content ?? '{}';
       const parsed = JSON.parse(String(content).replace(/```json|```/g, '').trim());
       const list = Array.isArray(parsed.passengers) ? parsed.passengers : [];
       const passengers = list
@@ -72,9 +63,8 @@ Deno.serve(async (req) => {
       return json({ passengers, source: 'ai' });
     } catch (e) {
       const msg = String((e as Error).message || e);
-      return json({ error: msg.includes('abort') ? 'TIMEOUT_15S' : 'GROQ_ERROR', message: msg, passengers: [] }, 200);
-    } finally {
-      clearTimeout(t);
+      // All keys exhausted → client silently runs its local Smart Regex parser.
+      return json({ error: 'GROQ_POOL_EXHAUSTED', source: 'local_fallback', message: msg, passengers: [] }, 200);
     }
   } catch (e) {
     return json({ error: 'BAD_REQUEST', message: String((e as Error).message || e), passengers: [] }, 400);
