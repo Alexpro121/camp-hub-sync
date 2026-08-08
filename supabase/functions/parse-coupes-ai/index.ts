@@ -1,4 +1,4 @@
-import { corsHeaders } from '../_shared/accounts.ts';
+import { corsHeaders, requireUser } from '../_shared/accounts.ts';
 import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 
 const MODEL = 'llama-3.3-70b-versatile';
@@ -26,6 +26,9 @@ const json = (body: unknown, status = 200) =>
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
+    const auth = await requireUser(req);
+    if (auth.response) return auth.response;
+
     const { text = '', team = null } = await req.json();
     if (!String(text).trim()) return json({ error: 'EMPTY', passengers: [] }, 400);
 

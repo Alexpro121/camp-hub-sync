@@ -118,3 +118,21 @@ export function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
+
+/**
+ * Require a valid signed-in Supabase session.
+ * Returns the user, or a 401 Response to return directly.
+ */
+export async function requireUser(req: Request) {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return { user: null, response: json({ error: 'Missing Authorization header' }, 401) };
+  }
+  const token = authHeader.replace(/^Bearer\s+/i, '');
+  const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+  const { data, error } = await pub.auth.getUser(token);
+  if (error || !data?.user) {
+    return { user: null, response: json({ error: 'Unauthorized: Invalid token' }, 401) };
+  }
+  return { user: data.user, response: null as Response | null };
+}
