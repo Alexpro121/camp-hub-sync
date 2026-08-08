@@ -4,6 +4,8 @@ import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
 
+const FAIR_RE = /(ярмарок|ярмарка|ярмарки|ярмарков|fair|market)/i;
+
 /** Left accent rail per category — deliberately restrained, four families only. */
 const ACCENT: Record<string, string> = {
   meal: 'border-l-amber-500',
@@ -59,6 +61,7 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
+  const isFair = FAIR_RE.test(`${item.title ?? ''} ${item.description ?? ''}`);
 
   return (
     <article
@@ -83,8 +86,20 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
       </header>
 
       <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
-        {sentenceCase(item.title)}
+        {isFair && isNow ? 'Розпочалася Ярмарка!' : sentenceCase(item.title)}
       </h3>
+
+      {isFair && isNow && (
+        <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.35)]">
+          🛍️ Касу відкрито
+        </span>
+      )}
+
+      {isFair && (
+        <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+          <span className="font-bold text-amber-300">💡 Корисна порада:</span> Обирайте одразу декілька товарів на стенді та сплачуйте за все разом однією сумою в 1 клік!
+        </div>
+      )}
       {item.description && (
         <p className="mt-0.5 break-words text-xs leading-relaxed text-slate-400">{item.description}</p>
       )}
