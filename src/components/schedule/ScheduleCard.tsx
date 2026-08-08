@@ -129,7 +129,7 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
           {isStaff ? (
             <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду та QR-код</>
           ) : (
-            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-сканер камери</>
+            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-Сканер та сплатити</>
           )}
         </button>
       )}
