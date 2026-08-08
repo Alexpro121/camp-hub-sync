@@ -410,9 +410,11 @@ const SupervisorFairView = ({ myTeam }: Props) => {
 
   useEffect(() => {
     if (!activeCode) return;
+    let mounted = true;
     const ch = supabase
       .channel(`fair_code_${activeCode}`)
       .on('broadcast', { event: 'FAIR_PAYMENT_SUCCESS' }, (e) => {
+        if (!mounted) return;
         const b = (e.payload ?? {}) as {
           childName?: string; teamNumber?: number; amount?: number; txId?: string;
         };
@@ -437,13 +439,13 @@ const SupervisorFairView = ({ myTeam }: Props) => {
         }, ...prev.slice(0, FEED_LIMIT - 1)]);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => { mounted = false; supabase.removeChannel(ch); };
   }, [activeCode, haptics]);
 
-  if (!userId) {
+  if (!userId || myTeam === null || myTeam === undefined) {
     return (
       <div className="p-8 text-center text-sm font-medium text-muted-foreground">
-        Завантаження каси стенду...
+        Завантаження даних каси та команди...
       </div>
     );
   }
