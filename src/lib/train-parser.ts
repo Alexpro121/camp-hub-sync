@@ -59,6 +59,63 @@ export function parseTrainCoupesLocal(rawText: string): ParsedPassenger[] {
     const p = parseSeatLine(line);
     if (p) out.push(p);
   }
+  if (out.length) return out;
+  // Fallback: "ПІБ - N команда" lines (typos included)
+  return parseInlineTeamRoster(rawText);
+}
+
+/**
+ * "Абдул - 6 команда", "артем - 5 моанада", "арарат - 6 комнада".
+ * The trailing word is optional and human typos of "команда" are accepted.
+ */
+const INLINE_TEAM_REGEX =
+  /^\s*(.*?)\s*[-–—]\s*(\d{1,3})\s*(?:команда|комнада|моанада|команді|команда\.|ком|загін|отряд|team)?\s*[.,;]?\s*$/iu;
+
+/** Capitalise every word of a name: "артем молодший" → "Артем Молодший". */
+function titleCaseName(raw: string): string {
+  return raw
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toLocaleUpperCase('uk-UA') + w.slice(1))
+    .join(' ');
+}
+
+/**
+ * Parse a flat roster where every line carries its own team number.
+ * Seat numbers run 1..40 independently for each team.
+ */
+export function parseInlineTeamRoster(rawText: string): Required<ParsedPassenger>[] {
+  if (!rawText || typeof rawText !== 'string') return [];
+  const seatByTeam = new Map<number, number>();
+  const out: Required<ParsedPassenger>[] = [];
+
+  for (const raw of rawText.split(/\r?\n/)) {
+    const line = normalizeLine(raw).replace(/\t+/g, ' ').trim();
+    if (!line) continue;
+    if (TEAM_REGEX.test(line)) continue; // "Команда 6" header, not a passenger
+
+    const m = line.replace(/^\d{1,3}\s*[.)]\s*/, '').match(INLINE_TEAM_REGEX);
+    if (!m) continue;
+
+    const rawName = m[1].trim();
+    const teamNumber = parseInt(m[2], 10);
+    if (!rawName || rawName.length < 2 || !teamNumber) continue;
+    if (PLACEHOLDER.test(rawName)) continue;
+    if (/\d/.test(rawName)) continue;
+
+    const seatNumber = (seatByTeam.get(teamNumber) ?? 0) + 1;
+    if (seatNumber > 40) continue;
+    seatByTeam.set(teamNumber, seatNumber);
+
+    out.push({
+      teamNumber,
+      seatNumber,
+      coupeNumber: Math.ceil(seatNumber / 4),
+      name: titleCaseName(rawName),
+      boardingCity: null,
+    });
+  }
+
   return out;
 }
 
@@ -139,6 +196,9 @@ const LEADING_NUM = /^(\d{1,3})\s*[.)]\s*/;
  */
 export function parseSequentialTrainText(rawText: string): Required<ParsedPassenger>[] {
   if (!rawText || typeof rawText !== 'string') return [];
+  // Lines that carry their own team number ("Абдул - 6 команда") take priority.
+  const inline = parseInlineTeamRoster(rawText);
+  if (inline.length) return inline;
   const result: Required<ParsedPassenger>[] = [];
   let currentTeam: number | null = null;
   let seatCounter = 0;

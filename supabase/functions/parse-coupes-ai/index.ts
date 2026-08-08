@@ -16,6 +16,7 @@ STRICT RULES:
 5. Map coupe_number = Math.ceil(seat_number / 4).
 6. NEVER rename, translate, correct or invent people. Copy names byte-for-byte.
 7. "Команда N" lines set team_number for the rows that follow.
+8. If line format is 'Name - TeamNumber команда' (e.g. 'артем - 5 моанада'), extract name='Артем', team_number=5, ignoring human typos like 'моанада', 'комнада', 'моанда'. In that case there are no explicit seat numbers: assign seat_number sequentially from 1 upward SEPARATELY for each team_number (max 40), and coupe_number = ceil(seat_number/4). Capitalize the first letter of each name word, keep the spelling otherwise.
 OUTPUT FORMAT (JSON Object):
 {"team_number":6,"passengers":[{"seat_number":5,"coupe_number":2,"name":"Могилка Анастасія Павлівна","boarding_city":null,"team_number":6},{"seat_number":12,"coupe_number":3,"name":"Кундик Сергій","boarding_city":"Львів","team_number":6}]}`;
 
