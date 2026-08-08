@@ -118,7 +118,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
             {child.full_name}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Команда #{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· ${child.team_name}`}
+            Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
           </p>
         </DialogHeader>
 
@@ -191,7 +191,9 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
               <div className="rounded-lg border border-border/50 bg-surface-1 divide-y divide-border/40">
                 {Object.entries(child.raw_data).map(([k, v]) => (
                   <div key={k} className="flex items-start gap-3 p-2.5 text-xs">
-                    <span className="text-muted-foreground min-w-[40%] truncate">{k}</span>
+                    <span className="text-muted-foreground min-w-[40%] truncate">
+                      {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
+                    </span>
                     <span className="font-medium break-words flex-1">{String(v)}</span>
                   </div>
                 ))}

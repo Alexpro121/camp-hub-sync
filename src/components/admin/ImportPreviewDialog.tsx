@@ -18,7 +18,7 @@ const FIELD_LABELS: Record<StdKey, string> = {
   team_number: '№ Команди',
   full_name: 'ПІБ дитини',
   phone: 'Телефон',
-  team_name: 'Команда',
+  team_name: 'Категорія',
   note_from_table: 'Примітка',
 };
 

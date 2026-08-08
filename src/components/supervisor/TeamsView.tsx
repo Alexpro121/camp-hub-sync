@@ -208,7 +208,7 @@ const TeamsView = ({ myTeam }: Props) => {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
-                          {c.phone || 'без телефону'}
+                          {c.team_name ? `Категорія: ${c.team_name} · ` : ''}{c.phone || 'без телефону'}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-primary shrink-0">

@@ -226,7 +226,7 @@ const ChildFlow = ({ onBack }: Props) => {
             <div className="min-w-0 flex-1">
               <h1 className="text-lg font-semibold leading-tight break-words">{child.full_name}</h1>
               <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
-                Команда {child.team_number}{child.team_name ? ` · ${child.team_name}` : ''}
+                Команда №{child.team_number}{child.team_name ? ` · Категорія: ${child.team_name}` : ''}
               </p>
             </div>
           </div>
@@ -277,7 +277,10 @@ const ChildFlow = ({ onBack }: Props) => {
               </p>
               <div className="space-y-3">
                 <InfoRow icon={<Hash className="w-4 h-4" strokeWidth={1.75} />} label="№ в списку" value={child.row_number?.toString() || '—'} />
-                <InfoRow icon={<Users className="w-4 h-4" strokeWidth={1.75} />} label="Команда" value={child.team_name || String(child.team_number)} />
+                <InfoRow icon={<Users className="w-4 h-4" strokeWidth={1.75} />} label="Номер команди" value={`Команда №${child.team_number}`} />
+                {child.team_name && (
+                  <InfoRow icon={<Users className="w-4 h-4" strokeWidth={1.75} />} label="Категорія" value={child.team_name} />
+                )}
                 <InfoRow icon={<Phone className="w-4 h-4" strokeWidth={1.75} />} label="Телефон" value={child.phone || '—'} />
                 {child.note_from_table && (
                   <InfoRow icon={<FileText className="w-4 h-4" strokeWidth={1.75} />} label="Примітка" value={child.note_from_table} />
@@ -303,7 +306,9 @@ const ChildFlow = ({ onBack }: Props) => {
                   <div className="border-t border-border/40 divide-y divide-border/30 max-h-80 overflow-y-auto scrollbar-thin">
                     {rawEntries.map(([k, v]) => (
                       <div key={k} className="flex items-start gap-3 p-3">
-                        <span className="text-[11px] text-muted-foreground min-w-[40%] truncate">{k}</span>
+                        <span className="text-[11px] text-muted-foreground min-w-[40%] truncate">
+                          {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
+                        </span>
                         <span className="text-xs break-words flex-1">{String(v)}</span>
                       </div>
                     ))}
@@ -416,8 +421,8 @@ const ChildFlow = ({ onBack }: Props) => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.full_name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Команда {item.team_number}
-                        {item.team_name ? ` · ${item.team_name}` : ''}
+                        Команда №{item.team_number}
+                        {item.team_name ? ` · Категорія: ${item.team_name}` : ''}
                       </p>
                     </div>
                     <span className="text-[10px] font-mono text-primary/80 tabular-nums shrink-0">
