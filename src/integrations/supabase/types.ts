@@ -793,7 +793,29 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      execute_child_swap: {
+        Args: {
+          p_child_1_id: string
+          p_child_2_id: string
+          p_performed_by: string
+        }
+        Returns: boolean
+      }
+      execute_child_transfer: {
+        Args: {
+          p_child_id: string
+          p_performed_by: string
+          p_target_team: number
+        }
+        Returns: boolean
+      }
       execute_coupe_swap: { Args: { p_request_id: string }; Returns: boolean }
+      get_available_transfer_teams: {
+        Args: { p_my_team: number; p_shift_id: string }
+        Returns: {
+          team_number: number
+        }[]
+      }
       increment_iron_dollars: {
         Args: {
           p_amount: number
@@ -816,6 +838,14 @@ export type Database = {
         Returns: Json
       }
       resolve_fair_code: { Args: { p_code: string }; Returns: Json }
+      search_child_for_transfer: {
+        Args: { p_my_team: number; p_query: string; p_shift_id: string }
+        Returns: {
+          full_name: string
+          id: string
+          team_number: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "supervisor" | "child"
