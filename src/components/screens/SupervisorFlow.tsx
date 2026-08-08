@@ -54,7 +54,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
     ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
-    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag } as DockItem] : []),
+    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag, accent: 'gold' } as DockItem] : []),
     { value: 'coupes', label: 'Потяг', icon: Train },
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
@@ -256,7 +256,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TeamsView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="schedule" className="mt-3 animate-fade-in">
-          <ScheduleView myTeam={authedTeam} />
+          <ScheduleView
+            myTeam={authedTeam}
+            isStaff
+            onFairAction={fair.active ? () => handleTabChange('fair') : undefined}
+          />
         </TabsContent>
         {talent.active && (
           <TabsContent value="talent" className="mt-3 animate-fade-in">

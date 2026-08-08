@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Users } from 'lucide-react';
+import { QrCode, ShoppingBag, Users } from 'lucide-react';
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
@@ -54,14 +54,20 @@ interface Props {
   past?: boolean;
   /** 0..100 elapsed share of the event, used for the bottom progress rail. */
   progress?: number;
+  /** Staff (supervisor) view — opens the stand cash register instead of the scanner. */
+  isStaff?: boolean;
+  /** Opens the fair cash register / scanner from inside the live fair card. */
+  onFairAction?: () => void;
 }
 
-const ScheduleCard = ({ event, team = null, isNow = false, past = false, progress = 0 }: Props) => {
+const ScheduleCard = ({ event, team = null, isNow = false, past = false, progress = 0, isStaff = false, onFairAction }: Props) => {
   const item = event.item;
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
   const isFair = FAIR_RE.test(`${item.title ?? ''} ${item.description ?? ''}`);
+  /** The fair extras (tip + register button) only exist while the fair runs. */
+  const fairLive = isFair && isNow;
 
   return (
     <article
@@ -95,10 +101,24 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
         </span>
       )}
 
-      {isFair && (
-        <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+      {fairLive && (
+        <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200 shadow-sm backdrop-blur-md">
           <span className="font-bold text-amber-300">💡 Корисна порада:</span> Обирайте одразу декілька товарів на стенді та сплачуйте за все разом однією сумою в 1 клік!
         </div>
+      )}
+
+      {fairLive && onFairAction && (
+        <button
+          type="button"
+          onClick={onFairAction}
+          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:from-amber-400 hover:to-amber-500 active:scale-95"
+        >
+          {isStaff ? (
+            <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду та QR-код</>
+          ) : (
+            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-сканер камери</>
+          )}
+        </button>
       )}
       {item.description && (
         <p className="mt-0.5 break-words text-xs leading-relaxed text-slate-400">{item.description}</p>

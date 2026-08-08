@@ -22,6 +22,10 @@ interface Props {
   myTeam?: number | null;
   /** Child mode: only the own team's schedule is visible. */
   lockTeam?: boolean;
+  /** Staff view flag — switches the live fair CTA to the cash register. */
+  isStaff?: boolean;
+  /** Opens the fair register (staff) or the QR scanner (child). */
+  onFairAction?: () => void;
 }
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -41,7 +45,7 @@ const countdown = (min: number) => {
   return `${h} год ${String(m % 60).padStart(2, '0')} хв`;
 };
 
-const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
+const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFairAction }: Props) => {
   const TEAMS = useAllTeams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
@@ -262,6 +266,8 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
               isNow={isNow}
               past={isToday && nowRel >= e.endMin}
               progress={isNow ? ((nowRel - e.startMin) / Math.max(1, e.endMin - e.startMin)) * 100 : 0}
+              isStaff={isStaff}
+              onFairAction={onFairAction}
             />
           );
         })}

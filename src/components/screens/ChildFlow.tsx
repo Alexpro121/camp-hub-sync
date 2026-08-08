@@ -21,6 +21,7 @@ import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useFairActive } from '@/hooks/useFairActive';
 import ChildFairCard from '@/components/fair/ChildFairCard';
+import ApplePayScannerModal from '@/components/fair/ApplePayScannerModal';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { clearSavedSession, getSavedChildId, getSavedRole, saveSession } from '@/lib/session';
@@ -42,6 +43,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [loading, setLoading] = useState(false);
   const [child, setChild] = useState<Child | null>(null);
   const [showAllFields, setShowAllFields] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const haptics = useHaptics();
   const island = useDynamicIsland();
@@ -319,7 +321,11 @@ const ChildFlow = ({ onBack }: Props) => {
             {phase?.currentPhase === 'PREPARING' ? (
               <PhaseBanner status={phase} teamNumber={child.team_number} />
             ) : (
-              <ScheduleView myTeam={child.team_number} lockTeam />
+              <ScheduleView
+                myTeam={child.team_number}
+                lockTeam
+                onFairAction={fair.active ? () => setScannerOpen(true) : undefined}
+              />
             )}
           </TabsContent>
           {talent.active && (
@@ -328,6 +334,14 @@ const ChildFlow = ({ onBack }: Props) => {
             </TabsContent>
           )}
         </Tabs>
+
+        <ApplePayScannerModal
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          balance={child.iron_dollars}
+          childName={child.full_name}
+          childTeam={child.team_number}
+        />
       </div>
     );
   }
