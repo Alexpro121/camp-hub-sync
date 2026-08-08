@@ -22,6 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { FullScreenLoader } from '@/components/ui/loader';
 import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
 import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
+import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
@@ -71,7 +72,7 @@ const AdminFlow = ({ onBack }: Props) => {
         </div>
 
         <TabsContent value="shifts" className="mt-3"><ShiftsTab /></TabsContent>
-        <TabsContent value="schedule" className="mt-3"><ScheduleAdmin /></TabsContent>
+        <TabsContent value="schedule" className="mt-3 space-y-4"><AdminScheduleEditor /><ScheduleAdmin /></TabsContent>
         <TabsContent value="talent" className="mt-3"><TalentAdmin /></TabsContent>
         <TabsContent value="coupes" className="mt-3"><TrainTab /></TabsContent>
         <TabsContent value="fair" className="mt-3"><AdminPrintQRCodes /></TabsContent>

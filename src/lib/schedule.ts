@@ -1,5 +1,6 @@
 import type { ScheduleItem } from '@/types/app';
 import { fromMinutes, toMinutes } from './scheduleCategories';
+import { supabase } from '@/integrations/supabase/client';
 
 /** Fallback duration when the source row has no end time. */
 export const DEFAULT_DURATION = 60;
@@ -100,3 +101,53 @@ export const normalizeScheduleItems = (
 /** Events that started before `now` and have not ended yet. */
 export const ongoingEvents = (events: NormalizedScheduleItem[], now: Date = new Date()) =>
   events.filter((e) => e.startAt <= now && e.endAt > now);
+
+/** Realtime channel used to push schedule changes to every connected client. */
+export const SCHEDULE_CHANNEL = 'schedule-live';
+export const SCHEDULE_UPDATED = 'SCHEDULE_UPDATED';
+
+/** Notify all clients that the schedule changed (admin edits). */
+export const broadcastScheduleUpdated = async (payload: Record<string, unknown> = {}) => {
+  const ch = supabase.channel(SCHEDULE_CHANNEL);
+  await ch.subscribe();
+  await ch.send({ type: 'broadcast', event: SCHEDULE_UPDATED, payload });
+  setTimeout(() => supabase.removeChannel(ch), 500);
+};
+
+/** Key used to detect duplicates across merged schedules of the same day. */
+export const itemKey = (i: { time_start?: string | null; title?: string | null }) =>
+  `${(i.time_start || '').trim()}|${(i.title || '').trim().toLowerCase()}`;
+
+/** Drop duplicates (same start time + title); the last occurrence wins. */
+export const dedupeItems = <T extends { time_start?: string | null; title?: string | null }>(items: T[]): T[] => {
+  const map = new Map<string, T>();
+  items.forEach((i) => map.set(itemKey(i), i));
+  return [...map.values()];
+};
+
+/**
+ * All published schedule items for one date — merged across EVERY schedule
+ * batch uploaded for that day (morning + evening + extra), sorted by start time.
+ */
+export const getScheduleForDate = async (
+  shiftId: string | null,
+  date: string,
+  opts: { publishedOnly?: boolean } = {},
+): Promise<ScheduleItem[]> => {
+  const publishedOnly = opts.publishedOnly !== false;
+  let q = supabase.from('schedules').select('id').eq('date', date);
+  if (publishedOnly) q = q.eq('is_published', true);
+  if (shiftId) q = q.eq('shift_id', shiftId);
+  const { data: sch } = await q;
+  const ids = (sch || []).map((s: { id: string }) => s.id);
+  if (!ids.length) return [];
+  const { data } = await supabase
+    .from('schedule_items')
+    .select('*')
+    .in('schedule_id', ids)
+    .order('time_start', { ascending: true });
+  const items = (data || []) as unknown as ScheduleItem[];
+  return dedupeItems(items).sort(
+    (a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index,
+  );
+};

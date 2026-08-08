@@ -11,6 +11,9 @@ import {
   normalizeScheduleItems,
   ongoingEvents,
   shiftISODate,
+  dedupeItems,
+  SCHEDULE_CHANNEL,
+  SCHEDULE_UPDATED,
   type NormalizedScheduleItem,
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
@@ -85,14 +88,23 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_items' }, debounced)
       .subscribe();
-    return () => { clearTimeout(debounce); supabase.removeChannel(ch); };
+    const live = supabase
+      .channel(SCHEDULE_CHANNEL)
+      .on('broadcast', { event: SCHEDULE_UPDATED }, debounced)
+      .subscribe();
+    return () => { clearTimeout(debounce); supabase.removeChannel(ch); supabase.removeChannel(live); };
   }, []);
 
   useEffect(() => {
     activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeDay, loading]);
 
-  const daySchedule = schedules.find((s) => s.date === activeDay);
+  /** One tab per date — several schedule batches of the same day are merged. */
+  const days = useMemo(() => [...new Set(schedules.map((s) => s.date))].sort(), [schedules]);
+  const idsForDate = useMemo(
+    () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
+    [schedules],
+  );
 
   const matchesTeam = useMemo(
     () => (i: ScheduleItem) =>
@@ -105,18 +117,27 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
 
   /** Events of the selected day, with ISO start/end (auto +1 day past midnight). */
   const dayEvents = useMemo<NormalizedScheduleItem[]>(() => {
-    if (!daySchedule) return [];
-    return normalizeScheduleItems(items.filter((i) => i.schedule_id === daySchedule.id).filter(matchesTeam), daySchedule.date);
-  }, [items, daySchedule?.id, daySchedule?.date, matchesTeam]);
+    if (!activeDay) return [];
+    const ids = idsForDate(activeDay);
+    if (!ids.length) return [];
+    return normalizeScheduleItems(
+      dedupeItems(items.filter((i) => ids.includes(i.schedule_id))).filter(matchesTeam),
+      activeDay,
+    );
+  }, [items, activeDay, idsForDate, matchesTeam]);
 
   /** Previous night's events that are still running right now (cross-midnight). */
   const carryOver = useMemo<NormalizedScheduleItem[]>(() => {
     if (!activeDay) return [];
-    const prev = schedules.find((s) => s.date === shiftISODate(activeDay, -1));
-    if (!prev) return [];
-    const prevEvents = normalizeScheduleItems(items.filter((i) => i.schedule_id === prev.id).filter(matchesTeam), prev.date);
+    const prevDate = shiftISODate(activeDay, -1);
+    const ids = idsForDate(prevDate);
+    if (!ids.length) return [];
+    const prevEvents = normalizeScheduleItems(
+      dedupeItems(items.filter((i) => ids.includes(i.schedule_id))).filter(matchesTeam),
+      prevDate,
+    );
     return ongoingEvents(prevEvents, now).map((e) => ({ ...e, startMin: e.startMin - 1440, endMin: e.endMin - 1440 }));
-  }, [items, schedules, activeDay, matchesTeam, now]);
+  }, [items, idsForDate, activeDay, matchesTeam, now]);
 
   const visibleEvents = useMemo(
     () => [...carryOver, ...dayEvents].sort((a, b) => a.startMin - b.startMin),
@@ -155,14 +176,14 @@ const ScheduleView = ({ myTeam = null, lockTeam = false }: Props) => {
     <div className="space-y-3">
       {/* Days */}
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-        {schedules.map((s) => {
-          const p = dayParts(s.date);
-          const active = s.date === activeDay;
+        {days.map((d) => {
+          const p = dayParts(d);
+          const active = d === activeDay;
           return (
             <button
-              key={s.id}
+              key={d}
               ref={active ? activeDayRef : undefined}
-              onClick={() => setActiveDay(s.date)}
+              onClick={() => setActiveDay(d)}
               className={`${tabCls} flex flex-col items-center leading-tight ${
                 active
                   ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'

@@ -1,0 +1,284 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAllTeams } from '@/hooks/useAllTeams';
+import { CATEGORY_LIST, shiftTime, sentenceCase } from '@/lib/scheduleCategories';
+import { broadcastScheduleUpdated, dedupeItems } from '@/lib/schedule';
+import type { Schedule, ScheduleItem, Shift } from '@/types/app';
+import { pickActiveShift } from '@/lib/shift';
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+interface Form {
+  id: string | null;
+  title: string;
+  time_start: string;
+  time_end: string;
+  category: string;
+  target_teams: number[];
+}
+
+const emptyForm = (): Form => ({ id: null, title: '', time_start: '', time_end: '', category: 'general', target_teams: [] });
+
+const AdminScheduleEditor = () => {
+  const TEAMS = useAllTeams();
+  const [date, setDate] = useState(todayISO());
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState<Form | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data: sch } = await supabase.from('schedules').select('*').eq('date', date);
+    const list = (sch || []) as Schedule[];
+    setSchedules(list);
+    const ids = list.map((s) => s.id);
+    if (ids.length) {
+      const { data } = await supabase.from('schedule_items').select('*').in('schedule_id', ids).order('time_start');
+      setItems(dedupeItems((data || []) as unknown as ScheduleItem[]));
+    } else {
+      setItems([]);
+    }
+    setLoading(false);
+  }, [date]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index),
+    [items],
+  );
+
+  /** Schedule row that receives new events for this date (created on demand). */
+  const ensureSchedule = async (): Promise<string> => {
+    const published = schedules.find((s) => s.is_published) ?? schedules[0];
+    if (published) return published.id;
+    const { data: shifts } = await supabase.from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
+    const active = pickActiveShift((shifts || []) as Shift[]);
+    const { data, error } = await supabase
+      .from('schedules')
+      .insert({ shift_id: active?.id ?? null, date, raw_text: null, is_published: true })
+      .select()
+      .single();
+    if (error || !data) throw error;
+    return data.id;
+  };
+
+  const save = async () => {
+    if (!form) return;
+    if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
+    setBusy(true);
+    try {
+      const payload = {
+        title: form.title.trim(),
+        time_start: form.time_start || null,
+        time_end: form.time_end || null,
+        category: form.category,
+        target_teams: form.target_teams,
+      };
+      if (form.id) {
+        const { error } = await supabase.from('schedule_items').update(payload).eq('id', form.id);
+        if (error) throw error;
+      } else {
+        const scheduleId = await ensureSchedule();
+        // Deduplication: same start time + title on this day → update instead of duplicating.
+        const dup = sorted.find(
+          (i) => (i.time_start || '') === (payload.time_start || '') &&
+            (i.title || '').trim().toLowerCase() === payload.title.toLowerCase(),
+        );
+        if (dup) {
+          const { error } = await supabase.from('schedule_items').update(payload).eq('id', dup.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('schedule_items').insert({
+            ...payload,
+            schedule_id: scheduleId,
+            description: null,
+            order_index: sorted.length,
+            has_sub_slots: false,
+            sub_slots: [] as unknown as any,
+          });
+          if (error) throw error;
+        }
+      }
+      setForm(null);
+      await load();
+      await broadcastScheduleUpdated({ date, action: form.id ? 'update' : 'create' });
+      toast.success('Розклад оновлено');
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка збереження');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    const { error } = await supabase.from('schedule_items').delete().eq('id', id);
+    if (error) { toast.error(error.message); return; }
+    await load();
+    await broadcastScheduleUpdated({ date, action: 'delete' });
+    toast.success('Подію видалено');
+  };
+
+  /** Shift this event and every later event of the day by ±delta minutes. */
+  const shiftFrom = async (from: ScheduleItem, delta: number) => {
+    const affected = sorted.filter((i) => (i.time_start || '') >= (from.time_start || ''));
+    setBusy(true);
+    try {
+      for (const i of affected) {
+        const { error } = await supabase
+          .from('schedule_items')
+          .update({ time_start: shiftTime(i.time_start, delta), time_end: shiftTime(i.time_end, delta) })
+          .eq('id', i.id);
+        if (error) throw error;
+      }
+      await load();
+      await broadcastScheduleUpdated({ date, action: 'shift', delta });
+      toast.success(`Зсув ${delta > 0 ? '+' : ''}${delta} хв для ${affected.length} подій`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка зсуву');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleTeam = (t: number) =>
+    setForm((p) => p && ({
+      ...p,
+      target_teams: p.target_teams.includes(t)
+        ? p.target_teams.filter((x) => x !== t)
+        : [...p.target_teams, t].sort((a, b) => a - b),
+    }));
+
+  return (
+    <Card className="p-4 bg-gradient-card space-y-3">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="w-4 h-4 text-primary" strokeWidth={1.75} />
+        <h3 className="font-bold uppercase text-sm tracking-wide">Редактор дня</h3>
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[150px] text-xs ml-auto" />
+      </div>
+
+      {schedules.length > 1 && (
+        <p className="text-[11px] text-muted-foreground">
+          Об’єднано {schedules.length} розкладів цієї дати в одну часову лінію.
+        </p>
+      )}
+
+      <Button onClick={() => setForm(emptyForm())} className="w-full h-10 text-xs font-bold uppercase">
+        <Plus className="w-4 h-4 mr-1.5" /> Додати подію
+      </Button>
+
+      {loading ? (
+        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : sorted.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">Подій на цю дату немає</p>
+      ) : (
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
+          {sorted.map((i) => (
+            <div key={i.id} className="rounded-xl border border-border/50 bg-surface-1 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground shrink-0">
+                  {i.time_start || '--:--'} – {i.time_end || '--:--'}
+                </span>
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold">{sentenceCase(i.title)}</p>
+                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setForm({
+                  id: i.id,
+                  title: i.title,
+                  time_start: i.time_start || '',
+                  time_end: i.time_end || '',
+                  category: i.category || 'general',
+                  target_teams: i.target_teams || [],
+                })}>
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => remove(i.id)}>
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {i.target_teams?.length ? `Команди ${i.target_teams.join(', ')}` : 'Для всіх'}
+                </span>
+                <Button size="sm" variant="secondary" disabled={busy} className="h-7 px-2 text-[10px] ml-auto" onClick={() => shiftFrom(i, -15)}>
+                  <Minus className="w-3 h-3 mr-1" />15 хв
+                </Button>
+                <Button size="sm" variant="secondary" disabled={busy} className="h-7 px-2 text-[10px]" onClick={() => shiftFrom(i, 15)}>
+                  <Plus className="w-3 h-3 mr-1" />15 хв
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>{form?.id ? 'Редагувати подію' : 'Нова подія'}</DialogTitle></DialogHeader>
+          {form && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва</Label>
+                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Сніданок" className="h-10 text-sm" />
+              </div>
+              <div className="flex gap-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Початок</Label>
+                  <Input value={form.time_start} onChange={(e) => setForm({ ...form, time_start: e.target.value })} placeholder="18:00" className="h-10 w-[96px] text-sm tabular-nums" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Кінець</Label>
+                  <Input value={form.time_end} onChange={(e) => setForm({ ...form, time_end: e.target.value })} placeholder="19:00" className="h-10 w-[96px] text-sm tabular-nums" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Категорія</Label>
+                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                  <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_LIST.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Команди {form.target_teams.length === 0 && '(порожньо = всі)'}
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {TEAMS.map((t) => {
+                    const on = form.target_teams.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => toggleTeam(t)}
+                        className={`h-8 w-8 rounded-lg text-xs font-bold border transition-all active:scale-95 ${
+                          on ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'
+                        }`}
+                      >{t}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={save} disabled={busy} className="w-full h-11 font-bold uppercase text-xs">
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Зберегти'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+};
+
+export default AdminScheduleEditor;
