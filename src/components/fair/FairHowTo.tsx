@@ -39,7 +39,7 @@ const FairHowTo = ({ variant, className = '' }: Props) => {
 
   if (hidden) {
     return (
-      <div className={`flex justify-end ${className}`}>
+      <div className={`relative z-10 -mt-2 flex justify-end ${className}`}>
         <button
           type="button"
           onClick={() => setState(false)}
