@@ -58,10 +58,21 @@ const AdminScheduleEditor = () => {
     [items],
   );
 
+  /** Make sure every schedule batch of this date is visible to children and staff. */
+  const ensurePublished = async () => {
+    const hidden = schedules.filter((s) => !s.is_published).map((s) => s.id);
+    if (!hidden.length) return;
+    await supabase.from('schedules').update({ is_published: true }).in('id', hidden);
+    setSchedules((p) => p.map((s) => (hidden.includes(s.id) ? { ...s, is_published: true } : s)));
+  };
+
   /** Schedule row that receives new events for this date (created on demand). */
   const ensureSchedule = async (): Promise<string> => {
-    const published = schedules.find((s) => s.is_published) ?? schedules[0];
-    if (published) return published.id;
+    const existing = schedules.find((s) => s.is_published) ?? schedules[0];
+    if (existing) {
+      await ensurePublished();
+      return existing.id;
+    }
     const { data: shifts } = await supabase.from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
     const active = pickActiveShift((shifts || []) as Shift[]);
     const { data, error } = await supabase
@@ -78,12 +89,14 @@ const AdminScheduleEditor = () => {
     if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
     setBusy(true);
     try {
+      // Added or edited events must be instantly visible to children and staff.
+      await ensurePublished();
       const payload = {
         title: form.title.trim(),
         time_start: form.time_start || null,
         time_end: form.time_end || null,
         category: form.category,
-        target_teams: form.target_teams,
+        target_teams: form.target_teams, // [] = for everyone
       };
       if (form.id) {
         const { error } = await supabase.from('schedule_items').update(payload).eq('id', form.id);
