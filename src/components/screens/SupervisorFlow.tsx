@@ -27,7 +27,6 @@ import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFairActive } from '@/hooks/useFairActive';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
-import SupervisorFairModal from '@/components/fair/SupervisorFairModal';
 import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
 
 interface Props {
@@ -45,7 +44,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [activeTab, setActiveTab] = useState('teams');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
-  const [fairModalOpen, setFairModalOpen] = useState(false);
   
   const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
@@ -65,7 +63,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
   const handleTabChange = (v: string) => {
     if (v === 'talent') talent.markSeen();
-    if (v === 'fair') { setFairModalOpen(true); return; }
     setActiveTab(v);
   };
 
@@ -263,7 +260,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <ScheduleView
             myTeam={authedTeam}
             isStaff
-            onFairAction={() => setFairModalOpen(true)}
+            onFairAction={() => setActiveTab('fair')}
           />
         </TabsContent>
         {talent.active && (
@@ -312,12 +309,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       {authedTeam !== null && (
         <IronBank myTeam={authedTeam} open={bankOpen} onClose={() => setBankOpen(false)} />
       )}
-
-      <SupervisorFairModal
-        isOpen={fairModalOpen}
-        onClose={() => setFairModalOpen(false)}
-        myTeam={authedTeam}
-      />
     </div>
   );
 };
