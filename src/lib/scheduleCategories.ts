@@ -24,11 +24,39 @@ export const CATEGORY_LIST = Object.values(CATEGORY_META);
 export const catMeta = (c?: string | null): CategoryMeta =>
   CATEGORY_META[(c as ScheduleCategory) ?? 'general'] ?? CATEGORY_META.general;
 
-/** "HH:MM" -> minutes since midnight */
-export const toMinutes = (t?: string | null): number | null => {
+/**
+ * Accepts any human time input — "14:25", "14.25", "14 25", "14-25", "1425",
+ * "9:5", "9" — and returns the canonical "HH:MM", or null when unparsable.
+ */
+export const normalizeTime = (raw?: string | null): string | null => {
+  const t = (raw ?? '').trim();
   if (!t) return null;
-  const [h, m] = t.split(':').map(Number);
-  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+  const m = t.match(/^(\d{1,2})\s*[:.,\-–—\s]?\s*(\d{1,2})?$/) ?? t.match(/^(\d{2})(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = m[2] == null || m[2] === '' ? 0 : Number(m[2].length === 1 ? `${m[2]}0` : m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+};
+
+/** Splits "14.25 - 14.56" / "14:25—14:56" into normalized start + end. */
+export const normalizeTimeRange = (raw?: string | null): { start: string | null; end: string | null } => {
+  const t = (raw ?? '').trim();
+  const parts = t.split(/\s*(?:-|–|—|до)\s*/).filter(Boolean);
+  if (parts.length >= 2) {
+    const start = normalizeTime(parts[0]);
+    const end = normalizeTime(parts[1]);
+    if (start && end) return { start, end };
+  }
+  return { start: normalizeTime(t), end: null };
+};
+
+/** Any supported time format -> minutes since midnight */
+export const toMinutes = (t?: string | null): number | null => {
+  const norm = normalizeTime(t);
+  if (!norm) return null;
+  const [h, m] = norm.split(':').map(Number);
+  return h * 60 + m;
 };
 
 export const fromMinutes = (v: number): string => {

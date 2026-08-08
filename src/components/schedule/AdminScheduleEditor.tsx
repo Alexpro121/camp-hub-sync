@@ -9,7 +9,7 @@ import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser } from 'luci
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
-import { CATEGORY_LIST, shiftTime, sentenceCase } from '@/lib/scheduleCategories';
+import { CATEGORY_LIST, shiftTime, sentenceCase, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
 import { broadcastScheduleUpdated, dedupeItems } from '@/lib/schedule';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
@@ -93,8 +93,9 @@ const AdminScheduleEditor = () => {
       await ensurePublished();
       const payload = {
         title: form.title.trim(),
-        time_start: form.time_start || null,
-        time_end: form.time_end || null,
+        // Any input format is accepted: "14.25", "14:25", "1425", "14.25 - 14.56".
+        time_start: normalizeTime(form.time_start) || null,
+        time_end: normalizeTime(form.time_end) || null,
         category: form.category,
         target_teams: form.target_teams, // [] = for everyone
       };
@@ -285,11 +286,26 @@ const AdminScheduleEditor = () => {
               <div className="flex gap-2">
                 <div className="space-y-1.5">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Початок</Label>
-                  <Input value={form.time_start} onChange={(e) => setForm({ ...form, time_start: e.target.value })} placeholder="18:00" className="h-10 w-[96px] text-sm tabular-nums" />
+                  <Input
+                    value={form.time_start}
+                    onChange={(e) => setForm({ ...form, time_start: e.target.value })}
+                    onBlur={(e) => {
+                      const { start, end } = normalizeTimeRange(e.target.value);
+                      setForm((p) => p && { ...p, time_start: start ?? p.time_start, time_end: end ?? p.time_end });
+                    }}
+                    placeholder="18:00 або 18.00"
+                    className="h-10 w-[96px] text-sm tabular-nums"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Кінець</Label>
-                  <Input value={form.time_end} onChange={(e) => setForm({ ...form, time_end: e.target.value })} placeholder="19:00" className="h-10 w-[96px] text-sm tabular-nums" />
+                  <Input
+                    value={form.time_end}
+                    onChange={(e) => setForm({ ...form, time_end: e.target.value })}
+                    onBlur={(e) => setForm((p) => p && { ...p, time_end: normalizeTime(e.target.value) ?? p.time_end })}
+                    placeholder="19:00 або 19.00"
+                    className="h-10 w-[96px] text-sm tabular-nums"
+                  />
                 </div>
               </div>
               <div className="space-y-1.5">
