@@ -434,6 +434,14 @@ const SupervisorFairView = ({ myTeam }: Props) => {
     return () => { supabase.removeChannel(ch); };
   }, [activeCode, haptics]);
 
+  if (!userId) {
+    return (
+      <div className="p-8 text-center text-sm font-medium text-muted-foreground">
+        Завантаження каси стенду...
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <PaymentSuccessCard toast={toast} />
