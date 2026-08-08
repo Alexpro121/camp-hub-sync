@@ -634,6 +634,7 @@ export type Database = {
           id: string
           is_staff: boolean
           passenger_name: string
+          passenger_role: string
           seat_number: number | null
           shift_id: string | null
           team_number: number
@@ -649,6 +650,7 @@ export type Database = {
           id?: string
           is_staff?: boolean
           passenger_name: string
+          passenger_role?: string
           seat_number?: number | null
           shift_id?: string | null
           team_number: number
@@ -664,6 +666,7 @@ export type Database = {
           id?: string
           is_staff?: boolean
           passenger_name?: string
+          passenger_role?: string
           seat_number?: number | null
           shift_id?: string | null
           team_number?: number
