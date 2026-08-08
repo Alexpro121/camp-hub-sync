@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import FairHowTo from './FairHowTo';
 import {
   FAIR_CODE_LENGTH,
   normalizeFairCode,
