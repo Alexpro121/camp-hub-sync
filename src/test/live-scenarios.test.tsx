@@ -2,6 +2,7 @@
  * Live scenario suite: camera scanner, supervisor realtime HUD,
  * offline IndexedDB sync and the A4 print layout.
  */
+import 'fake-indexeddb/auto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import fs from 'node:fs';
@@ -142,7 +143,9 @@ describe('SCENARIO 4 · Supervisor realtime HUD', () => {
     render(<SupervisorFairView myTeam={5} />);
 
     await waitFor(() => expect(channels.has('supervisor_fair_sup-1')).toBe(true));
-    const before = document.querySelector('svg')?.outerHTML;
+    const codeEl = () => document.querySelector('p.font-mono')?.textContent ?? '';
+    await waitFor(() => expect(codeEl()).toMatch(/^\d{5}$/));
+    const before = codeEl();
 
     await act(async () => {
       channels.get('supervisor_fair_sup-1').emit('FAIR_PAYMENT_SUCCESS', {
@@ -156,8 +159,8 @@ describe('SCENARIO 4 · Supervisor realtime HUD', () => {
     await act(async () => { vi.advanceTimersByTime(2600); });
     await waitFor(() => expect(screen.queryByText('+50 💰')).toBeNull());
 
-    // QR rotated to a fresh tx_id
-    await waitFor(() => expect(document.querySelector('svg')?.outerHTML).not.toBe(before));
+    // QR rotated: a fresh tx_id means a fresh 5-digit code
+    await waitFor(() => expect(codeEl()).not.toBe(before));
     vi.useRealTimers();
   });
 });
