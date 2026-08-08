@@ -5,16 +5,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser } from 'lucide-react';
+import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { CATEGORY_LIST, shiftTime, sentenceCase, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
-import { broadcastScheduleUpdated, dedupeItems } from '@/lib/schedule';
+import { broadcastScheduleUpdated, dedupeItems, shiftISODate } from '@/lib/schedule';
+import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localISO();
+
+const WEEKDAYS = ['неділю', 'понеділок', 'вівторок', 'середу', 'четвер', "п'ятницю", 'суботу'];
+const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+const humanDate = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`);
+  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+};
 
 interface Form {
   id: string | null;
@@ -35,6 +43,9 @@ const AdminScheduleEditor = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
+
+  // Midnight rollover: yesterday → today, live and on app focus.
+  useAutoTodayDate(date, setDate);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -212,6 +223,24 @@ const AdminScheduleEditor = () => {
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[150px] text-xs ml-auto" />
       </div>
 
+      {/* Date navigation */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" className="h-9 flex-1 text-[11px]" onClick={() => setDate(shiftISODate(date, -1))}>
+          <ChevronLeft className="w-4 h-4 mr-1" /> Попередній
+        </Button>
+        <Button
+          size="sm"
+          variant={date === todayISO() ? 'default' : 'secondary'}
+          className="h-9 flex-1 text-[11px] font-bold uppercase"
+          onClick={() => setDate(todayISO())}
+        >
+          <CalendarDays className="w-4 h-4 mr-1" /> Сьогодні
+        </Button>
+        <Button variant="outline" size="sm" className="h-9 flex-1 text-[11px]" onClick={() => setDate(shiftISODate(date, 1))}>
+          Наступний <ChevronRight className="w-4 h-4 ml-1" />
+        </Button>
+      </div>
+
       {schedules.length > 1 && (
         <p className="text-[11px] text-muted-foreground">
           Об’єднано {schedules.length} розкладів цієї дати в одну часову лінію.
@@ -234,7 +263,21 @@ const AdminScheduleEditor = () => {
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : sorted.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Подій на цю дату немає</p>
+        <div className="rounded-2xl border border-dashed border-border/70 bg-surface-1 p-5 text-center space-y-3">
+          <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/50" strokeWidth={1.5} />
+          <p className="text-sm font-semibold">На {humanDate(date)} розклад ще не створено.</p>
+          <div className="space-y-2">
+            <Button
+              className="w-full h-11 text-xs font-bold uppercase"
+              onClick={() => document.getElementById('schedule-text-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              <FileDown className="w-4 h-4 mr-1.5" /> Імпортувати розклад з тексту
+            </Button>
+            <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => setForm(emptyForm())}>
+              <Plus className="w-4 h-4 mr-1.5" /> Додати першу подію вручну
+            </Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
           {sorted.map((i) => (

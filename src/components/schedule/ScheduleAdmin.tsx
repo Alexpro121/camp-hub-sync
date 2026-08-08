@@ -249,7 +249,7 @@ const ScheduleAdmin = () => {
 
   return (
     <div className="space-y-4">
-      <Card className="p-5 bg-gradient-card space-y-3">
+      <Card id="schedule-text-import" className="p-5 bg-gradient-card space-y-3">
         <h3 className="font-bold uppercase text-sm tracking-wide">Створити розклад з тексту</h3>
         <Textarea
           value={raw}

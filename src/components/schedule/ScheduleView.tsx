@@ -17,6 +17,7 @@ import {
   type NormalizedScheduleItem,
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
+import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 
 interface Props {
   myTeam?: number | null;
@@ -28,7 +29,7 @@ interface Props {
   onFairAction?: () => void;
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => localISO();
 
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -56,6 +57,9 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
   const [now, setNow] = useState(new Date());
   const activeDayRef = useRef<HTMLButtonElement>(null);
 
+  // Live midnight rollover: yesterday's tab jumps to today automatically.
+  useAutoTodayDate(activeDay, setActiveDay);
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
@@ -82,7 +86,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       } else {
         setItems([]);
       }
-      setActiveDay((cur) => cur ?? list.find((s) => s.date >= todayISO())?.date ?? list[0]?.date ?? null);
+      setActiveDay((cur) => cur ?? todayISO());
       setLoading(false);
     };
     load();
@@ -104,7 +108,10 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
   }, [activeDay, loading]);
 
   /** One tab per date — several schedule batches of the same day are merged. */
-  const days = useMemo(() => [...new Set(schedules.map((s) => s.date))].sort(), [schedules]);
+  const days = useMemo(
+    () => [...new Set([...schedules.map((s) => s.date), todayISO()])].sort(),
+    [schedules],
+  );
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
     [schedules],
@@ -251,7 +258,14 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       )}
 
       {visibleEvents.length === 0 && (
-        <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Подій немає</p></Card>
+        <Card className="p-6 text-center bg-card/50">
+          <CalendarDays className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">
+            {idsForDate(activeDay).length
+              ? 'Подій на цей день немає'
+              : 'Розклад на цей день готується оргкомітетом табору'}
+          </p>
+        </Card>
       )}
 
       {/* Chronological timeline */}
