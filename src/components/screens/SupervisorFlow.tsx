@@ -25,7 +25,7 @@ import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useFairActive } from '@/hooks/useFairActive';
+import { useFairAccess } from '@/hooks/useFairAccess';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
 import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
 
@@ -48,14 +48,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
-  const fair = useFairActive();
+  const fair = useFairAccess(true);
   const isMobile = useIsMobile();
 
   const tabItems: DockItem[] = [
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
     ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
-    ...(fair.active ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag, accent: 'gold' } as DockItem] : []),
+    ...(fair.hasFairAccess
+      ? [{
+          value: 'fair',
+          label: fair.isLiveFairRunning ? 'Каса відкрита' : 'Ярмарок',
+          icon: ShoppingBag,
+          accent: 'gold',
+          live: fair.isLiveFairRunning,
+        } as DockItem]
+      : []),
     { value: 'coupes', label: 'Потяг', icon: Train },
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
@@ -269,7 +277,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           </TabsContent>
         )}
         <TabsContent value="fair" className="mt-3 animate-fade-in">
-          <SupervisorFairView myTeam={authedTeam} />
+          <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
         </TabsContent>
         <TabsContent value="coupes" className="mt-3 animate-fade-in">
           <div className="space-y-3">
