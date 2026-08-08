@@ -480,19 +480,18 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
 
         {/* Scanner viewport */}
         {(stage === 'scanning' || stage === 'processing') && (
-          <div className={`scanner-viewport relative mx-auto overflow-hidden rounded-3xl bg-black ${stage === 'processing' ? 'is-collapsing' : ''}`}>
-            <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
+          <div
+            ref={viewportRef}
+            className={`scanner-viewport relative mx-auto overflow-hidden rounded-3xl bg-black ${stage === 'processing' ? 'is-collapsing is-locked' : ''}`}
+          >
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+            />
             <canvas ref={frameRef} className="hidden" />
-            {box && (
-              <span
-                className="scan-frame"
-                style={{
-                  transform: `translate3d(${box.x}px, ${box.y}px, 0)`,
-                  width: `${box.w}px`,
-                  height: `${box.h}px`,
-                }}
-              />
-            )}
+            <span ref={boxRef} className="scan-frame" />
             <span className="scan-corner tl" /><span className="scan-corner tr" />
             <span className="scan-corner bl" /><span className="scan-corner br" />
             {stage === 'scanning' && <span className="scan-laser" />}
