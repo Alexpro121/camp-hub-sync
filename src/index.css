@@ -373,7 +373,15 @@
     height: 28px;
     border: 3px solid rgba(255, 255, 255, 0.9);
     border-radius: 4px;
+    will-change: transform, opacity;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
   }
+  /* QR captured: the corners tuck inward and the laser fades out. */
+  .scanner-viewport.is-locked .scan-corner.tl { transform: translate3d(14px, 14px, 0) scale(0.82); }
+  .scanner-viewport.is-locked .scan-corner.tr { transform: translate3d(-14px, 14px, 0) scale(0.82); }
+  .scanner-viewport.is-locked .scan-corner.bl { transform: translate3d(14px, -14px, 0) scale(0.82); }
+  .scanner-viewport.is-locked .scan-corner.br { transform: translate3d(-14px, -14px, 0) scale(0.82); }
+  .scanner-viewport.is-locked .scan-laser { opacity: 0; transition: opacity 0.2s ease; }
 
   /* Telegram-style bounding frame that snaps onto the detected QR geometry. */
   .scan-frame {
@@ -383,10 +391,13 @@
     border: 2.5px solid rgba(52, 199, 89, 0.95);
     border-radius: 12px;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28), 0 0 18px rgba(52, 199, 89, 0.55);
-    transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-      width 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-      height 0.18s cubic-bezier(0.32, 0.72, 0, 1);
-    will-change: transform, width, height;
+    opacity: 0;
+    transition: transform 0.12s cubic-bezier(0.16, 1, 0.3, 1),
+      width 0.12s cubic-bezier(0.16, 1, 0.3, 1),
+      height 0.12s cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 0.2s ease;
+    will-change: transform, width, height, opacity;
+    backface-visibility: hidden;
     pointer-events: none;
     z-index: 3;
   }
