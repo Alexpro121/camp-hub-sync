@@ -106,12 +106,16 @@ export const ongoingEvents = (events: NormalizedScheduleItem[], now: Date = new 
 export const SCHEDULE_CHANNEL = 'schedule-live';
 export const SCHEDULE_UPDATED = 'SCHEDULE_UPDATED';
 
-/** Notify all clients that the schedule changed (admin edits). */
+/** Notify all clients that the schedule changed (admin edits).
+ *  Also pings the fair status channel so the "Ярмарок" tab appears instantly. */
 export const broadcastScheduleUpdated = async (payload: Record<string, unknown> = {}) => {
   const ch = supabase.channel(SCHEDULE_CHANNEL);
   await ch.subscribe();
   await ch.send({ type: 'broadcast', event: SCHEDULE_UPDATED, payload });
-  setTimeout(() => supabase.removeChannel(ch), 500);
+  const fair = supabase.channel('fair_global_status');
+  await fair.subscribe();
+  await fair.send({ type: 'broadcast', event: 'FAIR_STATUS_UPDATED', payload });
+  setTimeout(() => { supabase.removeChannel(ch); supabase.removeChannel(fair); }, 500);
 };
 
 /** Key used to detect duplicates across merged schedules of the same day. */
