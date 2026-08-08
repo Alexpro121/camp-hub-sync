@@ -188,16 +188,16 @@ const ScheduleAdmin = () => {
         .single();
       if (error || !sch) throw error;
 
-      // Merge with what already exists for this date: identical events (start + title)
-      // are updated in place instead of being duplicated on the timeline.
+      // Fresh import wins: wipe every event previously stored for this date so the
+      // same items ("Швидка перекличка", "Вихід на активність") can never duplicate.
       const { data: sameDay } = await supabase.from('schedules').select('id').eq('date', date);
       const dayIds = (sameDay || []).map((s: { id: string }) => s.id).filter((id) => id !== sch.id);
-      let byKey = new Map<string, ScheduleItem>();
       if (dayIds.length) {
-        const { data: prevItems } = await supabase.from('schedule_items').select('*').in('schedule_id', dayIds);
-        byKey = new Map(((prevItems || []) as unknown as ScheduleItem[]).map((i) => [itemKey(i), i]));
+        const { error: delErr } = await supabase.from('schedule_items').delete().in('schedule_id', dayIds);
+        if (delErr) throw delErr;
       }
 
+      const seen = new Set<string>();
       const all = draft.map((it, i) => ({
         schedule_id: sch.id,
         time_start: it.time_start,
@@ -210,17 +210,13 @@ const ScheduleAdmin = () => {
         has_sub_slots: it.has_sub_slots && it.sub_slots.length > 0,
         sub_slots: it.sub_slots as unknown as any,
       }));
-      const rows: typeof all = [];
-      for (const row of all) {
-        const dup = byKey.get(itemKey(row));
-        if (dup) {
-          const { schedule_id: _ignored, ...values } = row;
-          const { error: upErr } = await supabase.from('schedule_items').update(values).eq('id', dup.id);
-          if (upErr) throw upErr;
-        } else {
-          rows.push(row);
-        }
-      }
+      // Drop duplicates inside the draft itself as well.
+      const rows = all.filter((row) => {
+        const k = itemKey(row as unknown as ScheduleItem);
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
       if (rows.length) {
         const { error: itErr } = await supabase.from('schedule_items').insert(rows);
         if (itErr) throw itErr;
