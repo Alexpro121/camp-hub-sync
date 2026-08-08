@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
 import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCategory } from '@/lib/schedule-parser-fallback';
-import { CATEGORY_LIST, catMeta, shiftTime } from '@/lib/scheduleCategories';
+import { CATEGORY_LIST, catMeta, shiftTime, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
 import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
 import { pushIsland } from '@/lib/islandBus';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
@@ -303,7 +303,13 @@ const ScheduleAdmin = () => {
                     placeholder="09:00 або 9.00"
                     className="h-9 w-[86px] text-xs tabular-nums"
                   />
-                  <Input value={it.time_end ?? ''} onChange={(e) => patch(i, { time_end: e.target.value || null })} placeholder="10:00" className="h-9 w-[86px] text-xs tabular-nums" />
+                  <Input
+                    value={it.time_end ?? ''}
+                    onChange={(e) => patch(i, { time_end: e.target.value || null })}
+                    onBlur={(e) => patch(i, { time_end: normalizeTime(e.target.value) ?? it.time_end })}
+                    placeholder="10:00 або 10.00"
+                    className="h-9 w-[86px] text-xs tabular-nums"
+                  />
                   <Button size="icon" variant="ghost" className="h-9 w-9 ml-auto shrink-0" onClick={() => setDraft((p) => p!.filter((_, k) => k !== i))}>
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
