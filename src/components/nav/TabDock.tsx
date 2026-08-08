@@ -9,6 +9,8 @@ export interface DockItem {
   icon: LucideIcon;
   badge?: number;
   isNew?: boolean;
+  /** Highlights a live, time-critical tab (e.g. the fair cash register). */
+  accent?: 'gold';
 }
 
 interface Props {
@@ -49,7 +51,13 @@ const TabDock = ({ items, value, onChange }: Props) => {
             : 'text-muted-foreground border border-transparent hover:text-foreground hover:bg-muted/40',
         )}
       >
-        <Icon className={compact ? 'w-[20px] h-[20px]' : 'w-[18px] h-[18px]'} strokeWidth={1.9} />
+        <Icon
+          className={cn(
+            compact ? 'w-[20px] h-[20px]' : 'w-[18px] h-[18px]',
+            item.accent === 'gold' && 'text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.7)]',
+          )}
+          strokeWidth={1.9}
+        />
         {!compact && <span className="truncate">{item.label}</span>}
         {item.isNew && (
           <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-warning animate-pulse" />
