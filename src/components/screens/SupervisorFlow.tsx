@@ -27,6 +27,7 @@ import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFairActive } from '@/hooks/useFairActive';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
+import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
 
 interface Props {
   onBack: () => void;
@@ -67,11 +68,13 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   // Restore session (only if a real backend session is still valid)
   useEffect(() => {
     const restore = async () => {
-      const saved = localStorage.getItem('helpsuprov:supervisor-team');
+      const saved = localStorage.getItem('helpsuprov:supervisor-team')
+        ?? (getSavedRole() === 'supervisor' && getSavedTeam() != null ? String(getSavedTeam()) : null);
       if (!saved) return;
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
         localStorage.removeItem('helpsuprov:supervisor-team');
+        clearSavedSession();
         return;
       }
       setAuthedTeam(parseInt(saved, 10));
@@ -136,6 +139,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
     if (data.role === 'admin') {
       haptics.notification('success');
+      saveSession('admin');
       setShowAdminAnim(true);
       setTimeout(() => onAdminUnlock(), 1800);
       return;
@@ -143,6 +147,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
     setAuthedTeam(teamNum);
     localStorage.setItem('helpsuprov:supervisor-team', String(teamNum));
+    saveSession('supervisor', { teamNumber: teamNum });
     haptics.notification('success');
     toast.success(`Вітаємо, супровід команди #${teamNum}`);
     setLoading(false);
@@ -151,6 +156,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const logout = async () => {
     setAuthedTeam(null);
     localStorage.removeItem('helpsuprov:supervisor-team');
+    clearSavedSession();
     await supabase.auth.signOut();
     onBack();
   };
