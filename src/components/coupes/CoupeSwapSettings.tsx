@@ -48,8 +48,12 @@ const CoupeSwapSettings = ({ myTeam }: { myTeam: number | null }) => {
     setBusy(key);
     const { error } = await update({ [key]: next });
     setBusy(null);
-    if (error) { toast.error(error.message); return; }
-    toast.success(next ? 'Увімкнено' : 'Вимкнено');
+    if (error) {
+      toast.error('Не вдалося зберегти налаштування', { description: error.message });
+      return;
+    }
+    const label = key === 'allow_coupe_swaps' ? 'Пропозиції замін купе' : 'Автопідтвердження замін';
+    toast.success(`${label} ${next ? 'увімкнено' : 'вимкнено'}`);
   };
 
   const decide = async (id: string, approve: boolean) => {
