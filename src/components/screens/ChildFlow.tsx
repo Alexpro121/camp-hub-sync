@@ -306,7 +306,9 @@ const ChildFlow = ({ onBack }: Props) => {
                   <div className="border-t border-border/40 divide-y divide-border/30 max-h-80 overflow-y-auto scrollbar-thin">
                     {rawEntries.map(([k, v]) => (
                       <div key={k} className="flex items-start gap-3 p-3">
-                        <span className="text-[11px] text-muted-foreground min-w-[40%] truncate">{k}</span>
+                        <span className="text-[11px] text-muted-foreground min-w-[40%] truncate">
+                          {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
+                        </span>
                         <span className="text-xs break-words flex-1">{String(v)}</span>
                       </div>
                     ))}
