@@ -23,6 +23,7 @@ import { useFairActive } from '@/hooks/useFairActive';
 import ChildFairCard from '@/components/fair/ChildFairCard';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { clearSavedSession, getSavedChildId, getSavedRole, saveSession } from '@/lib/session';
 
 interface Props { onBack: () => void; }
 
