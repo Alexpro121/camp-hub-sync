@@ -44,7 +44,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [activeTab, setActiveTab] = useState('teams');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
-  const [exportButtonState, setExportButtonState] = useState<'visible' | 'hiding' | 'hidden'>('visible');
+  
   const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
