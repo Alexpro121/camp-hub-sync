@@ -301,7 +301,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         </Button>
         <Button
           onClick={handleExport}
-          className="h-12 w-12 rounded-full shadow-card p-0 bg-secondary text-foreground hover:bg-secondary/80 tap hover:scale-110 transition-spring"
+          className="export-button-auto-hide h-12 w-12 rounded-full shadow-card p-0 bg-secondary text-foreground hover:bg-secondary/80 tap hover:scale-110 transition-spring"
           title="Експорт в Excel"
         >
           <Download className="w-5 h-5" />
