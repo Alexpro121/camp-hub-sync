@@ -26,6 +26,7 @@ import { useDynamicIsland } from '@/context/DynamicIslandContext';
 
 interface Props { onBack: () => void; }
 
+
 interface Candidate {
   id: string;
   full_name: string;
