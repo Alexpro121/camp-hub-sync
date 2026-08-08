@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { clearSavedSession, saveSession } from '@/lib/session';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,11 +35,19 @@ const SHIFT_LABELS: Record<ShiftType, string> = {
 };
 
 const AdminFlow = ({ onBack }: Props) => {
+  useEffect(() => { saveSession('admin'); }, []);
+
+  const handleExit = async () => {
+    clearSavedSession();
+    await supabase.auth.signOut();
+    onBack();
+  };
+
   return (
     <div className="min-h-screen max-w-3xl mx-auto pb-16 safe-bottom">
       <div className="app-bar px-4 py-3 safe-top border-b border-border/40">
         <div className="flex items-center justify-between">
-          <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
+          <button onClick={handleExit} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
             <ArrowLeft className="w-4 h-4" /> Вийти
           </button>
           <div className="flex items-center gap-2">
