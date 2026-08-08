@@ -32,6 +32,7 @@ export interface IslandPayload {
   myTime?: string | null;
   myTeams?: number[] | null;
   phase?: 'pre' | 'start';
+  category?: string | null;
 }
 
 export interface EventAlert {
@@ -40,6 +41,7 @@ export interface EventAlert {
   myTime?: string | null;
   myTeams?: number[] | null;
   phase?: 'pre' | 'start';
+  category?: string | null;
 }
 
 interface IslandApi {

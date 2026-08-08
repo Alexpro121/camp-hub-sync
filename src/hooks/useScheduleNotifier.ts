@@ -24,6 +24,7 @@ interface Alert {
   range: string;
   myTime: string | null;
   myTeams: number[] | null;
+  category: string | null;
 }
 
 /**
@@ -83,6 +84,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
           range: `${fromMinutes(start)} – ${fromMinutes(end)}`,
           myTime: slotMin != null ? fromMinutes(slotMin) : null,
           myTeams: slot?.teams ?? null,
+          category: i.category ?? null,
         });
       });
       setAlerts(built);
@@ -125,6 +127,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
               myTime: ev.myTime,
               myTeams: ev.myTeams,
               phase: c.kind,
+              category: ev.category,
             });
           }
         }
