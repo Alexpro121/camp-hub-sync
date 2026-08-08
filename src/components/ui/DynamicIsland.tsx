@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useDynamicIsland, type BroadcastColor } from '@/context/DynamicIslandContext';
+import { getEventCategoryIcon } from '@/lib/eventIcons';
 
 const BASE =
   'island-container bg-black/95 text-white overflow-hidden backdrop-blur-2xl border flex items-center justify-center relative';
@@ -68,6 +69,7 @@ const DynamicIsland = () => {
   const teamsLabel = payload.myTeams?.length
     ? `(Команд${payload.myTeams.length > 1 ? 'и' : 'а'} ${payload.myTeams.join(' і ')})`
     : '';
+  const EventIcon = getEventCategoryIcon(payload.eventTitle ?? '', payload.category);
 
   return (
     <div className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none safe-top top-0">
@@ -189,14 +191,17 @@ const DynamicIsland = () => {
           {state === 'EVENT_ALERT' && !expanded && (
             <div className="w-full flex items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2 min-w-0">
-                <Utensils className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <EventIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span className="font-semibold text-white truncate">
                   {payload.phase === 'pre' ? 'Скоро' : 'Зараз'}: {payload.eventTitle}
+                  {payload.myTime && (
+                    <span className="text-amber-300/90"> (Твій час: {payload.myTime})</span>
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="font-mono text-[11px] text-amber-300 tabular-nums">
-                  {payload.myTime ?? payload.range}
+                  {payload.range}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-white/50" />
               </div>
@@ -206,12 +211,15 @@ const DynamicIsland = () => {
           {state === 'EVENT_ALERT' && expanded && (
             <div className="w-full h-full flex flex-col gap-2 py-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-start gap-2">
+                  <EventIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="min-w-0">
                   <div className="text-[9px] font-bold tracking-[0.18em] text-amber-400/80 uppercase">
                     {payload.phase === 'pre' ? 'За 5 хвилин' : 'Починається'}
                   </div>
                   <div className="text-sm font-semibold text-white break-words leading-snug">
                     {payload.eventTitle}
+                  </div>
                   </div>
                 </div>
                 <button
@@ -222,15 +230,23 @@ const DynamicIsland = () => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 font-mono text-xl font-semibold tabular-nums text-white">
-                <Clock className="w-4 h-4 text-white/50" />
-                {payload.range}
-              </div>
-
-              {payload.myTime && (
-                <div className="rounded-xl bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 text-[11px] text-amber-200">
-                  Твій час: <span className="font-mono font-semibold">{payload.myTime}</span>
-                  {teamsLabel && <span className="text-amber-300/70"> {teamsLabel}</span>}
+              {payload.myTime ? (
+                <>
+                  <div className="flex items-baseline gap-2 font-mono text-2xl font-bold tabular-nums text-amber-300">
+                    <Clock className="h-4 w-4 self-center text-amber-400/70" />
+                    Твій вихід: {payload.myTime}
+                    {teamsLabel && (
+                      <span className="font-sans text-[11px] font-medium text-amber-300/70">{teamsLabel}</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-white/60">
+                    Загальний час події: <span className="font-mono tabular-nums text-white/85">{payload.range}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 font-mono text-xl font-semibold tabular-nums text-white">
+                  <Clock className="w-4 h-4 text-white/50" />
+                  {payload.range}
                 </div>
               )}
             </div>
