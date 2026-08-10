@@ -1,7 +1,7 @@
 import { parseScheduleText, extractDate, extractTeams, type ParsedScheduleItem } from './scheduleParser';
 import { toMinutes } from './scheduleCategories';
 
-export type ScheduleCategory = 'sports' | 'meal' | 'gathering' | 'entertainment' | 'transfer' | 'general';
+export type ScheduleCategory = 'sports' | 'meal' | 'gathering' | 'entertainment' | 'transfer' | 'fair' | 'general';
 
 export interface SubSlot {
   time: string;
@@ -18,6 +18,7 @@ export const TIME_RE = /(\d{1,2}[:.]\d{2})\s*(?:(?:-|–|—|до)\s*(\d{1,2}[:.
 export const TEAM_RE = /(\d+)(?:\s*,|\s*і|\s*та)*\s*команда/g;
 
 const RULES: Array<[ScheduleCategory, RegExp]> = [
+  ['fair', /ярмарок|ярмарк|fair|market/i],
   ['meal', /сніданок|обід|вечер|полуден|їж|харчув/i],
   ['sports', /йога|зарядк|спорт|футбол|волейбол|скеледром|басейн|біг|естафет/i],
   ['gathering', /збір|лінійк|переклич|шикув|нарад/i],
