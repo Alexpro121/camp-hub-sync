@@ -130,6 +130,24 @@ export const dedupeItems = <T extends { time_start?: string | null; title?: stri
 };
 
 /**
+ * Multi-schedule overlay: camp-wide events (no shift) + the shift's own program.
+ * Duplicates (same start time + title) collapse, shift-specific rows win.
+ */
+export const mergeScheduleLayers = (
+  campWide: ScheduleItem[],
+  shiftSpecific: ScheduleItem[],
+): ScheduleItem[] =>
+  dedupeItems([...campWide, ...shiftSpecific]).sort(
+    (a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index,
+  );
+
+/** Keeps camp-wide rows (empty target_teams) plus rows aimed at this team. */
+export const filterItemsForTeam = (items: ScheduleItem[], team: number | null): ScheduleItem[] =>
+  team == null
+    ? items
+    : items.filter((i) => !i.target_teams?.length || i.target_teams.includes(team));
+
+/**
  * All published schedule items for one date — merged across EVERY schedule
  * batch uploaded for that day (morning + evening + extra), sorted by start time.
  */
@@ -141,7 +159,8 @@ export const getScheduleForDate = async (
   const publishedOnly = opts.publishedOnly !== false;
   let q = supabase.from('schedules').select('id').eq('date', date);
   if (publishedOnly) q = q.eq('is_published', true);
-  if (shiftId) q = q.eq('shift_id', shiftId);
+  // Overlay: the shift's own program PLUS camp-wide schedules (shift_id IS NULL).
+  if (shiftId) q = q.or(`shift_id.eq.${shiftId},shift_id.is.null`);
   const { data: sch } = await q;
   const ids = (sch || []).map((s: { id: string }) => s.id);
   if (!ids.length) return [];
