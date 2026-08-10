@@ -33,6 +33,7 @@ export interface IslandPayload {
   myTeams?: number[] | null;
   phase?: 'pre' | 'start';
   category?: string | null;
+  location?: string | null;
   /** Optional semantic hint for icon selection. */
   type?: 'TRAIN' | 'COUPES_SWAP' | 'COINS' | 'GENERIC';
   isSchedule?: boolean;
@@ -46,6 +47,7 @@ export interface EventAlert {
   myTeams?: number[] | null;
   phase?: 'pre' | 'start';
   category?: string | null;
+  location?: string | null;
 }
 
 interface IslandApi {
