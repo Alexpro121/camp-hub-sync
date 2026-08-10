@@ -276,6 +276,28 @@ const AdminScheduleEditor = () => {
         </p>
       )}
 
+      {schedules.length > 0 && (
+        <div className={`rounded-xl border p-3 space-y-2 ${hasDraft ? 'border-amber-400/40 bg-amber-400/10' : 'border-border/60 bg-surface-1'}`}>
+          <div className="flex items-center gap-2">
+            {hasDraft ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4 text-primary" />}
+            <p className="text-[11px] font-semibold">
+              {hasDraft
+                ? 'Чернетка — діти й супровід поки не бачать цей розклад.'
+                : 'Розклад опубліковано і видимий для всіх.'}
+            </p>
+          </div>
+          {hasDraft ? (
+            <Button disabled={busy} onClick={publishDrafts} className="w-full h-10 text-xs font-bold uppercase">
+              <Eye className="w-4 h-4 mr-1.5" /> Опублікувати розклад
+            </Button>
+          ) : (
+            <Button variant="outline" disabled={busy} onClick={unpublishAll} className="w-full h-10 text-xs font-bold uppercase">
+              <EyeOff className="w-4 h-4 mr-1.5" /> Повернути в чернетку
+            </Button>
+          )}
+        </div>
+      )}
+
       <Button onClick={() => setForm(emptyForm())} className="w-full h-10 text-xs font-bold uppercase">
         <Plus className="w-4 h-4 mr-1.5" /> Додати подію
       </Button>
