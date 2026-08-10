@@ -11,6 +11,7 @@ import { Trash2, Wand2, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, 
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
+import { parseScheduleSmartTwoPhase } from '@/lib/schedule-chunk-parser';
 import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCategory } from '@/lib/schedule-parser-fallback';
 import { CATEGORY_LIST, catMeta, shiftTime, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
 import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
@@ -73,9 +74,11 @@ const ScheduleAdmin = () => {
     setSource(null);
     island.showLoader();
     try {
-      const { data, error } = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText: raw } });
+      const data = await parseScheduleSmartTwoPhase(raw);
+      const error = null as any;
+      const aiOk = data.success && (data.source === 'ai' || data.source === 'groq_two_phase');
       const items = (data?.items ?? []) as Array<AiScheduleItem & { date?: string | null }>;
-      if (error || data?.error || data?.source !== 'ai' || !items.length) {
+      if (data?.error || !aiOk || !items.length) {
         const info: AiErrorInfo = {
           ...(data?.error ?? {}),
           reason: data?.reason ?? (error ? 'invoke_error' : 'empty_result'),
@@ -92,7 +95,7 @@ const ScheduleAdmin = () => {
         island.showError('Помилка ШІ-розпізнавання', 'Натисніть для деталей', `${info.code} · ${info.message}`);
         if (!silent) setErrorOpen(true);
       }
-      if (error || data?.source !== 'ai' || !items.length) {
+      if (!aiOk || !items.length) {
         applyLocal(data?.reason);
         return;
       }
