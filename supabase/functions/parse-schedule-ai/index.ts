@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       const { data: payload, keyUsedIndex } = await fetchGroqWithFallback({
         model: MODEL,
         temperature: 0.1,
-        max_tokens: 8192,
+        max_tokens: 3500,
         stream: false,
         response_format: { type: 'json_object' },
         messages: [
