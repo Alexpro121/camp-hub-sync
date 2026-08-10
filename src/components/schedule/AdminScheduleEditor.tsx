@@ -408,6 +408,8 @@ const AdminScheduleEditor = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AdminAiStudioImportModal open={aiOpen} date={date} onOpenChange={setAiOpen} onImported={load} />
     </Card>
   );
 };
