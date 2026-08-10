@@ -279,11 +279,8 @@ const AdminScheduleEditor = () => {
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/50" strokeWidth={1.5} />
           <p className="text-sm font-semibold">На {humanDate(date)} розклад ще не створено.</p>
           <div className="space-y-2">
-            <Button
-              className="w-full h-11 text-xs font-bold uppercase"
-              onClick={() => document.getElementById('schedule-text-import')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            >
-              <FileDown className="w-4 h-4 mr-1.5" /> Імпортувати розклад з тексту
+            <Button className="w-full h-11 text-xs font-bold uppercase" onClick={() => setAiOpen(true)}>
+              <FileDown className="w-4 h-4 mr-1.5" /> Імпорт розкладу через AI Studio
             </Button>
             <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => setForm(emptyForm())}>
               <Plus className="w-4 h-4 mr-1.5" /> Додати першу подію вручну

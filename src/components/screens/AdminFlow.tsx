@@ -21,7 +21,6 @@ import TeamTagInput from '@/components/admin/TeamTagInput';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
-import ScheduleAdmin from '@/components/schedule/ScheduleAdmin';
 import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
@@ -72,7 +71,7 @@ const AdminFlow = ({ onBack }: Props) => {
         </div>
 
         <TabsContent value="shifts" className="mt-3"><ShiftsTab /></TabsContent>
-        <TabsContent value="schedule" className="mt-3 space-y-4"><AdminScheduleEditor /><ScheduleAdmin /></TabsContent>
+        <TabsContent value="schedule" className="mt-3 space-y-4"><AdminScheduleEditor /></TabsContent>
         <TabsContent value="talent" className="mt-3"><TalentAdmin /></TabsContent>
         <TabsContent value="coupes" className="mt-3"><TrainTab /></TabsContent>
         <TabsContent value="fair" className="mt-3"><AdminPrintQRCodes /></TabsContent>
