@@ -14,11 +14,12 @@ const FAIR_RE = /(ярмарок|ярмарка|ярмарки|ярмарков|
 export interface FairLike {
   title?: string | null;
   description?: string | null;
+  category?: string | null;
 }
 
-/** True when the row's title/description names a fair. */
+/** True when the row is explicitly categorised as a fair, or names one. */
 export const isFairEvent = (i: FairLike | null | undefined): boolean =>
-  !!i && FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`);
+  !!i && (i.category === 'fair' || FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`));
 
 /** Alias used by access hooks: a raw schedule row that represents a fair. */
 export const isFairScheduleItem = isFairEvent;

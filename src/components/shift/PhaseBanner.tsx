@@ -43,10 +43,10 @@ const PhaseBanner = ({ status, teamNumber, compact }: Props) => {
           <p className="text-sm font-semibold mt-0.5 break-words">{status.phaseTitle}</p>
           {status.currentPhase === 'PREPARING' ? (
             <p className="text-xs mt-1 opacity-90">
-              До початку вашого заїзду в Буковель залишилося:{' '}
+              Твій заїзд розпочнеться <span className="font-bold tabular-nums">{arrival}</span>. Залишилося{' '}
               <span className="font-bold tabular-nums">
                 {status.daysUntilStart} {pluralDays(status.daysUntilStart)}
-              </span>
+              </span>!
             </p>
           ) : (
             <p className="text-xs mt-1 opacity-80 tabular-nums">

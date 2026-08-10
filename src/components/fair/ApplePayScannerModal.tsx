@@ -359,7 +359,9 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
           .catch(() => navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: 'environment' } },
             audio: false,
-          }));
+          }))
+          // Stage B: any available video device (front camera, webcam, OBS...).
+          .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         // Second chance at continuous focus for browsers that ignore it in getUserMedia.
