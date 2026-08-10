@@ -256,6 +256,14 @@ const AdminScheduleEditor = () => {
       </Button>
 
       <Button
+        variant="secondary"
+        onClick={() => setAiOpen(true)}
+        className="w-full h-10 text-xs font-bold uppercase"
+      >
+        <Sparkles className="w-4 h-4 mr-1.5" /> Імпорт через AI Studio (JSON)
+      </Button>
+
+      <Button
         variant="outline"
         disabled={busy || !sorted.length}
         onClick={cleanDuplicates}
@@ -294,6 +302,7 @@ const AdminScheduleEditor = () => {
                 <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setForm({
                   id: i.id,
                   title: i.title,
+                  location: i.location || '',
                   time_start: i.time_start || '',
                   time_end: i.time_end || '',
                   category: i.category || 'general',
@@ -329,6 +338,12 @@ const AdminScheduleEditor = () => {
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва</Label>
                 <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Сніданок" className="h-10 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> Локація (необов’язково)
+                </Label>
+                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Велика зала" className="h-10 text-sm" />
               </div>
               <div className="flex gap-2">
                 <div className="space-y-1.5">
