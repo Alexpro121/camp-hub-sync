@@ -160,12 +160,19 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
+    // Auth is required for AI usage, but a missing/expired session must NOT blow up the UI:
+    // answer 200 with a local_fallback marker so the client parses the schedule offline.
     const auth = req.headers.get('Authorization') ?? '';
     const token = auth.replace(/^Bearer\s+/i, '');
-    if (!token) return json({ error: 'unauthorized' }, 401);
-    const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-    const { data: userRes } = await pub.auth.getUser(token);
-    if (!userRes?.user) return json({ error: 'unauthorized' }, 401);
+    let authorized = false;
+    if (token && token !== ANON_KEY) {
+      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      const { data: userRes } = await pub.auth.getUser(token);
+      authorized = Boolean(userRes?.user);
+    }
+    if (!authorized) {
+      return json({ source: 'local_fallback', reason: 'unauthorized', items: [] }, 200);
+    }
 
     const parsedBody = BodySchema.safeParse(await req.json());
     if (!parsedBody.success) return json({ error: 'invalid_body' }, 400);

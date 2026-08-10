@@ -8,9 +8,17 @@ export interface ChunkParseResult {
   error?: any;
 }
 
+/** Ensures a valid access token before hitting the function (expired sessions caused 401s). */
+async function ensureSession() {
+  const { data } = await supabase.auth.getSession();
+  if (data.session) return;
+  try { await supabase.auth.refreshSession(); } catch { /* stays anonymous → local fallback */ }
+}
+
 /** Single-call edge invocation. Never throws — always resolves to a result shape. */
 async function callScheduleEdgeFunction(rawText: string): Promise<ChunkParseResult> {
   try {
+    await ensureSession();
     const res = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText } });
     const data: any = res.data;
     if (data && Array.isArray(data.items)) {
