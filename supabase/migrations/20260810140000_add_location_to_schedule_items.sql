@@ -1,0 +1,5 @@
+-- Додавання поля локації проведення події
+ALTER TABLE public.schedule_items
+ADD COLUMN IF NOT EXISTS location TEXT DEFAULT NULL;
+
+COMMENT ON COLUMN public.schedule_items.location IS 'Локація проведення події (наприклад: Велика зала, Зал АВ, Басейн)';

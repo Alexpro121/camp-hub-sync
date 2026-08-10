@@ -108,6 +108,12 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
         {fairLive ? 'Розпочалася Ярмарка!' : sentenceCase(item.title)}
       </h3>
 
+      {item.location && (
+        <span className="mt-1 flex items-center gap-1 text-xs font-medium text-slate-400">
+          📍 {item.location}
+        </span>
+      )}
+
       {fairLive && (
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.35)]">
           🛍️ Касу відкрито

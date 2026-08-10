@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
+import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft, ChevronRight, FileDown, Sparkles, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
@@ -14,6 +14,7 @@ import { broadcastScheduleUpdated, dedupeItems, shiftISODate } from '@/lib/sched
 import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
+import AdminAiStudioImportModal from './AdminAiStudioImportModal';
 
 const todayISO = () => localISO();
 
@@ -27,13 +28,14 @@ const humanDate = (iso: string) => {
 interface Form {
   id: string | null;
   title: string;
+  location: string;
   time_start: string;
   time_end: string;
   category: string;
   target_teams: number[];
 }
 
-const emptyForm = (): Form => ({ id: null, title: '', time_start: '', time_end: '', category: 'general', target_teams: [] });
+const emptyForm = (): Form => ({ id: null, title: '', location: '', time_start: '', time_end: '', category: 'general', target_teams: [] });
 
 const AdminScheduleEditor = () => {
   const TEAMS = useAllTeams();
@@ -43,6 +45,7 @@ const AdminScheduleEditor = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // Midnight rollover: yesterday → today, live and on app focus.
   useAutoTodayDate(date, setDate);
@@ -104,6 +107,7 @@ const AdminScheduleEditor = () => {
       await ensurePublished();
       const payload = {
         title: form.title.trim(),
+        location: form.location.trim() || null,
         // Any input format is accepted: "14.25", "14:25", "1425", "14.25 - 14.56".
         time_start: normalizeTime(form.time_start) || null,
         time_end: normalizeTime(form.time_end) || null,
@@ -252,6 +256,14 @@ const AdminScheduleEditor = () => {
       </Button>
 
       <Button
+        variant="secondary"
+        onClick={() => setAiOpen(true)}
+        className="w-full h-10 text-xs font-bold uppercase"
+      >
+        <Sparkles className="w-4 h-4 mr-1.5" /> Імпорт через AI Studio (JSON)
+      </Button>
+
+      <Button
         variant="outline"
         disabled={busy || !sorted.length}
         onClick={cleanDuplicates}
@@ -290,6 +302,7 @@ const AdminScheduleEditor = () => {
                 <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={() => setForm({
                   id: i.id,
                   title: i.title,
+                  location: i.location || '',
                   time_start: i.time_start || '',
                   time_end: i.time_end || '',
                   category: i.category || 'general',
@@ -325,6 +338,12 @@ const AdminScheduleEditor = () => {
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва</Label>
                 <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Сніданок" className="h-10 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> Локація (необов’язково)
+                </Label>
+                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Велика зала" className="h-10 text-sm" />
               </div>
               <div className="flex gap-2">
                 <div className="space-y-1.5">
@@ -389,6 +408,8 @@ const AdminScheduleEditor = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AdminAiStudioImportModal open={aiOpen} date={date} onOpenChange={setAiOpen} onImported={load} />
     </Card>
   );
 };

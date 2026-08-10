@@ -100,6 +100,7 @@ export interface ScheduleItem {
   time_end: string | null;
   title: string;
   description: string | null;
+  location?: string | null;
   target_teams: number[];
   order_index: number;
   category?: string | null;

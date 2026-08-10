@@ -23,6 +23,7 @@ interface Alert {
   myTime: string | null;
   myTeams: number[] | null;
   category: string | null;
+  location: string | null;
   isFair: boolean;
 }
 
@@ -86,6 +87,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
           myTime: slotMin != null ? fromMinutes(slotMin) : null,
           myTeams: slot?.teams ?? null,
           category: i.category ?? null,
+          location: i.location ?? null,
           isFair: FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`),
         });
       });
@@ -131,6 +133,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
               myTeams: ev.myTeams,
               phase: c.kind,
               category: ev.category,
+              location: ev.location,
             });
           }
         }
