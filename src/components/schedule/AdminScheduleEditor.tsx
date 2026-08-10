@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft, ChevronRight, FileDown, Sparkles, MapPin } from 'lucide-react';
+import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft, ChevronRight, FileDown, Sparkles, MapPin, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
@@ -72,21 +72,48 @@ const AdminScheduleEditor = () => {
     [items],
   );
 
-  /** Make sure every schedule batch of this date is visible to children and staff. */
-  const ensurePublished = async () => {
+  const hasDraft = schedules.some((s) => !s.is_published);
+
+  /** Publish every draft batch of this date so children and staff can see it. */
+  const publishDrafts = async () => {
     const hidden = schedules.filter((s) => !s.is_published).map((s) => s.id);
     if (!hidden.length) return;
-    await supabase.from('schedules').update({ is_published: true }).in('id', hidden);
-    setSchedules((p) => p.map((s) => (hidden.includes(s.id) ? { ...s, is_published: true } : s)));
+    setBusy(true);
+    try {
+      const { error } = await supabase.from('schedules').update({ is_published: true }).in('id', hidden);
+      if (error) throw error;
+      setSchedules((p) => p.map((s) => (hidden.includes(s.id) ? { ...s, is_published: true } : s)));
+      await broadcastScheduleUpdated({ date, action: 'publish' });
+      toast.success('Розклад опубліковано');
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка публікації');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Hide the day again (back to draft). */
+  const unpublishAll = async () => {
+    const shown = schedules.filter((s) => s.is_published).map((s) => s.id);
+    if (!shown.length) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.from('schedules').update({ is_published: false }).in('id', shown);
+      if (error) throw error;
+      setSchedules((p) => p.map((s) => (shown.includes(s.id) ? { ...s, is_published: false } : s)));
+      await broadcastScheduleUpdated({ date, action: 'unpublish' });
+      toast.success('Розклад приховано (чернетка)');
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка');
+    } finally {
+      setBusy(false);
+    }
   };
 
   /** Schedule row that receives new events for this date (created on demand). */
   const ensureSchedule = async (): Promise<string> => {
     const existing = schedules.find((s) => s.is_published) ?? schedules[0];
-    if (existing) {
-      await ensurePublished();
-      return existing.id;
-    }
+    if (existing) return existing.id;
     const { data: shifts } = await supabase.from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
     const active = pickActiveShift((shifts || []) as Shift[]);
     const { data, error } = await supabase
@@ -103,8 +130,6 @@ const AdminScheduleEditor = () => {
     if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
     setBusy(true);
     try {
-      // Added or edited events must be instantly visible to children and staff.
-      await ensurePublished();
       const payload = {
         title: form.title.trim(),
         location: form.location.trim() || null,
