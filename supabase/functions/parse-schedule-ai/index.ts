@@ -6,10 +6,11 @@ import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 const MODEL = 'llama-3.3-70b-versatile';
 
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for a Ukrainian youth camp.
-Your job is to convert unstructured Ukrainian raw text schedule into a valid JSON array of event objects.
+Your job is to convert unstructured Ukrainian raw text schedule into valid JSON.
 
 OUTPUT FORMAT REQUIREMENTS:
-- Return ONLY a valid JSON array. No markdown blocks, no code fences, no introductory text, no comments.
+- Return ONLY a valid JSON object of the form { "events": [ ... ] }.
+  No markdown blocks, no code fences, no introductory text, no comments.
 - Structure of each event object in the array:
   {
     "date": "DD.MM" string or null if not present in text,
@@ -17,10 +18,21 @@ OUTPUT FORMAT REQUIREMENTS:
     "time_end": "HH:MM" string or null,
     "title": "Clean event title without team numbers or time",
     "target_teams": [number array of team numbers, e.g., [1, 2], or empty array [] if for all teams],
-    "category": "sports" | "meal" | "gathering" | "entertainment" | "transfer" | "general",
+    "category": "fair" | "sports" | "meal" | "gathering" | "entertainment" | "transfer" | "general",
     "has_sub_slots": boolean,
     "sub_slots": [ { "time": "HH:MM", "teams": [1, 2] } ]
   }
+
+CATEGORY RULES (Allowed: "fair" | "meal" | "sports" | "gathering" | "entertainment" | "transfer" | "general"):
+1. If title/description mentions 'ярмарок', 'ярмарка', 'маркет', 'продаж смаколиків' -> category MUST BE 'fair'.
+2. If title mentions 'сніданок', 'обід', 'вечеря', 'чай' -> category MUST BE 'meal'.
+3. If title mentions 'зарядка', 'йога', 'спорт', 'бассейн', 'басейн', 'тактична медицина' -> category MUST BE 'sports'.
+4. If title mentions 'свічка', 'сінемалогія', 'концерт', 'акторська майстерність', 'розпис футболок' -> category MUST BE 'gathering'.
+5. If title mentions 'виїзд', 'буковель', 'потяг', 'трансфер' -> category MUST BE 'transfer'.
+
+CIRCULAR SYSTEM RULES (Колова система):
+For parallel workshop blocks like 'колова система': group them concisely into logical time slots.
+Assign specific team numbers to 'target_teams' if specified for that sub-event.
 
 PARSING RULES:
 1. If a line specifies teams like "1 і 2 команда" or "3, 4 та 5 команди", parse them into target_teams: [1, 2].
@@ -55,7 +67,7 @@ const ItemSchema = z.object({
   time_end: z.string().regex(TIME).nullable().optional(),
   title: z.string().min(1),
   target_teams: z.array(z.number()).default([]),
-  category: z.enum(['sports', 'meal', 'gathering', 'entertainment', 'transfer', 'general']).default('general'),
+  category: z.enum(['fair', 'sports', 'meal', 'gathering', 'entertainment', 'transfer', 'general']).default('general'),
   has_sub_slots: z.boolean().default(false),
   sub_slots: z.array(SubSlotSchema).default([]),
 });
@@ -72,6 +84,76 @@ function extractArray(s: string) {
   const a = t.indexOf('[');
   const b = t.lastIndexOf(']');
   return a >= 0 && b > a ? t.slice(a, b + 1) : t;
+}
+
+/** Repairs truncated model output: closes dangling strings/brackets and drops the incomplete tail. */
+function repairJson(input: string): string {
+  let s = stripFences(input);
+  // Drop a trailing incomplete token (e.g. `"tim` or `, {"time":`)
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  let lastSafe = -1;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      lastSafe = i;
+    }
+  }
+  if (inStr) {
+    s = lastSafe >= 0 ? s.slice(0, lastSafe + 1) : s + '"';
+  } else if (lastSafe >= 0 && lastSafe < s.length - 1) {
+    s = s.slice(0, lastSafe + 1);
+  }
+  // Recompute open brackets after truncation
+  const open: string[] = [];
+  let str = false, e2 = false;
+  for (const c of s) {
+    if (str) {
+      if (e2) e2 = false;
+      else if (c === '\\') e2 = true;
+      else if (c === '"') str = false;
+      continue;
+    }
+    if (c === '"') str = true;
+    else if (c === '{') open.push('}');
+    else if (c === '[') open.push(']');
+    else if (c === '}' || c === ']') open.pop();
+  }
+  s = s.replace(/,\s*$/, '');
+  while (open.length) s += open.pop();
+  return s;
+}
+
+/** Accepts a bare array, `{ events: [...] }`, or any object holding the first array value. */
+function pickItems(parsed: unknown): unknown {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>;
+    if (Array.isArray(obj.events)) return obj.events;
+    for (const v of Object.values(obj)) if (Array.isArray(v)) return v;
+  }
+  return parsed;
+}
+
+function parseModelJson(content: string): unknown {
+  const stripped = stripFences(content);
+  const attempts = [stripped, extractArray(content), repairJson(stripped)];
+  for (const a of attempts) {
+    try {
+      return pickItems(JSON.parse(a));
+    } catch { /* try next */ }
+  }
+  throw new SyntaxError('Model returned unrepairable JSON');
 }
 
 Deno.serve(async (req) => {
@@ -95,22 +177,24 @@ Deno.serve(async (req) => {
       const { data: payload, keyUsedIndex } = await fetchGroqWithFallback({
         model: MODEL,
         temperature: 0.1,
-        max_tokens: 2048,
+        max_tokens: 8192,
         stream: false,
+        response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: rawText },
         ],
-      });
+      }, 20000);
       console.log(`[parse-schedule-ai] served by key #${keyUsedIndex}`);
       const content: string = payload?.choices?.[0]?.message?.content ?? '';
       let candidate: unknown;
       try {
-        candidate = JSON.parse(extractArray(content));
+        candidate = parseModelJson(content);
       } catch (e) {
+        console.error('Failed to parse Groq response, falling back to local regex:', e);
         return json({
-          source: 'fallback',
-          reason: 'invalid_json',
+          source: 'local_fallback',
+          reason: 'json_syntax_repaired',
           items: [],
           error: {
             code: 'JSON_SYNTAX_ERROR',
