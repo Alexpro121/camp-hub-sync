@@ -1,5 +1,5 @@
 import type { ScheduleCategory } from './schedule-parser-fallback';
-import { Utensils, Activity, Mic2, Bus, Megaphone, Pin, type LucideIcon } from 'lucide-react';
+import { Utensils, Activity, Mic2, Bus, Megaphone, Pin, ShoppingBag, type LucideIcon } from 'lucide-react';
 
 export interface CategoryMeta {
   value: ScheduleCategory;
@@ -15,6 +15,7 @@ export const CATEGORY_META: Record<ScheduleCategory, CategoryMeta> = {
   sports: { value: 'sports', label: 'Спорт', icon: Activity, token: 'sports', gradient: 'var(--gradient-sports)' },
   entertainment: { value: 'entertainment', label: 'Захід', icon: Mic2, token: 'event', gradient: 'var(--gradient-event)' },
   transfer: { value: 'transfer', label: 'Виїзд', icon: Bus, token: 'transfer', gradient: 'var(--gradient-transfer)' },
+  fair: { value: 'fair', label: 'Ярмарок', icon: ShoppingBag, token: 'event', gradient: 'var(--gradient-event)' },
   gathering: { value: 'gathering', label: 'Збір', icon: Megaphone, token: 'gathering', gradient: 'var(--gradient-gathering)' },
   general: { value: 'general', label: 'Загальне', icon: Pin, token: 'general', gradient: 'var(--gradient-general)' },
 };
