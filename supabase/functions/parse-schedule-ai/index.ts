@@ -3,7 +3,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders, json, SUPABASE_URL, ANON_KEY } from '../_shared/accounts.ts';
 import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = 'groq/compound';
 
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for a Ukrainian youth camp.
 Your job is to convert unstructured Ukrainian raw text schedule into valid JSON.
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
       const { data: payload, keyUsedIndex } = await fetchGroqWithFallback({
         model: MODEL,
         temperature: 0.1,
-        max_tokens: 3500,
+        max_tokens: 8192,
         stream: false,
         response_format: { type: 'json_object' },
         messages: [
