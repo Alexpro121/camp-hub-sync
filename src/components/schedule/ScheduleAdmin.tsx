@@ -73,9 +73,11 @@ const ScheduleAdmin = () => {
     setSource(null);
     island.showLoader();
     try {
-      const { data, error } = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText: raw } });
+      const data = await parseScheduleSmartTwoPhase(raw);
+      const error = null as any;
+      const aiOk = data.success && (data.source === 'ai' || data.source === 'groq_two_phase');
       const items = (data?.items ?? []) as Array<AiScheduleItem & { date?: string | null }>;
-      if (error || data?.error || data?.source !== 'ai' || !items.length) {
+      if (data?.error || !aiOk || !items.length) {
         const info: AiErrorInfo = {
           ...(data?.error ?? {}),
           reason: data?.reason ?? (error ? 'invoke_error' : 'empty_result'),
@@ -92,7 +94,7 @@ const ScheduleAdmin = () => {
         island.showError('Помилка ШІ-розпізнавання', 'Натисніть для деталей', `${info.code} · ${info.message}`);
         if (!silent) setErrorOpen(true);
       }
-      if (error || data?.source !== 'ai' || !items.length) {
+      if (!aiOk || !items.length) {
         applyLocal(data?.reason);
         return;
       }
