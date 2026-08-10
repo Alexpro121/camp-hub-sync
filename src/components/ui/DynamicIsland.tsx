@@ -265,6 +265,11 @@ const DynamicIsland = () => {
                       {payload.subtitle}
                     </div>
                   )}
+                  {payload.location && (
+                    <div className="text-[11px] text-slate-300/80 break-words leading-snug">
+                      📍 Локація: {payload.location}
+                    </div>
+                  )}
                   </div>
                 </div>
                 <button
