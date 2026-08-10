@@ -7,6 +7,7 @@ import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2 } from "lucide-react
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
+import { cleanAndParseScheduleJson } from "@/lib/json-sanitizer";
 import { broadcastScheduleUpdated } from "@/lib/schedule";
 import { normalizeTime } from "@/lib/scheduleCategories";
 import { pickActiveShift } from "@/lib/shift";
@@ -82,18 +83,17 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   const publish = async () => {
     let parsed: { items?: ParsedItem[] };
     try {
-      parsed = JSON.parse(
-        json
-          .trim()
-          .replace(/^```json/i, "")
-          .replace(/```$/, "")
-          .trim(),
-      );
-    } catch {
-      toast.error("Некоректний JSON. Скопіюй відповідь ШІ повністю, без зайвого тексту.");
+      parsed = cleanAndParseScheduleJson(json);
+      if (!parsed?.items || !Array.isArray(parsed.items)) {
+        throw new Error('JSON не містить масиву "items"');
+      }
+    } catch (err: any) {
+      toast.error("Помилка синтаксису JSON", {
+        description: err?.message || "Перевірте вставлений текст",
+      });
       return;
     }
-    const items = Array.isArray(parsed?.items) ? parsed.items : [];
+    const items = parsed.items as ParsedItem[];
     if (!items.length) {
       toast.error("У JSON немає жодної події (items)");
       return;
