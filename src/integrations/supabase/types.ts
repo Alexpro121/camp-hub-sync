@@ -396,6 +396,7 @@ export type Database = {
           description: string | null
           has_sub_slots: boolean
           id: string
+          location: string | null
           order_index: number
           schedule_id: string
           sub_slots: Json
@@ -411,6 +412,7 @@ export type Database = {
           description?: string | null
           has_sub_slots?: boolean
           id?: string
+          location?: string | null
           order_index?: number
           schedule_id: string
           sub_slots?: Json
@@ -426,6 +428,7 @@ export type Database = {
           description?: string | null
           has_sub_slots?: boolean
           id?: string
+          location?: string | null
           order_index?: number
           schedule_id?: string
           sub_slots?: Json
