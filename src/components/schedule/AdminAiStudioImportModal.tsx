@@ -57,14 +57,11 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     toast.success("Промт скопійовано! Вставте його в AI Studio");
   };
 
-  /** Schedule row of this date (created and published on demand). */
+  /** Schedule row of this date (created on demand as a DRAFT). */
   const ensureSchedule = async (): Promise<string> => {
     const { data: existing } = await supabase.from("schedules").select("*").eq("date", date);
     const row = (existing || [])[0];
-    if (row) {
-      if (!row.is_published) await supabase.from("schedules").update({ is_published: true }).eq("id", row.id);
-      return row.id;
-    }
+    if (row) return row.id;
     const { data: shifts } = await supabase
       .from("shifts")
       .select("*")
@@ -73,7 +70,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     const active = pickActiveShift((shifts || []) as Shift[]);
     const { data, error } = await supabase
       .from("schedules")
-      .insert({ shift_id: active?.id ?? null, date, raw_text: rawText.trim() || null, is_published: true })
+      .insert({ shift_id: active?.id ?? null, date, raw_text: rawText.trim() || null, is_published: false })
       .select()
       .single();
     if (error || !data) throw error;
@@ -122,7 +119,9 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
       if (error) throw error;
 
       await broadcastScheduleUpdated({ date, action: "SCHEDULE_MUTATED", source: "ai-studio", count: rows.length });
-      toast.success(`Розклад опубліковано: ${rows.length} подій`);
+      toast.success(`Збережено як чернетку: ${rows.length} подій`, {
+        description: "Перевір розклад і натисни «Опублікувати розклад» у редакторі дня.",
+      });
       setJson("");
       onOpenChange(false);
       onImported();
@@ -186,7 +185,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Завантажити та опублікувати розклад
+                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Завантажити як чернетку
               </>
             )}
           </Button>
