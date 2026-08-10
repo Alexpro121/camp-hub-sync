@@ -11,6 +11,7 @@ import { Trash2, Wand2, Send, Loader2, CalendarDays, EyeOff, Plus, Cpu, Layers, 
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { extractDate } from '@/lib/scheduleParser';
+import { parseScheduleSmartTwoPhase } from '@/lib/schedule-chunk-parser';
 import { fallbackParse, detectCategory, type AiScheduleItem, type ScheduleCategory } from '@/lib/schedule-parser-fallback';
 import { CATEGORY_LIST, catMeta, shiftTime, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
 import AIErrorDialog, { type AiErrorInfo } from './AIErrorDialog';
