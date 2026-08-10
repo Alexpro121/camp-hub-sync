@@ -25,7 +25,7 @@ import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useFairAccess } from '@/hooks/useFairAccess';
+import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
 import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
 
@@ -48,7 +48,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [trip, setTrip] = useState(1);
   const haptics = useHaptics();
   const talent = useTalentEventActive();
-  const fair = useFairAccess(authedTeam !== null);
+  const fair = useAggressiveFairUnlock(authedTeam !== null);
   const isMobile = useIsMobile();
 
   const tabItems: DockItem[] = [
