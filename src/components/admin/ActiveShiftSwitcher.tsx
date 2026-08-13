@@ -18,7 +18,7 @@ const ActiveShiftSwitcher = () => {
       <Layers className="h-4 w-4 shrink-0 text-amber-400" strokeWidth={1.75} />
       <Select
         value={shiftId ?? undefined}
-        onValueChange={(v) => { haptics.impact?.('light'); setShiftId(v); }}
+        onValueChange={(v) => { haptics.selection(); setShiftId(v); }}
       >
         <SelectTrigger className="h-9 min-w-0 flex-1 border-0 bg-transparent px-1 text-xs font-semibold focus:ring-0">
           <SelectValue placeholder="Оберіть зміну" />
