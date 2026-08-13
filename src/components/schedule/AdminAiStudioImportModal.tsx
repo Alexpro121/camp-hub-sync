@@ -10,8 +10,7 @@ import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator"
 import { cleanAndParseScheduleJson } from "@/lib/json-sanitizer";
 import { broadcastScheduleUpdated } from "@/lib/schedule";
 import { normalizeTime } from "@/lib/scheduleCategories";
-import { pickActiveShift } from "@/lib/shift";
-import type { Shift } from "@/types/app";
+import { useActiveShift } from "@/context/ActiveShiftContext";
 
 const AI_STUDIO_URL = "https://aistudio.google.com/prompts/new_chat";
 
@@ -26,6 +25,7 @@ interface ParsedItem {
   time_start?: string | null;
   time_end?: string | null;
   title?: string;
+  description?: string | null;
   location?: string | null;
   category?: string | null;
   target_teams?: number[] | null;
@@ -33,7 +33,29 @@ interface ParsedItem {
   sub_slots?: { time: string; teams: number[] }[] | null;
 }
 
+interface ParsedDay {
+  date: string;
+  items: ParsedItem[];
+}
+
+/** Accepts an array of days, a single day object, or a bare items array. */
+const toDays = (parsed: unknown, fallbackDate: string): ParsedDay[] => {
+  const norm = (d: any): ParsedDay | null => {
+    const items = Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : null;
+    if (!items) return null;
+    const date = typeof d?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.date) ? d.date : fallbackDate;
+    return { date, items: items as ParsedItem[] };
+  };
+  if (Array.isArray(parsed)) {
+    const days = parsed.map(norm).filter(Boolean) as ParsedDay[];
+    if (days.length) return days;
+  }
+  const single = norm(parsed);
+  return single ? [single] : [];
+};
+
 const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Props) => {
+  const { shiftId } = useActiveShift();
   const [rawText, setRawText] = useState("");
   const [json, setJson] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,20 +79,16 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     toast.success("Промт скопійовано! Вставте його в AI Studio");
   };
 
-  /** Schedule row of this date (created on demand as a DRAFT). */
-  const ensureSchedule = async (): Promise<string> => {
-    const { data: existing } = await supabase.from("schedules").select("*").eq("date", date);
+  /** Schedule row of one date inside the active shift (created on demand as a DRAFT). */
+  const ensureSchedule = async (dayDate: string): Promise<string> => {
+    let q = supabase.from("schedules").select("*").eq("date", dayDate);
+    if (shiftId) q = q.eq("shift_id", shiftId);
+    const { data: existing } = await q;
     const row = (existing || [])[0];
     if (row) return row.id;
-    const { data: shifts } = await supabase
-      .from("shifts")
-      .select("*")
-      .is("deleted_at", null)
-      .order("start_date", { ascending: false });
-    const active = pickActiveShift((shifts || []) as Shift[]);
     const { data, error } = await supabase
       .from("schedules")
-      .insert({ shift_id: active?.id ?? null, date, raw_text: rawText.trim() || null, is_published: false })
+      .insert({ shift_id: shiftId, date: dayDate, raw_text: rawText.trim() || null, is_published: false })
       .select()
       .single();
     if (error || !data) throw error;
@@ -78,48 +96,49 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   };
 
   const publish = async () => {
-    let parsed: { items?: ParsedItem[] };
+    let days: ParsedDay[];
     try {
-      parsed = cleanAndParseScheduleJson(json);
-      if (!parsed?.items || !Array.isArray(parsed.items)) {
-        throw new Error('JSON не містить масиву "items"');
-      }
+      days = toDays(cleanAndParseScheduleJson(json), date);
+      if (!days.length) throw new Error('JSON не містить днів з масивом "items"');
     } catch (err: any) {
       toast.error("Помилка синтаксису JSON", {
         description: err?.message || "Перевірте вставлений текст",
       });
       return;
     }
-    const items = parsed.items as ParsedItem[];
-    if (!items.length) {
+    if (!days.some((d) => d.items.length)) {
       toast.error("У JSON немає жодної події (items)");
       return;
     }
 
     setBusy(true);
     try {
-      const scheduleId = await ensureSchedule();
-      const rows = items
-        .filter((i) => (i.title || "").trim())
-        .map((i, idx) => ({
-          schedule_id: scheduleId,
-          title: String(i.title).trim(),
-          description: null,
-          location: i.location ? String(i.location).trim() : null,
-          time_start: normalizeTime(i.time_start || "") || null,
-          time_end: normalizeTime(i.time_end || "") || null,
-          category: i.category || "general",
-          target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []) as unknown as any,
-          order_index: idx,
-          has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
-          sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []) as unknown as any,
-        }));
+      let total = 0;
+      for (const day of days) {
+        const scheduleId = await ensureSchedule(day.date);
+        const rows = day.items
+          .filter((i) => (i.title || "").trim())
+          .map((i, idx) => ({
+            schedule_id: scheduleId,
+            title: String(i.title).trim(),
+            description: i.description ? String(i.description).trim() : null,
+            location: i.location ? String(i.location).trim() : null,
+            time_start: normalizeTime(i.time_start || "") || null,
+            time_end: normalizeTime(i.time_end || "") || null,
+            category: i.category || "general",
+            target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []) as unknown as any,
+            order_index: idx,
+            has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
+            sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []) as unknown as any,
+          }));
+        if (!rows.length) continue;
+        const { error } = await supabase.from("schedule_items").insert(rows);
+        if (error) throw error;
+        total += rows.length;
+      }
 
-      const { error } = await supabase.from("schedule_items").insert(rows);
-      if (error) throw error;
-
-      await broadcastScheduleUpdated({ date, action: "SCHEDULE_MUTATED", source: "ai-studio", count: rows.length });
-      toast.success(`Збережено як чернетку: ${rows.length} подій`, {
+      await broadcastScheduleUpdated({ date, action: "SCHEDULE_MUTATED", source: "ai-studio", count: total });
+      toast.success(`Збережено як чернетку: ${total} подій · ${days.length} дн.`, {
         description: "Перевір розклад і натисни «Опублікувати розклад» у редакторі дня.",
       });
       setJson("");
@@ -147,7 +166,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             <Textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder="Встав сюди текст розкладу на день…"
+              placeholder="Встав сюди текст розкладу на один або кілька днів (наприклад 11.08 – 15.08)…"
               className="min-h-[140px] text-xs"
             />
           </div>
@@ -175,7 +194,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             <Textarea
               value={json}
               onChange={(e) => setJson(e.target.value)}
-              placeholder='{"date":"…","items":[…]}'
+              placeholder='[{"date":"…","items":[…]}, …]'
               className="min-h-[140px] font-mono text-[11px]"
             />
           </div>
