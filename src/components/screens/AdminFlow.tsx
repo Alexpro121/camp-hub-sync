@@ -25,7 +25,7 @@ import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { ActiveShiftProvider, useActiveShift } from '@/context/ActiveShiftContext';
+import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 
 interface Props { onBack: () => void; }
@@ -35,13 +35,6 @@ const SHIFT_LABELS: Record<ShiftType, string> = {
   short: 'Коротка (5 днів)',
   international: 'Міжнародна',
   sports: 'Спортивна зміна',
-};
-
-const SHIFT_BADGES: Record<ShiftType, string> = {
-  long: 'Довга',
-  short: 'Коротка',
-  international: 'Міжнародна',
-  sports: '⚡ Спортивна',
 };
 
 const AdminFlow = ({ onBack }: Props) => {
