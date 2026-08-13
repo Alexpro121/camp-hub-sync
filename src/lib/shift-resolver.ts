@@ -20,7 +20,11 @@ export const CATEGORY_LABELS: Record<ShiftCategory, string> = {
   long: 'Довга зміна',
   short: 'Коротка зміна',
   international: 'Міжнародна зміна',
+  sports: 'Спортивна зміна',
 };
+
+/** Sports shifts behave exactly like short shifts, only their badge differs. */
+export const isShortLike = (c: ShiftCategory) => c === 'short' || c === 'sports';
 
 export function shiftCategoryOf(s: Shift): ShiftCategory {
   return (s.shift_category || s.shift_type || 'short') as ShiftCategory;
