@@ -186,7 +186,8 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
 
   return (
     <div className="space-y-3">
-      {/* Days — a child only ever gets today */}
+      {/* Days — a child only ever gets today, so the picker is hidden for them */}
+      {days.length > 1 && (
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
         {days.map((d) => {
           const p = dayParts(d);
@@ -209,6 +210,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
           );
         })}
       </div>
+      )}
 
       {/* Team filter */}
       {lockTeam ? (
