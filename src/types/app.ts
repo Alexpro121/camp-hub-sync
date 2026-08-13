@@ -1,5 +1,5 @@
-export type ShiftType = 'long' | 'short' | 'international';
-export type ShiftCategory = 'long' | 'short' | 'international';
+export type ShiftType = 'long' | 'short' | 'international' | 'sports';
+export type ShiftCategory = 'long' | 'short' | 'international' | 'sports';
 
 export interface Shift {
   id: string;

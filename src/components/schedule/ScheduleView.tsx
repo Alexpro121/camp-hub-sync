@@ -86,7 +86,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       } else {
         setItems([]);
       }
-      setActiveDay((cur) => cur ?? todayISO());
+      setActiveDay((cur) => (lockTeam ? todayISO() : cur ?? todayISO()));
       setLoading(false);
     };
     load();
@@ -107,10 +107,11 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
     activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeDay, loading]);
 
-  /** One tab per date — several schedule batches of the same day are merged. */
+  /** One tab per date — several schedule batches of the same day are merged.
+   *  Children never see future days: no spoilers for tomorrow. */
   const days = useMemo(
-    () => [...new Set([...schedules.map((s) => s.date), todayISO()])].sort(),
-    [schedules],
+    () => (lockTeam ? [todayISO()] : [...new Set([...schedules.map((s) => s.date), todayISO()])].sort()),
+    [schedules, lockTeam],
   );
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
@@ -185,7 +186,8 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
 
   return (
     <div className="space-y-3">
-      {/* Days */}
+      {/* Days — a child only ever gets today, so the picker is hidden for them */}
+      {days.length > 1 && (
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
         {days.map((d) => {
           const p = dayParts(d);
@@ -208,6 +210,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
           );
         })}
       </div>
+      )}
 
       {/* Team filter */}
       {lockTeam ? (

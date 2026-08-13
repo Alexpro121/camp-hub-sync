@@ -15,11 +15,13 @@ import {
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { tripName } from '@/lib/trips';
+import { useActiveShift } from '@/context/ActiveShiftContext';
+import { SINGLE_TRIP, TRAIN_TITLE } from '@/lib/trips';
 
 /** Admin: paste or upload a train seating list, verify it, then store it. */
-const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: number } = {}) => {
+const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
   const island = useDynamicIsland();
+  const { shiftId: activeShiftId } = useActiveShift();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftId, setShiftId] = useState<string>('');
   const [text, setText] = useState('');
@@ -34,10 +36,10 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
       const { data } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       const list = (data || []) as Shift[];
       setShifts(list);
-      const active = list.find((s) => s.is_active) || list[0];
+      const active = list.find((s) => s.id === activeShiftId) || list.find((s) => s.is_active) || list[0];
       if (active) setShiftId(active.id);
     })();
-  }, []);
+  }, [activeShiftId]);
 
   const onFile = async (f: File) => {
     if (/\.(txt|csv)$/i.test(f.name)) {
@@ -114,14 +116,14 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
     setSaving(true);
     try {
       const teams = Array.from(new Set(rows.map((r) => r.team_number)));
-      let del = supabase.from('train_coupes').delete().eq('trip_number', trip).in('team_number', teams);
+      let del = supabase.from('train_coupes').delete().eq('trip_number', SINGLE_TRIP).in('team_number', teams);
       del = shiftId ? del.eq('shift_id', shiftId) : del.is('shift_id', null);
       await del;
 
       const payload = rows.map((r) => ({
         shift_id: shiftId || null,
-        trip_number: trip,
-        trip_name: tripName(trip),
+        trip_number: SINGLE_TRIP,
+        trip_name: TRAIN_TITLE,
         team_number: r.team_number,
         coupe_number: r.coupe_number,
         seat_number: r.seat_number,
@@ -134,7 +136,7 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
       const { error } = await supabase.from('train_coupes').insert(payload);
       if (error) throw error;
       const teamLabel = teams.filter(Boolean).join(', ') || '—';
-      island.showSuccess(`${tripName(trip)} · команда №${teamLabel}`, `${payload.length} пасажирів збережено`);
+      island.showSuccess(`${TRAIN_TITLE} · команда №${teamLabel}`, `${payload.length} пасажирів збережено`);
       toast.success(`Збережено ${payload.length} пасажирів`);
       setRows(null);
       setText('');
@@ -157,7 +159,7 @@ const CoupeImport = ({ onSaved, trip = 1 }: { onSaved?: () => void; trip?: numbe
       <Card className="p-4 bg-card/80 backdrop-blur-md border-border/50 space-y-3">
         <div className="flex items-center gap-2">
           <Train className="w-4 h-4 text-primary" strokeWidth={1.75} />
-          <p className="text-sm font-semibold">Розселення по купе · {tripName(trip)}</p>
+          <p className="text-sm font-semibold">Розселення по купе</p>
         </div>
 
         <div className="space-y-1.5">

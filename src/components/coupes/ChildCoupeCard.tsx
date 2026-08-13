@@ -4,11 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeftRight, Check, Loader2, MapPin, Train, User, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import TripSelector from '@/components/coupes/TripSelector';
 import ChildSwapDialog, { type SwapRow } from '@/components/coupes/ChildSwapDialog';
 import { useTrainSettings } from '@/hooks/useTrainSettings';
 import { useSwapRequests } from '@/hooks/useSwapRequests';
-import { tripShort } from '@/lib/trips';
+import { SINGLE_TRIP } from '@/lib/trips';
 import { pushIsland } from '@/lib/islandBus';
 
 interface Row extends SwapRow {
@@ -16,12 +15,11 @@ interface Row extends SwapRow {
   trip_number: number;
 }
 
-/** "Твоє купе в потязі" — coupe, neighbours, trips and optional seat swapping. */
+/** "Твоє купе в потязі" — single static allocation for the whole shift. */
 const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: number }) => {
   const { settings } = useTrainSettings();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [trip, setTrip] = useState(1);
   const [swapOpen, setSwapOpen] = useState(false);
   const { incoming, respond, busy } = useSwapRequests(childId, settings.autoApprove);
 
@@ -56,13 +54,8 @@ const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: 
 
   if (loading || !rows.length) return null;
 
-  const counts = rows.reduce<Record<number, number>>((acc, r) => {
-    acc[r.trip_number] = (acc[r.trip_number] ?? 0) + 1;
-    return acc;
-  }, {});
-  const tripRows = rows.filter((r) => r.trip_number === trip);
+  const tripRows = rows;
   const mine = tripRows.find((r) => r.child_id === childId);
-  const hasAnyTrip = Object.keys(counts).length > 1;
 
   // Service coupes (staff, speakers, guests) are hidden from children entirely.
   const neighbours = mine
@@ -78,11 +71,6 @@ const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: 
         </p>
       </div>
 
-      {hasAnyTrip && (
-        <div className="mb-3">
-          <TripSelector value={trip} onChange={setTrip} counts={counts} />
-        </div>
-      )}
 
       {incoming.length > 0 && (
         <div className="mb-3 space-y-2">
@@ -105,7 +93,7 @@ const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: 
       )}
 
       {!mine ? (
-        <p className="text-sm text-muted-foreground">Для «{tripShort(trip)}» місце ще не призначене</p>
+        <p className="text-sm text-muted-foreground">Місце в потязі ще не призначене</p>
       ) : (
       <>
       <div className="flex items-baseline gap-2">
@@ -152,7 +140,7 @@ const ChildCoupeCard = ({ childId, teamNumber }: { childId: string; teamNumber: 
             onOpenChange={setSwapOpen}
             childId={childId}
             teamNumber={teamNumber}
-            tripNumber={trip}
+            tripNumber={SINGLE_TRIP}
             shiftId={settings.shiftId}
             rows={tripRows}
             autoApprove={settings.autoApprove}

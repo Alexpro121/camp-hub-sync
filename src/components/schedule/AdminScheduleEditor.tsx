@@ -13,7 +13,7 @@ import { CATEGORY_LIST, shiftTime, sentenceCase, normalizeTime, normalizeTimeRan
 import { broadcastScheduleUpdated, dedupeItems, shiftISODate } from '@/lib/schedule';
 import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
-import { pickActiveShift } from '@/lib/shift';
+import { useActiveShift } from '@/context/ActiveShiftContext';
 import AdminAiStudioImportModal from './AdminAiStudioImportModal';
 
 const todayISO = () => localISO();
@@ -39,6 +39,7 @@ const emptyForm = (): Form => ({ id: null, title: '', location: '', time_start: 
 
 const AdminScheduleEditor = () => {
   const TEAMS = useAllTeams();
+  const { shiftId } = useActiveShift();
   const [date, setDate] = useState(todayISO());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
@@ -52,8 +53,9 @@ const AdminScheduleEditor = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: sch } = await supabase.from('schedules').select('*').eq('date', date);
-    const list = (sch || []) as Schedule[];
+    const { data: sch } = await supabase.from('schedules').select('*').eq('date', date).is('deleted_at', null);
+    // Parallel shifts: only this shift's program (plus camp-wide rows) is editable here.
+    const list = ((sch || []) as Schedule[]).filter((s) => !s.shift_id || !shiftId || s.shift_id === shiftId);
     setSchedules(list);
     const ids = list.map((s) => s.id);
     if (ids.length) {
@@ -63,7 +65,7 @@ const AdminScheduleEditor = () => {
       setItems([]);
     }
     setLoading(false);
-  }, [date]);
+  }, [date, shiftId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -114,11 +116,9 @@ const AdminScheduleEditor = () => {
   const ensureSchedule = async (): Promise<string> => {
     const existing = schedules.find((s) => s.is_published) ?? schedules[0];
     if (existing) return existing.id;
-    const { data: shifts } = await supabase.from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
-    const active = pickActiveShift((shifts || []) as Shift[]);
     const { data, error } = await supabase
       .from('schedules')
-      .insert({ shift_id: active?.id ?? null, date, raw_text: null, is_published: true })
+      .insert({ shift_id: shiftId, date, raw_text: null, is_published: true })
       .select()
       .single();
     if (error || !data) throw error;

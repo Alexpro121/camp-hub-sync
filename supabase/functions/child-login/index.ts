@@ -74,15 +74,18 @@ function score(query: string, name: string): number {
   return s;
 }
 
-/* ---------- active shift selection (mirrors src/lib/shift.ts) ---------- */
+/* ---------- active shift selection (mirrors src/lib/shift.ts) ----------
+ * Parallel shifts: only live (or imminent) shifts may be logged into, so a
+ * child of one shift can never claim a profile from another one.            */
 function pickActiveShift(shifts: any[]): any | null {
-  if (!shifts.length) return null;
+  const live = shifts.filter((s) => !s.deleted_at);
+  if (!live.length) return null;
   const t = new Date().toISOString().slice(0, 10);
-  const current = shifts.find((s) => s.start_date <= t && t <= s.end_date);
+  const current = live.find((s) => s.start_date <= t && t <= s.end_date);
   if (current) return current;
-  const upcoming = shifts.filter((s) => s.start_date > t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
+  const upcoming = live.filter((s) => s.start_date > t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
   if (upcoming) return upcoming;
-  return shifts.slice().sort((a, b) => b.end_date.localeCompare(a.end_date))[0] ?? null;
+  return live.slice().sort((a, b) => b.end_date.localeCompare(a.end_date))[0] ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -94,7 +97,11 @@ Deno.serve(async (req) => {
     const action = body?.action === 'claim' ? 'claim' : 'search';
     const svc = admin();
 
-    const { data: shifts } = await svc.from('shifts').select('*').order('start_date', { ascending: false });
+    const { data: shifts } = await svc
+      .from('shifts')
+      .select('*')
+      .is('deleted_at', null)
+      .order('start_date', { ascending: false });
     const active = pickActiveShift(shifts || []);
 
     if (action === 'search') {
