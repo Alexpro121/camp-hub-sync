@@ -11,6 +11,7 @@ import { groupByTeamThenCoupe } from '@/lib/coupes';
 import PassengerRoleBadge from '@/components/coupes/PassengerRoleBadge';
 import { PASSENGER_ROLE_CHANNEL } from '@/lib/passengerRoles';
 import { SINGLE_TRIP } from '@/lib/trips';
+import { useActiveShift } from '@/context/ActiveShiftContext';
 
 interface Row {
   id: string;
@@ -25,21 +26,22 @@ interface Row {
 
 /** Admin train allocation grouped by team, each team editable in its own dialog. */
 const AdminTrainView = ({ refreshKey = 0 }: { refreshKey?: number }) => {
+  const { shiftId } = useActiveShift();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTeam, setOpenTeam] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    let q = supabase
       .from('train_coupes')
       .select('id, team_number, coupe_number, seat_number, passenger_name, boarding_city, is_staff, passenger_role')
-      .eq('trip_number', SINGLE_TRIP)
-      .order('coupe_number')
-      .order('seat_number');
+      .eq('trip_number', SINGLE_TRIP);
+    if (shiftId) q = q.eq('shift_id', shiftId);
+    const { data } = await q.order('coupe_number').order('seat_number');
     setRows((data || []) as unknown as Row[]);
     setLoading(false);
-  }, []);
+  }, [shiftId]);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 

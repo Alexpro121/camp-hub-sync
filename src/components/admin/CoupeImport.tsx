@@ -15,11 +15,13 @@ import {
 } from '@/lib/coupes';
 import CoupeCard from '@/components/coupes/CoupeCard';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { useActiveShift } from '@/context/ActiveShiftContext';
 import { SINGLE_TRIP, TRAIN_TITLE } from '@/lib/trips';
 
 /** Admin: paste or upload a train seating list, verify it, then store it. */
 const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
   const island = useDynamicIsland();
+  const { shiftId: activeShiftId } = useActiveShift();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftId, setShiftId] = useState<string>('');
   const [text, setText] = useState('');
@@ -34,10 +36,10 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
       const { data } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       const list = (data || []) as Shift[];
       setShifts(list);
-      const active = list.find((s) => s.is_active) || list[0];
+      const active = list.find((s) => s.id === activeShiftId) || list.find((s) => s.is_active) || list[0];
       if (active) setShiftId(active.id);
     })();
-  }, []);
+  }, [activeShiftId]);
 
   const onFile = async (f: File) => {
     if (/\.(txt|csv)$/i.test(f.name)) {
