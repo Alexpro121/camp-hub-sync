@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import type { Shift, TalentEntry, TalentEvent } from '@/types/app';
+import type { TalentEntry, TalentEvent } from '@/types/app';
 import { buildRunningOrder } from '@/lib/talent';
-import { pickActiveShift } from '@/lib/shift';
+import { useActiveShift } from '@/context/ActiveShiftContext';
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   draft: { label: 'Чернетка', cls: 'bg-muted text-muted-foreground border-border' },
@@ -17,12 +17,15 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
 };
 
 const TalentAdmin = () => {
+  const { shiftId } = useActiveShift();
   const [event, setEvent] = useState<TalentEvent | null>(null);
   const [entries, setEntries] = useState<TalentEntry[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
-    const { data: evs } = await supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
+    let q = supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
+    if (shiftId) q = q.eq('shift_id', shiftId);
+    const { data: evs } = await q;
     const ev = (evs?.[0] as TalentEvent) || null;
     setEvent(ev);
     if (ev) {
@@ -42,13 +45,12 @@ const TalentAdmin = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'talent_events' }, debounced)
       .subscribe();
     return () => { clearTimeout(t); supabase.removeChannel(ch); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shiftId]);
 
   const startCollecting = async () => {
     setBusy(true);
-    const { data: shifts } = await supabase.from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
-    const active = pickActiveShift((shifts || []) as Shift[]);
-    const { error } = await supabase.from('talent_events').insert({ shift_id: active?.id ?? null, status: 'collecting' });
+    const { error } = await supabase.from('talent_events').insert({ shift_id: shiftId, status: 'collecting' });
     setBusy(false);
     if (error) { toast.error('Не вдалося створити подію'); return; }
     await supabase.from('broadcasts').insert({

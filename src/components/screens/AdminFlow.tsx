@@ -65,7 +65,7 @@ const AdminFlow = ({ onBack }: Props) => {
       </div>
 
       <Tabs defaultValue="shifts" className="w-full px-3">
-        <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
+        <div className="sticky top-[112px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
           <TabsList className="grid grid-cols-7 h-[54px] w-full p-1">
             <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Calendar className="w-[18px] h-[18px]" /> <span>Зміни</span></TabsTrigger>
             <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none"><CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span></TabsTrigger>

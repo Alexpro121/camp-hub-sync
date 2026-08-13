@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Printer, Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useActiveShift } from '@/context/ActiveShiftContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ interface PresetCode {
  * fair — any child, any number of scans.
  */
 const AdminPrintQRCodes = () => {
+  const { shiftId } = useActiveShift();
   const [codes, setCodes] = useState<PresetCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -31,22 +33,21 @@ const AdminPrintQRCodes = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('fair_preset_codes')
-      .select('id,label,amount,is_reusable')
-      .order('amount');
+    let q = supabase.from('fair_preset_codes').select('id,label,amount,is_reusable').order('amount');
+    if (shiftId) q = q.eq('shift_id', shiftId);
+    const { data, error } = await q;
     if (error) toast.error(error.message);
     const list = (data || []) as PresetCode[];
     setCodes(list);
     setSelected(new Set(list.map((c) => c.id)));
     setLoading(false);
-  }, []);
+  }, [shiftId]);
 
   useEffect(() => { load(); }, [load]);
 
   const seedDefaults = async () => {
     setBusy(true);
-    const rows = FAIR_PRESETS.map((a) => ({ label: `${a} Айрон-доларів`, amount: a, is_reusable: true }));
+    const rows = FAIR_PRESETS.map((a) => ({ label: `${a} Айрон-доларів`, amount: a, is_reusable: true, shift_id: shiftId }));
     const { error } = await supabase.from('fair_preset_codes').insert(rows);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
@@ -62,7 +63,7 @@ const AdminPrintQRCodes = () => {
     setBusy(true);
     const { error } = await supabase
       .from('fair_preset_codes')
-      .insert({ label: label.trim() || `${value} Айрон-доларів`, amount: value, is_reusable: true });
+      .insert({ label: label.trim() || `${value} Айрон-доларів`, amount: value, is_reusable: true, shift_id: shiftId });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     setLabel(''); setAmount('');
