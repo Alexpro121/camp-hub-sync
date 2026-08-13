@@ -7,7 +7,6 @@ import { ArrowLeftRight, Check, Loader2, X, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTrainSettings } from '@/hooks/useTrainSettings';
-import { tripShort } from '@/lib/trips';
 
 interface SwapRow {
   id: string;
@@ -122,7 +121,6 @@ const CoupeSwapSettings = ({ myTeam }: { myTeam: number | null }) => {
                   ? <> ↔ <span className="font-medium">{r.target.full_name}</span></>
                   : <> → вільне місце у купе №{r.target_coupe_number}</>}
               </p>
-              <Badge variant="outline" className="text-[9px]">{tripShort(r.trip_number)}</Badge>
               <div className="grid grid-cols-2 gap-2">
                 <Button size="sm" className="h-9 text-xs" disabled={busy === r.id} onClick={() => decide(r.id, true)}>
                   {busy === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Check className="w-3.5 h-3.5 mr-1" /> Підтвердити</>}

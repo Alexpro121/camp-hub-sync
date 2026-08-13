@@ -10,6 +10,7 @@ import CoupeManager from '@/components/coupes/CoupeManager';
 import { groupByTeamThenCoupe } from '@/lib/coupes';
 import PassengerRoleBadge from '@/components/coupes/PassengerRoleBadge';
 import { PASSENGER_ROLE_CHANNEL } from '@/lib/passengerRoles';
+import { SINGLE_TRIP } from '@/lib/trips';
 
 interface Row {
   id: string;
@@ -23,7 +24,7 @@ interface Row {
 }
 
 /** Admin train allocation grouped by team, each team editable in its own dialog. */
-const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; trip?: number }) => {
+const AdminTrainView = ({ refreshKey = 0 }: { refreshKey?: number }) => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTeam, setOpenTeam] = useState<number | null>(null);
@@ -33,12 +34,12 @@ const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; tri
     const { data } = await supabase
       .from('train_coupes')
       .select('id, team_number, coupe_number, seat_number, passenger_name, boarding_city, is_staff, passenger_role')
-      .eq('trip_number', trip)
+      .eq('trip_number', SINGLE_TRIP)
       .order('coupe_number')
       .order('seat_number');
     setRows((data || []) as unknown as Row[]);
     setLoading(false);
-  }, [trip]);
+  }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
@@ -133,7 +134,7 @@ const AdminTrainView = ({ refreshKey = 0, trip = 1 }: { refreshKey?: number; tri
       <Dialog open={openTeam !== null} onOpenChange={(o) => { if (!o) { setOpenTeam(null); load(); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Команда №{openTeam} · потяг</DialogTitle></DialogHeader>
-          {openTeam !== null && <CoupeManager myTeam={openTeam} trip={trip} />}
+          {openTeam !== null && <CoupeManager myTeam={openTeam} />}
         </DialogContent>
       </Dialog>
     </div>
