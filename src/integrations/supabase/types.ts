@@ -47,6 +47,7 @@ export type Database = {
       children: {
         Row: {
           created_at: string
+          deleted_at: string | null
           full_name: string
           has_logged_in: boolean
           id: string
@@ -65,6 +66,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           full_name: string
           has_logged_in?: boolean
           id?: string
@@ -83,6 +85,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           full_name?: string
           has_logged_in?: boolean
           id?: string
@@ -452,6 +455,7 @@ export type Database = {
         Row: {
           created_at: string
           date: string
+          deleted_at: string | null
           id: string
           is_published: boolean
           raw_text: string | null
@@ -461,6 +465,7 @@ export type Database = {
         Insert: {
           created_at?: string
           date: string
+          deleted_at?: string | null
           id?: string
           is_published?: boolean
           raw_text?: string | null
@@ -470,6 +475,7 @@ export type Database = {
         Update: {
           created_at?: string
           date?: string
+          deleted_at?: string | null
           id?: string
           is_published?: boolean
           raw_text?: string | null
