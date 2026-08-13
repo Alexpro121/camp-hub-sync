@@ -8,7 +8,7 @@ import { resolveShiftPhase, resolveTeamShiftStatus, parseTeamsInput } from '@/li
 import { generateShortCode, FAIR_CODE_LENGTH, isFairScheduleActive } from '@/lib/fair';
 import { detectCategory } from '@/lib/schedule-parser-fallback';
 import { levenshtein, findNameSuggestions, parseTeamNumber } from '@/lib/normalize';
-import { tripName, tripShort } from '@/lib/trips';
+import { SINGLE_TRIP, TRAIN_TITLE, tripName } from '@/lib/trips';
 
 const item = (o: Partial<any>): any => ({
   id: o.id ?? Math.random().toString(36).slice(2),
@@ -132,8 +132,8 @@ SS
     expect(inline.map((p) => p.teamNumber).sort()).toEqual([6, 7]);
   });
   it('names trips', () => {
-    expect(tripName(1)).toContain('Подорож 1');
-    expect(tripShort(3)).toBe('Додому');
+    expect(SINGLE_TRIP).toBe(1);
+    expect(tripName()).toBe(TRAIN_TITLE);
   });
 });
 
