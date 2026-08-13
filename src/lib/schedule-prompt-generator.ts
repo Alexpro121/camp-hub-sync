@@ -1,49 +1,74 @@
 /**
  * Builds a strict, copy-paste ready prompt for Google AI Studio / Gemini so an
- * admin can convert a raw Ukrainian camp schedule into importable JSON.
+ * admin can convert a raw multi-day Ukrainian camp schedule (PDF text) into an
+ * importable JSON array of days.
+ *
+ * Speakers are anonymised on purpose — the camp keeps guests a surprise —
+ * while institutions, programs and in-house coaches stay visible.
  */
-export function generateAiStudioSchedulePrompt(rawText: string, date: string): string {
-  return `You are a master Ukrainian youth camp schedule JSON generator.
-Convert the unstructured raw text schedule for date "${date}" into a STRICT, VALID, SINGLE-LINE CLEAN JSON object.
+export function generateAiStudioSchedulePrompt(rawText: string, defaultDate: string): string {
+  const year = defaultDate.slice(0, 4);
+  return `Ти — головний диспетчер табору «Залізна Зміна». Твоє завдання: розпарсити наданий сирий текст/PDF розкладу (на один або декілька днів) і перетворити його на строгий JSON-масив днів та подій.
 
-JSON OUTPUT SCHEMA (STRICT REQUIREMENT - RETURN ONLY PURE VALID JSON, NO MARKDOWN, NO CODE FENCES, NO LITERAL NEWLINES INSIDE STRINGS):
-{
-  "date": "${date}",
-  "items": [
-    {
-      "time_start": "HH:MM",
-      "time_end": "HH:MM",
-      "title": "Clean event title without location or time",
-      "location": "Location name extracted from text/notes or null",
-      "category": "fair" | "meal" | "sports" | "gathering" | "transfer" | "general",
-      "target_teams": [],
-      "has_sub_slots": boolean,
-      "sub_slots": [
-        { "time": "HH:MM", "teams": [1, 2] }
-      ]
-    }
-  ]
-}
+ПРАВИЛА ТРАНСФОРМАЦІЇ:
 
-PARSING RULES & LOCATIONS:
-1. LOCATIONS MAPPING (notes at the bottom of the raw text):
-   - 'Тактична медицина' -> location: "Велика зала, басейн, зал для боротьби"
-   - 'KSE' -> location: "Зал АВ"
-   - 'Акторська майстерність' -> location: "Дзеркальна зала"
-   - 'Паракорди' -> location: "Зал СД"
-   - 'Розпис футболок' -> location: "Цегляна зала"
-   - Extract any other location in parentheses, e.g. "(велика зала)". If unknown -> null.
-2. CATEGORY RULES:
-   - "fair": ярмарок, ярмарка, ярмарка-продаж, маркет, продаж.
-   - "meal": сніданок, обід, вечеря, чай, смаколики.
-   - "sports": зарядка, йога, спорт, тактична медицина, басейн, скелелазіння.
-   - "gathering": свічка, сінемалогія, концерт, акторська майстерність, розпис футболок, KSE, паракорди.
-   - "transfer": виїзд, буковель, потяг, трансфер.
-   - otherwise "general".
-3. CIRCULAR SYSTEMS (Колова система): parse parallel workshops for specific teams into separate events with their exact 'target_teams' array (e.g. target_teams: [1]) plus start/end times and assigned location.
-4. TIMES: standardize all times to HH:MM. If time_end is missing, estimate a reasonable time_end.
+1. ДАТИ: Знайди дати у тексті (наприклад "11.08", "12.08-СЕРЕДА") та перетвори їх у формат "YYYY-MM-DD" (рік зміни: ${year}). Якщо дат немає взагалі — використай "${defaultDate}". Кожен день — окремий об'єкт масиву.
 
-RAW TEXT SCHEDULE TO PARSE:
+2. АНОНІМІЗАЦІЯ СПІКЕРІВ (ЕФЕКТ СЮРПРИЗУ):
+   - Якщо зустріч із персоналією (спортсмен, бізнесмен, блогер, журналіст, телеведучий, засновник компанії) — НІКОЛИ не пиши ім'я:
+     title: "Таємний гість: [короткий профіль] 🤫"
+     description: "Секретний спікер: [регалії без імені]. Зустріч та Q&A — приходь дізнатися, хто це!"
+   - Приклади:
+     "Зустріч та Q&A з Дмитром Феліксовим - засновником concert.ua" ->
+       title: "Таємний гість: Засновник Concert.ua 🤫",
+       description: "Секретний спікер: Засновник concert.ua, Readeat та Origin Stage."
+     "Зустріч з Олег Верняєв" ->
+       title: "Таємний гість: Олімпійський чемпіон 🤫",
+       description: "Секретний спікер: Олімпійський чемпіон зі спортивної гімнастики."
+     "Зустріч з Віталієм Портніковим" ->
+       title: "Таємний гість: Відомий журналіст 🤫",
+       description: "Секретний спікер: Відомий журналіст, публіцист та телеведучий."
+   - ВАЙТЛИСТ (НЕ МАСКУВАТИ, залишати як є): "АЗОВ", "KSE", "УАЛ", "Українська Академія Лідерства", "Державотворення", "KRYLATA", "Сінемалогія", "Вечір талантів", "Ярмарок".
+   - Тренери та вожаті на спортивних і колових станціях ("Ярік Бутко", "Діма ВВО", "Паша ВВО", "Ліля", "Яцура") залишаються відкритими — їхні імена можна писати у sub_slots.
+
+3. ЛОКАЦІЇ ТА СТАНЦІЇ:
+   - Обов'язково витягуй точну локацію в поле "location": "Велика зала", "Цегляна зала", "Дзеркальна зала", "Зал АВ", "Зал СД", "ТРЦ «Караван»", "вуличний басейн", "футбольне поле" тощо.
+   - Мапінг зі списку приміток: 'KSE' -> "Зал АВ", 'Паракорди' -> "Зал СД", 'Акторська майстерність' -> "Дзеркальна зала", 'Розпис футболок' -> "Цегляна зала", 'Тактична медицина' -> "Велика зала, басейн, зал для боротьби".
+   - Якщо локації немає — null.
+
+4. КАТЕГОРІЇ (поле "category"):
+   'fair' (ярмарок, ринок, продаж), 'meal' (сніданок, обід, вечеря, піца, смаколики), 'sports' (зарядка, футбол, волейбол, бокс, басейн, скелелазіння), 'gathering' (збори, свічка, підйом, відбій, сінемалогія, концерт), 'transfer' (посадка, потяг, переїзд, автобус, Буковель), 'general' (лекції, Q&A, тімбілдинг, кіно, квест).
+
+5. РОЗБИТТЯ ПО КОМАНДАХ ТА ПІДСЛОТИ:
+   - Якщо їжа розбита по часу (10:30 — 1-2 команди, 10:45 — 3-4 команди) або спорт/колова система розбита на станції — формуй sub_slots:
+     "sub_slots": [{ "time": "10:30-10:45", "teams": [1,2], "title": "Станція: бокс", "location": "Велика зала" }]
+   - has_sub_slots = true лише коли масив sub_slots не порожній.
+   - target_teams: [] означає «всі команди».
+
+6. ЧАС: усі часи у форматі "HH:MM". Якщо time_end відсутній — оціни розумний time_end.
+
+7. ФОРМАТ ВІДПОВІДІ (ТІЛЬКИ ЧИСТИЙ JSON-МАСИВ, БЕЗ МАРКДАУНУ, БЕЗ ТЕКСТУ ДО/ПІСЛЯ):
+
+[
+  {
+    "date": "${year}-08-11",
+    "items": [
+      {
+        "time_start": "10:30",
+        "time_end": "12:00",
+        "title": "Збір учасників, видача форми",
+        "description": "Знайомство з командами",
+        "location": "м. Київ",
+        "category": "gathering",
+        "target_teams": [1,2,3,4,5,6,7,8],
+        "has_sub_slots": false,
+        "sub_slots": []
+      }
+    ]
+  }
+]
+
+СИРИЙ ТЕКСТ РОЗКЛАДУ ДЛЯ ПАРСИНГУ:
 ${rawText}
 `;
 }
