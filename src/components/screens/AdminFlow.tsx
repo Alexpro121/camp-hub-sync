@@ -25,6 +25,8 @@ import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { ActiveShiftProvider, useActiveShift } from '@/context/ActiveShiftContext';
+import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 
 interface Props { onBack: () => void; }
 
@@ -32,6 +34,14 @@ const SHIFT_LABELS: Record<ShiftType, string> = {
   long: 'Довга (12 днів)',
   short: 'Коротка (5 днів)',
   international: 'Міжнародна',
+  sports: 'Спортивна зміна',
+};
+
+const SHIFT_BADGES: Record<ShiftType, string> = {
+  long: 'Довга',
+  short: 'Коротка',
+  international: 'Міжнародна',
+  sports: '⚡ Спортивна',
 };
 
 const AdminFlow = ({ onBack }: Props) => {
@@ -44,6 +54,7 @@ const AdminFlow = ({ onBack }: Props) => {
   };
 
   return (
+    <ActiveShiftProvider>
     <div className="min-h-screen max-w-3xl mx-auto pb-16 safe-bottom">
       <div className="app-bar px-4 py-3 safe-top border-b border-border/40">
         <div className="flex items-center justify-between">
@@ -54,6 +65,9 @@ const AdminFlow = ({ onBack }: Props) => {
             <span className="text-2xl">👑</span>
             <p className="text-lg font-black uppercase text-gradient-primary">Admin</p>
           </div>
+        </div>
+        <div className="mt-2">
+          <ActiveShiftSwitcher />
         </div>
       </div>
 
@@ -79,7 +93,7 @@ const AdminFlow = ({ onBack }: Props) => {
         <TabsContent value="data" className="mt-3"><DataTab /></TabsContent>
       </Tabs>
     </div>
-
+    </ActiveShiftProvider>
   );
 };
 
@@ -115,6 +129,7 @@ const ShiftsTab = () => {
 
   const computeEnd = (startStr: string, t: ShiftType) => {
     if (!startStr || t === 'international') return '';
+    // Sports shifts are structurally identical to short ones.
     // Auto-suggest +1 extra day vs nominal length (e.g. long shift = 12 days → start + 12)
     const days = t === 'long' ? 12 : 5;
     const d = new Date(startStr);
@@ -127,7 +142,7 @@ const ShiftsTab = () => {
 
   const onTypeChange = (t: ShiftType) => {
     setType(t);
-    if (t === 'short' && baseLong) {
+    if ((t === 'short' || t === 'sports') && baseLong) {
       setStart(baseLong.start_date);
       setEnd(baseLong.end_date);
       return;
@@ -202,7 +217,7 @@ const ShiftsTab = () => {
     await supabase
       .from('shifts')
       .update({ start_date: startDate, end_date: endDate, travel_start_date: startDate, hotel_start_date: addDays(startDate, 1) })
-      .eq('shift_category', 'short')
+      .in('shift_category', ['short', 'sports'])
       .is('deleted_at', null);
   };
 
@@ -328,6 +343,7 @@ const ShiftsTab = () => {
               <SelectContent>
                 <SelectItem value="long">{SHIFT_LABELS.long}</SelectItem>
                 <SelectItem value="short">{SHIFT_LABELS.short}</SelectItem>
+                <SelectItem value="sports">{SHIFT_LABELS.sports}</SelectItem>
                 <SelectItem value="international">{SHIFT_LABELS.international}</SelectItem>
               </SelectContent>
             </Select>
@@ -335,11 +351,11 @@ const ShiftsTab = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Початок</Label>
-              <Input type="date" value={start} disabled={type === 'short' && !!baseLong} onChange={e => onStartChange(e.target.value)} className="h-11" />
+              <Input type="date" value={start} disabled={(type === 'short' || type === 'sports') && !!baseLong} onChange={e => onStartChange(e.target.value)} className="h-11" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Кінець <span className="text-primary/70">(авто)</span></Label>
-              <Input type="date" value={end} disabled={type === 'short' && !!baseLong} onChange={e => setEnd(e.target.value)} className="h-11" />
+              <Input type="date" value={end} disabled={(type === 'short' || type === 'sports') && !!baseLong} onChange={e => setEnd(e.target.value)} className="h-11" />
             </div>
           </div>
 
@@ -365,9 +381,9 @@ const ShiftsTab = () => {
             </p>
           </div>
 
-          {type === 'short' && baseLong && (
+          {(type === 'short' || type === 'sports') && baseLong && (
             <p className="text-[10px] text-muted-foreground rounded-lg border border-border/40 bg-muted/25 p-2.5">
-              Дати короткої зміни синхронізовано з довгою зміною «{baseLong.name}»
+              Дати цієї зміни синхронізовано з довгою зміною «{baseLong.name}»
               ({baseLong.start_date} → {baseLong.end_date}). Фази подорожі рахуються автоматично.
             </p>
           )}
@@ -485,9 +501,14 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
           <Badge className={`text-[9px] px-1.5 py-0 h-4 border ${statusMeta[status].cls}`}>
             {statusMeta[status].label}
           </Badge>
+          {(s.shift_category ?? s.shift_type) === 'sports' && (
+            <Badge className="text-[9px] px-1.5 py-0 h-4 border bg-amber-500/20 text-amber-400 border-amber-500/40">
+              ⚡ Спортивна зміна
+            </Badge>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
-          {SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
+          {SHIFT_LABELS[(s.shift_category ?? s.shift_type) as ShiftType] ?? SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
         </p>
         <p className="text-[11px] text-muted-foreground">
           Команди {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
