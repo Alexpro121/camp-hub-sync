@@ -271,6 +271,7 @@ export type Database = {
         Row: {
           allow_other_teams: boolean
           created_at: string
+          is_active: boolean
           supervisor_user_id: string
           team_number: number | null
           updated_at: string
@@ -278,6 +279,7 @@ export type Database = {
         Insert: {
           allow_other_teams?: boolean
           created_at?: string
+          is_active?: boolean
           supervisor_user_id: string
           team_number?: number | null
           updated_at?: string
@@ -285,6 +287,7 @@ export type Database = {
         Update: {
           allow_other_teams?: boolean
           created_at?: string
+          is_active?: boolean
           supervisor_user_id?: string
           team_number?: number | null
           updated_at?: string
@@ -835,6 +838,7 @@ export type Database = {
         }
         Returns: number
       }
+      is_fair_open_now: { Args: never; Returns: boolean }
       pay_fair_purchase: {
         Args: {
           p_amount: number
