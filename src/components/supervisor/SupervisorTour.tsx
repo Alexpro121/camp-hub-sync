@@ -394,8 +394,10 @@ const SupervisorTour = ({
         >
           Пропустити навчання
         </button>
+        </div>
       </div>
     </div>,
+
     document.body,
   );
 };
