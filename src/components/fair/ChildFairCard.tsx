@@ -20,6 +20,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import FairHowTo from './FairHowTo';
 
 interface Props {
+  childId?: string;
   balance: number;
   onPaid?: (newBalance: number) => void;
   childName?: string;
@@ -30,7 +31,7 @@ type PayStatus = 'idle' | 'sending' | 'pending' | 'success' | 'rejected';
 
 const PRESET_AMOUNTS = [5, 10, 15, 20];
 
-const ChildFairCard = ({ balance, onPaid, childName, childTeam }: Props) => {
+const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props) => {
   const [selectedAmount, setSelectedAmount] = useState<number>(20);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [targetTeam, setTargetTeam] = useState<number>(childTeam || 1);
@@ -119,6 +120,7 @@ const ChildFairCard = ({ balance, onPaid, childName, childTeam }: Props) => {
         event: 'FAIR_PUSH_REQUEST',
         payload: {
           requestId,
+          childId,
           childName: childName || 'Учасник',
           childTeam: childTeam ?? 0,
           amount: finalAmount,
@@ -135,7 +137,7 @@ const ChildFairCard = ({ balance, onPaid, childName, childTeam }: Props) => {
       setCurrentRequestId(null);
       toast.error('Не вдалося надіслати запит. Перевірте зʼєднання');
     }
-  }, [finalAmount, balance, targetTeam, childName, childTeam, haptics]);
+  }, [finalAmount, balance, targetTeam, childId, childName, childTeam, haptics]);
 
   // Скасування активного запиту дитиною
   const handleCancelRequest = () => {
