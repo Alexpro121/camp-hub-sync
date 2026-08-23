@@ -227,12 +227,11 @@
   .accordion-grid[data-open="false"] { grid-template-rows: 0fr; }
 
   /* Onboarding tour: single monolithic dim, no double overlays from dialogs */
-  body[data-tour-active="true"] [data-radix-popper-content-wrapper] { z-index: 60; }
-  body[data-tour-active="true"] [data-tour-dialog] ~ div,
-  body[data-tour-active="true"] div[data-state][aria-hidden="true"].fixed.inset-0 {
+  body[data-tour-active="true"] .dialog-overlay {
     background: transparent !important;
     backdrop-filter: none !important;
   }
+
 
   .tour-spotlight {
     transition:
