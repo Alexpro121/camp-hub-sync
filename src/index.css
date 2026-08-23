@@ -70,7 +70,7 @@
     --gradient-general: linear-gradient(135deg, hsl(215 25% 45%), hsl(220 25% 35%));
     --gradient-navy: linear-gradient(135deg, hsl(222 47% 9%), hsl(222 50% 14%));
     --gradient-card: linear-gradient(160deg, hsl(222 45% 13%), hsl(222 42% 11%));
-    --gradient-hero: radial-gradient(ellipse at top, hsl(22 95% 55% / 0.15), transparent 60%), linear-gradient(180deg, hsl(222 47% 9%), hsl(222 50% 7%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(22 95% 50% / 0.12), transparent 70%), linear-gradient(180deg, hsl(222 47% 7%), hsl(222 47% 7%));
 
     /* Shadows (subtle, flat) */
     --shadow-glow: 0 0 40px hsl(22 95% 55% / 0.25);
@@ -127,8 +127,11 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: var(--gradient-hero);
+    background-color: hsl(222 47% 7%);
+    background-image: radial-gradient(ellipse at top, hsl(22 95% 50% / 0.12), transparent 70%);
+    background-repeat: no-repeat;
     background-attachment: fixed;
+    background-size: 100% 100%;
     /* Use Telegram viewport when available, falls back to dynamic vh */
     min-height: var(--tg-viewport, 100dvh);
     -webkit-font-smoothing: antialiased;
