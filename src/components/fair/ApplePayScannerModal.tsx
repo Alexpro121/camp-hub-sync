@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
-import { KeyRound, ScanLine, X } from 'lucide-react';
+import { KeyRound, ScanLine, X, Coins, Check, AlertCircle, ShoppingBag, Clock, Hash, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
@@ -37,17 +37,15 @@ interface FrameBox { x: number; y: number; w: number; h: number }
 
 const SCAN_LOCK_MS = 3000;
 const RPC_RETRIES = 3;
-/** Decode at ~10 FPS instead of 60 — same responsiveness, ~70% less CPU/GPU load. */
+/** Декодування камери на 10 FPS для зниження навантаження на процесор на ~70% */
 const SCAN_FPS = 10;
 const SCAN_INTERVAL_MS = 1000 / SCAN_FPS;
-/** Hard network timeout for a single payment attempt. */
+/** Жорсткий таймаут для одного RPC-запиту оплати */
 const RPC_TIMEOUT_MS = 5000;
-/** Tracking frame repaints at ~15 FPS — the compositor interpolates the rest. */
 const BOX_UPDATE_MS = 65;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Rejects when the RPC takes longer than the timeout; retries stay idempotent via tx_id. */
 const withTimeout = async <T,>(p: PromiseLike<T>, ms: number): Promise<T> => {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
@@ -60,7 +58,7 @@ const withTimeout = async <T,>(p: PromiseLike<T>, ms: number): Promise<T> => {
   }
 };
 
-/** Lightweight canvas confetti — no dependency, cleans itself up. */
+/** Легке конфеті на Canvas без сторонніх бібліотек */
 const triggerConfetti = (canvas: HTMLCanvasElement | null) => {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
@@ -72,14 +70,13 @@ const triggerConfetti = (canvas: HTMLCanvasElement | null) => {
   canvas.height = h * dpr;
   ctx.scale(dpr, dpr);
 
-  const colors = ['#34c759', '#ffffff', '#8ee9a4', '#c9f7d4'];
-  // Pooled, small particle count keeps the animation cheap on mid-range phones.
+  const colors = ['#FA5A15', '#10B981', '#38BDF8', '#F59E0B', '#FFFFFF'];
   const parts = Array.from({ length: 45 }, () => ({
     x: w / 2 + (Math.random() - 0.5) * 60,
-    y: h * 0.42,
+    y: h * 0.4,
     vx: (Math.random() - 0.5) * 7,
-    vy: -Math.random() * 9 - 3,
-    size: 3 + Math.random() * 4,
+    vy: -Math.random() * 8 - 3,
+    size: 3.5 + Math.random() * 3.5,
     rot: Math.random() * Math.PI,
     vr: (Math.random() - 0.5) * 0.3,
     color: colors[Math.floor(Math.random() * colors.length)],
@@ -132,10 +129,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
   const haptics = useHaptics();
   const island = useDynamicIsland();
 
-  /**
-   * Moves the tracking frame straight through the DOM — no React re-render per
-   * camera frame, so the video layer never repaints and cannot flicker.
-   */
   const applyBox = useCallback((next: FrameBox | null, now: number) => {
     const el = boxRef.current;
     if (!el) return;
@@ -154,8 +147,13 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     const video = videoRef.current;
-    if (video) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; }
-    streamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
+    if (video) { 
+      try { video.pause(); } catch { /* ignore */ } 
+      video.srcObject = null; 
+    }
+    streamRef.current?.getTracks().forEach((t) => { 
+      try { t.stop(); } catch { /* ignore */ } 
+    });
     streamRef.current = null;
   }, []);
 
@@ -165,7 +163,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     setStage('failure');
   }, [haptics]);
 
-  /** Charges the balance through the atomic RPC; safe to retry with the same tx. */
   const charge = useCallback(async (payload: FairQrPayload) => {
     setStage('processing');
 
@@ -180,8 +177,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             p_amount: payload.amount,
             p_supervisor_id: payload.supervisor_id,
             p_supervisor_team: payload.supervisor_team,
-            // Printed reusable tag: the server re-reads price + label from the tag row
-            // and skips the one-time tx_id lock entirely.
             p_code_id: payload.is_reusable ? payload.code_id ?? null : null,
             p_label: payload.label ?? null,
           }),
@@ -196,15 +191,13 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
       if (!error) {
         const res = (data ?? {}) as { status?: string; balance?: number; balance_after?: number; label?: string | null; tx_id?: string };
         if (res.status === 'insufficient_funds') {
-          showFailure(`Недостатньо Айрон-доларів (Баланс: ${res.balance ?? balance} 💰, Сума: ${payload.amount} 💰)`);
+          showFailure(`Недостатньо Айрон-доларів (Баланс: ${res.balance ?? balance} А$, Сума: ${payload.amount} А$)`);
           return;
         }
         if (res.status === 'ok' || res.status === 'duplicate') {
           if (typeof res.balance_after === 'number') onPaid?.(res.balance_after);
-          // Instant WebSocket ping to the supervisor: rotates their QR immediately,
-          // without waiting for Postgres replication.
-          // A manually typed code carries no supervisor id, so also ping the
-          // code-derived channel the supervisor listens on for their live QR.
+          
+          // Миттєвий WebSocket-пінг касиру супроводу
           {
             const targets = [
               payload.supervisor_id ? `supervisor_fair_${payload.supervisor_id}` : null,
@@ -222,12 +215,12 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
                 try {
                   await ch.subscribe();
                   await ch.send({ type: 'broadcast', event: 'FAIR_PAYMENT_SUCCESS', payload: body });
-                } catch { /* the ledger channels still cover this */ }
+                } catch { /* ledger fallback */ }
                 supabase.removeChannel(ch);
               })();
             });
           }
-          // Free the camera the moment the payment lands.
+
           stopCamera();
           setReceipt({
             merchant: payload.supervisor_name || 'Ярмарок · Залізна зміна',
@@ -236,10 +229,11 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             at: new Date(),
             label: res.label ?? payload.label ?? null,
           });
+          
           if (!mountedRef.current) return;
           setStage('success');
           haptics.notification('success');
-          setTimeout(() => triggerConfetti(confettiRef.current), 220);
+          setTimeout(() => triggerConfetti(confettiRef.current), 200);
           return;
         }
         showFailure('Не вдалося провести оплату');
@@ -250,25 +244,24 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
       const msg = String((error as any)?.message || '');
       const restricted = msg.match(/RESTRICTED_TEAM_PAYMENT:?(\d+)?/);
       if (restricted) {
-        showFailure(`Оплата доступна лише для дітей Команди №${restricted[1] ?? payload.supervisor_team ?? ''}!`);
+        showFailure(`Оплата доступна лише для учасників Команди №${restricted[1] ?? payload.supervisor_team ?? ''}!`);
         return;
       }
       if (/fair_closed/.test(msg)) {
-        showFailure('Ярмарок наразі закрито. Здійснювати покупки можна лише під час слоту ярмарку за розкладом або за дозволом адміністратора');
+        showFailure('Ярмарок наразі закрито. Покупки доступні лише під час слоту ярмарку за розкладом.');
         return;
       }
       if (/double_scan_guard/.test(msg)) { showFailure('Захист від подвійного сканування'); return; }
-
       if (/unknown_preset/.test(msg)) { showFailure('Цінник більше не діє'); return; }
       if (/tx_already_used/.test(msg)) { showFailure('Цей QR-код вже використано'); return; }
       if (/invalid_amount/.test(msg)) { showFailure('Недійсна сума в QR-коді'); return; }
-      if (/not_a_child|not_authenticated/.test(msg)) { showFailure('Сесію втрачено, увійди знову'); return; }
-      // Idempotent retry — the same tx_id can never be charged twice.
+      if (/not_a_child|not_authenticated/.test(msg)) { showFailure('Сесію втрачено, увійдіть знову'); return; }
+      
       island.showError('Повторна спроба зʼєднання…', 'Списання не подвоїться');
       await sleep(700 * (attempt + 1));
     }
 
-    showFailure(lastError ? 'Немає звʼязку. Спробуй ще раз — списання не подвоїться' : 'Не вдалося провести оплату');
+    showFailure(lastError ? 'Немає звʼязку. Спробуйте ще раз — списання не подвоїться' : 'Не вдалося провести оплату');
   }, [balance, childName, childTeam, haptics, island, onPaid, showFailure, stopCamera]);
 
   const handleDecoded = useCallback((raw: string) => {
@@ -276,23 +269,21 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     lockedRef.current = true;
     setTimeout(() => { lockedRef.current = false; }, SCAN_LOCK_MS);
 
-    // Freeze the frame + haptic instantly: perceived latency stays under 50 ms.
     cancelAnimationFrame(rafRef.current);
     try { videoRef.current?.pause(); } catch { /* ignore */ }
-    viewportRef.current?.classList.add('is-locked');
     haptics.impact('medium');
 
     const parsed = parseFairQr(raw);
     if (!parsed.ok) {
       showFailure(parsed.reason === 'expired'
-        ? 'QR-код застарів, попросіть новий у вожатого'
+        ? 'QR-код застарів, попросіть новий у супроводу'
         : 'Недійсний QR-код ярмарку');
       return;
     }
     charge(parsed.payload);
   }, [charge, haptics, showFailure]);
 
-  // Camera lifecycle + decode loop.
+  // Життєвий цикл камери
   useEffect(() => {
     if (!open || stage !== 'scanning') return;
     let cancelled = false;
@@ -312,13 +303,11 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
           try {
-            // Sharp edges beat smooth ones for jsQR's binarizer.
             ctx.imageSmoothingEnabled = false;
             ctx.drawImage(video, 0, 0, w, h);
             const img = ctx.getImageData(0, 0, w, h);
             const code = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
             if (code?.location) {
-              // Map the decoded corners onto the displayed (object-cover) video box.
               const rw = video.clientWidth || w;
               const rh = video.clientHeight || h;
               const s = Math.max(rw / w, rh / h);
@@ -339,7 +328,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
               applyBox(null, now);
             }
             if (code?.data) handleDecoded(code.data);
-          } catch { /* frame not ready */ }
+          } catch { /* frame skip */ }
         }
       }
       if (!cancelled) rafRef.current = requestAnimationFrame(scan);
@@ -353,7 +342,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             facingMode: { ideal: 'environment' },
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            // Hardware continuous autofocus on phones that expose it.
             // @ts-expect-error non-standard WebRTC constraint
             advanced: [{ focusMode: 'continuous' }],
           },
@@ -365,18 +353,10 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
             video: { facingMode: { ideal: 'environment' } },
             audio: false,
           }))
-          // Stage B: any available video device (front camera, webcam, OBS...).
           .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
-        // Second chance at continuous focus for browsers that ignore it in getUserMedia.
-        try {
-          const track = stream.getVideoTracks()[0];
-          const caps = track?.getCapabilities?.() as { focusMode?: string[] } | undefined;
-          if (caps?.focusMode?.includes('continuous')) {
-            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as never] });
-          }
-        } catch { /* focus stays on the browser default */ }
+        
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
@@ -394,7 +374,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     return () => { cancelled = true; stopCamera(); };
   }, [open, stage, handleDecoded, stopCamera, applyBox]);
 
-  // Reset everything each time the sheet opens.
   useEffect(() => {
     if (open) {
       mountedRef.current = true;
@@ -404,7 +383,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
       setManualCode('');
       lastBoxUpdateRef.current = 0;
       if (boxRef.current) boxRef.current.style.opacity = '0';
-      viewportRef.current?.classList.remove('is-locked');
       lockedRef.current = false;
     } else {
       mountedRef.current = false;
@@ -414,7 +392,6 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
 
   useEffect(() => () => { mountedRef.current = false; stopCamera(); }, [stopCamera]);
 
-  // Failure auto-returns to the scanner.
   useEffect(() => {
     if (stage !== 'failure') return;
     const t = setTimeout(() => {
@@ -432,7 +409,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
 
     const { data: raw2, error } = await supabase.rpc('resolve_fair_code', { p_code: code });
 
-    if (error) { showFailure('Немає звʼязку. Спробуй ще раз'); return; }
+    if (error) { showFailure('Немає звʼязку. Спробуйте ще раз'); return; }
     const data = raw2 as unknown as {
       tx_id: string;
       amount: number;
@@ -442,7 +419,7 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
     } | null;
     if (!data) { showFailure('Код не знайдено або він застарів'); return; }
     if (new Date(data.expires_at).getTime() < Date.now()) {
-      showFailure('Код застарів, попросіть новий у вожатого');
+      showFailure('Код застарів, попросіть новий у супроводу');
       return;
     }
 
@@ -465,72 +442,122 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
   const close = () => { stopCamera(); onClose(); };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-[calc(6.5rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))]">
-      {/* Floating glass HUD — Apple Pay style, always on top of the sheet */}
-      <div className="fixed top-4 left-4 right-4 z-[110] bg-black/60 backdrop-blur-3xl border border-white/15 rounded-3xl p-4 shadow-2xl flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold tracking-tight text-white">Оплата Айрон-доларами</p>
-          <p className="text-[11px] text-white/50 tabular-nums mt-0.5">Баланс: {balance} 💰</p>
-        </div>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Закрити"
-          className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center cursor-pointer transition active:scale-90 shrink-0"
-        >
-          <X className="w-5 h-5" strokeWidth={2} />
-        </button>
-      </div>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none">
+      
+      {/* Вбудовані плавні стилі для сканера та анімації чека */}
+      <style>{`
+        @keyframes laserSweep {
+          0% { top: 6%; opacity: 0.2; }
+          50% { opacity: 1; }
+          100% { top: 92%; opacity: 0.2; }
+        }
+        @keyframes checkmarkDraw {
+          0% { stroke-dashoffset: 50; }
+          100% { stroke-dashoffset: 0; }
+        }
+        .anim-laser {
+          animation: laserSweep 2s ease-in-out infinite alternate;
+        }
+        .anim-check {
+          stroke-dasharray: 50;
+          stroke-dashoffset: 50;
+          animation: checkmarkDraw 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.2s;
+        }
+      `}</style>
 
-      <div className="pay-sheet relative w-full sm:max-w-sm mx-auto mt-0 rounded-[28px] border border-white/10 bg-[#0c0c0e]/95 backdrop-blur-2xl p-5 pb-8 overflow-hidden">
-        <canvas ref={confettiRef} className="pointer-events-none absolute inset-0 w-full h-full z-20" />
+      {/* Головна картка модального вікна */}
+      <div className="relative w-full max-w-sm rounded-[32px] border border-white/15 bg-[#0C0F17]/95 backdrop-blur-2xl p-5 sm:p-6 shadow-2xl overflow-hidden text-slate-100 flex flex-col justify-between">
+        <canvas ref={confettiRef} className="pointer-events-none absolute inset-0 w-full h-full z-30" />
 
-        {/* Scanner viewport */}
-        {(stage === 'scanning' || stage === 'processing') && (
-          <div
-            ref={viewportRef}
-            className={`scanner-viewport relative mx-auto overflow-hidden rounded-3xl bg-black ${stage === 'processing' ? 'is-collapsing is-locked' : ''}`}
-          >
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <canvas ref={frameRef} className="hidden" />
-            <span ref={boxRef} className="scan-frame" />
-            <span className="scan-corner tl" /><span className="scan-corner tr" />
-            <span className="scan-corner bl" /><span className="scan-corner br" />
-            {stage === 'scanning' && <span className="scan-laser" />}
-          </div>
-        )}
-
-        {stage === 'scanning' && (
-          <div className="mt-4 text-center relative z-10">
-            <p className="text-[15px] font-semibold text-white tracking-tight">Наведи камеру на QR-код</p>
-            <p className="text-[12px] text-white/50 mt-1">Баланс: {balance} 💰</p>
-            <button
-              type="button"
-              onClick={() => { stopCamera(); setStage('manual'); }}
-              className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-white/60 hover:text-white transition-colors"
-            >
-              <KeyRound className="w-3.5 h-3.5" strokeWidth={1.9} /> Ввести код вручну
-            </button>
-            <FairHowTo variant="child" className="mt-4 text-left" />
-          </div>
-        )}
-
-        {stage === 'manual' && (
-          <div className="relative z-10">
-            <div className="fallback-aurora rounded-3xl h-40 flex items-center justify-center">
-              <ScanLine className="w-8 h-8 text-white/70" strokeWidth={1.6} />
+        {/* Верхній рядок: Баланс та кнопка закриття */}
+        <div className="flex items-center justify-between pb-3 border-b border-white/10 relative z-20">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#FA5A15]/20 border border-[#FA5A15]/30 flex items-center justify-center text-[#FA5A15]">
+              <Coins className="w-4 h-4" />
             </div>
-            <p className="mt-4 text-[15px] font-semibold text-white tracking-tight text-center">
-              Камера недоступна
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Оплата на ярмарку</p>
+              <p className="text-xs font-mono font-bold text-white tabular-nums">
+                Баланс: <span className="text-[#FA5A15]">{balance}</span> А$
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Закрити"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-all cursor-pointer"
+          >
+            <X className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* 1. СТАН СКАНУВАННЯ КАМЕРОЮ */}
+        {(stage === 'scanning' || stage === 'processing') && (
+          <div className="mt-4 flex flex-col items-center relative z-10">
+            {/* Вікно камери з лазером */}
+            <div
+              ref={viewportRef}
+              className="relative w-60 h-60 rounded-3xl overflow-hidden bg-black border-2 border-white/20 shadow-2xl flex items-center justify-center"
+            >
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <canvas ref={frameRef} className="hidden" />
+              
+              {/* Рамка розпізнаного QR */}
+              <span 
+                ref={boxRef} 
+                className="absolute border-2 border-[#FA5A15] rounded-xl transition-all duration-75 pointer-events-none opacity-0 shadow-[0_0_12px_#FA5A15]" 
+              />
+
+              {/* Лазер сканування */}
+              {stage === 'scanning' && (
+                <div className="anim-laser absolute inset-x-3 h-0.5 bg-gradient-to-r from-transparent via-[#FA5A15] to-transparent shadow-[0_0_12px_#FA5A15]" />
+              )}
+
+              {/* Спінер підтвердження */}
+              {stage === 'processing' && (
+                <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center gap-2">
+                  <div className="w-8 h-8 rounded-full border-2 border-[#FA5A15] border-t-transparent animate-spin" />
+                  <span className="text-xs font-bold text-white tracking-wide">Проведення оплати...</span>
+                </div>
+              )}
+            </div>
+
+            {stage === 'scanning' && (
+              <div className="mt-4 text-center w-full">
+                <p className="text-sm font-bold text-white tracking-tight">Наведіть камеру на QR-код касира</p>
+                <button
+                  type="button"
+                  onClick={() => { stopCamera(); setStage('manual'); }}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all active:scale-95"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-[#FA5A15]" /> 
+                  <span>Ввести 5-значний код вручну</span>
+                </button>
+                <FairHowTo variant="child" className="mt-4 text-left" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. СТАН РУЧНОГО ВВЕДЕННЯ КОДУ */}
+        {stage === 'manual' && (
+          <div className="mt-4 relative z-10 text-center">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-[#FA5A15]/15 border border-[#FA5A15]/25 flex items-center justify-center text-[#FA5A15] mb-2 shadow-inner">
+              <ScanLine className="w-8 h-8" strokeWidth={1.8} />
+            </div>
+            
+            <h3 className="text-base font-bold text-white">Введіть код каси</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Введіть 5 цифр, вказаних під QR-кодом супроводу
             </p>
-            <p className="text-[12px] text-white/50 text-center mt-1">
-              Введи 5-значний код — він під QR-кодом вожатого
-            </p>
+
             <Input
               value={manualCode}
               onChange={(e) => {
@@ -543,97 +570,102 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
               type="tel"
               autoComplete="one-time-code"
               maxLength={FAIR_CODE_LENGTH}
-              className="mt-4 h-14 text-center font-mono text-3xl tracking-[0.4em] bg-white/5 border-white/10 text-white placeholder:text-white/25"
+              className="mt-4 h-14 text-center font-mono text-3xl font-black tracking-[0.35em] bg-white/5 border-white/15 text-white placeholder:text-slate-600 rounded-2xl focus:border-[#FA5A15]"
             />
+
             <Button
               onClick={() => void submitManual()}
               disabled={manualCode.length !== FAIR_CODE_LENGTH}
-              className="w-full h-12 mt-3 rounded-2xl bg-white text-black hover:bg-white/90 font-semibold"
+              className="w-full h-12 mt-3 rounded-2xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white font-bold active:scale-[0.98] transition-all shadow-md"
             >
-              Оплатити
+              Підтвердити оплату
             </Button>
+
             {cameraReady && (
               <button
                 type="button"
                 onClick={() => setStage('scanning')}
-                className="mt-3 w-full text-[12px] text-white/60 hover:text-white transition-colors"
+                className="mt-3 text-xs text-slate-400 hover:text-white transition-colors"
               >
-                Повернутись до сканера
+                ← Повернутися до камери
               </button>
             )}
           </div>
         )}
 
-        {stage === 'processing' && (
-          <div className="mt-5 flex flex-col items-center relative z-10">
-            <span className="ios-spinner" aria-hidden="true" />
-            <p className="mt-3 text-[15px] font-semibold text-white tracking-tight">Підтвердження оплати…</p>
-          </div>
-        )}
-
+        {/* 3. СТАН УСПІХУ ТА ЧЕК (APPLE PAY RECEIPT) */}
         {stage === 'success' && receipt && (
-          <div className="pay-success flex flex-col items-center relative z-10">
-            <div className="relative w-[88px] h-[88px] flex items-center justify-center">
-              <span className="success-shockwave" />
-              <span className="success-bg-circle" />
-              <svg viewBox="0 0 52 52" className="w-11 h-11 relative z-[2]">
-                <path className="apple-checkmark-path" d="M14 27 L23 36 L38 18" />
+          <div className="mt-4 flex flex-col items-center relative z-10 text-center animate-fade-in">
+            {/* Анімована зелена галочка */}
+            <div className="relative w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shadow-[0_0_24px_rgba(16,185,129,0.35)] mb-2">
+              <svg viewBox="0 0 52 52" className="w-8 h-8 text-emerald-400 stroke-current" fill="none" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                <path className="anim-check" d="M14 27 L23 36 L38 18" />
               </svg>
             </div>
-            <p className="mt-2 text-[20px] font-bold text-white tracking-tight">Оплачено</p>
-            <p className="text-[13px] text-white/50">
-              {receipt.label ? `${receipt.label} • ${receipt.amount} 💰` : `${receipt.amount} Айрон-доларів`}
+
+            <h3 className="text-xl font-black text-white tracking-tight">Оплачено успішно</h3>
+            <p className="text-xs font-mono font-bold text-[#FA5A15] mt-0.5">
+              -{receipt.amount} А$
             </p>
 
-            <div className="w-full mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-[13px] space-y-1.5">
+            {/* Деталі чека */}
+            <div className="w-full mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 text-xs space-y-2 text-left">
               {receipt.label && (
-                <div className="flex justify-between text-white/55">
-                  <span>Товар</span><span className="text-white font-semibold text-right">{receipt.label}</span>
+                <div className="flex justify-between items-center text-slate-400">
+                  <span className="flex items-center gap-1.5"><ShoppingBag className="w-3.5 h-3.5 text-primary" /> Товар:</span>
+                  <span className="text-white font-semibold truncate max-w-[160px]">{receipt.label}</span>
                 </div>
               )}
-              <div className="flex justify-between text-white/55">
-                <span>Магазин</span><span className="text-white font-semibold text-right">{receipt.merchant}</span>
+
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="flex items-center gap-1.5"><Store className="w-3.5 h-3.5 text-sky-400" /> Точка / Каса:</span>
+                <span className="text-white font-semibold truncate max-w-[160px]">{receipt.merchant}</span>
               </div>
-              <div className="flex justify-between text-white/55">
-                <span>Сума</span><span className="text-white font-semibold tabular-nums">{receipt.amount} 💰</span>
+
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="flex items-center gap-1.5"><Hash className="w-3.5 h-3.5 text-amber-400" /> Транзакція:</span>
+                <span className="text-white font-mono font-bold">{receipt.txId.slice(0, 8).toUpperCase()}</span>
               </div>
-              <div className="flex justify-between text-white/55">
-                <span>Транзакція</span>
-                <span className="text-white font-mono text-[11px]">{receipt.txId.slice(0, 8).toUpperCase()}</span>
-              </div>
-              <div className="flex justify-between text-white/55">
-                <span>Час</span>
-                <span className="text-white font-semibold tabular-nums">
+
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-400" /> Час оплати:</span>
+                <span className="text-white font-mono font-semibold">
                   {receipt.at.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             </div>
 
-            <Button onClick={close} className="w-full h-12 mt-4 rounded-2xl bg-white text-black hover:bg-white/90 font-semibold">
+            <Button 
+              onClick={close} 
+              className="w-full h-12 mt-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold active:scale-[0.98] transition-all shadow-md"
+            >
               Готово
             </Button>
           </div>
         )}
 
+        {/* 4. СТАН ПОМИЛКИ */}
         {stage === 'failure' && (
-          <div className="pay-failure flex flex-col items-center py-4 relative z-10">
-            <div className="relative w-[88px] h-[88px] flex items-center justify-center">
-              <span className="failure-bg-circle" />
-              <svg viewBox="0 0 52 52" className="w-10 h-10 relative z-[2]">
-                <path className="apple-cross-path" d="M18 18 L34 34" />
-                <path className="apple-cross-path delay" d="M34 18 L18 34" />
-              </svg>
+          <div className="mt-4 flex flex-col items-center py-2 relative z-10 text-center animate-fade-in">
+            <div className="w-16 h-16 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-[0_0_24px_rgba(244,63,94,0.35)] mb-2">
+              <AlertCircle className="w-8 h-8" strokeWidth={2} />
             </div>
-            <p className="mt-3 text-[15px] font-semibold text-white text-center px-2 tracking-tight">{failure}</p>
+
+            <h3 className="text-lg font-bold text-white">Помилка оплати</h3>
+            <p className="mt-1 text-xs text-rose-300 font-medium px-2 leading-relaxed">
+              {failure}
+            </p>
+
             <Button
-              variant="secondary"
+              variant="outline"
               onClick={() => { setFailure(null); setStage(cameraReady ? 'scanning' : 'manual'); }}
-              className="w-full h-12 mt-4 rounded-2xl"
+              className="w-full h-11 mt-4 rounded-2xl border-white/10 hover:bg-white/10 font-bold active:scale-[0.98] transition-all"
             >
-              Спробувати ще раз
+              Спробувати знову
             </Button>
           </div>
         )}
+
       </div>
     </div>
   );
