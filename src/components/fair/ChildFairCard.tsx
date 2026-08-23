@@ -35,7 +35,8 @@ const PRESET_AMOUNTS = [5, 10, 15, 20];
 const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props) => {
   const [selectedAmount, setSelectedAmount] = useState<number>(20);
   const [customAmount, setCustomAmount] = useState<string>('');
-  const [targetTeam, setTargetTeam] = useState<number>(childTeam || 1);
+  const [targetTeam, setTargetTeam] = useState<string>(String(childTeam || 1));
+  const numericTargetTeam = Math.min(TEAM_MAX, Math.max(1, parseInt(targetTeam, 10) || 1));
   const [status, setStatus] = useState<PayStatus>('idle');
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
 
