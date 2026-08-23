@@ -139,6 +139,14 @@ const SupervisorTour = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Mark the body while the tour runs — dialogs then render without their own dim,
+  // so the tour overlay stays a single, monolithic, never-flashing layer.
+  useEffect(() => {
+    if (!open) return;
+    document.body.setAttribute('data-tour-active', 'true');
+    return () => { document.body.removeAttribute('data-tour-active'); };
+  }, [open]);
+
   // Run the step's onEnter whenever it becomes current
   useEffect(() => {
     if (!open || !step) return;
@@ -149,37 +157,52 @@ const SupervisorTour = ({
   const measure = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(step.selector) as HTMLElement | null;
-    setRect(el ? el.getBoundingClientRect() : null);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect((prev) => {
+      if (prev && Math.abs(prev.top - r.top) < 0.5 && Math.abs(prev.left - r.left) < 0.5
+        && Math.abs(prev.width - r.width) < 0.5 && Math.abs(prev.height - r.height) < 0.5) return prev;
+      return r;
+    });
   }, [step]);
 
-  // Locate target (retry while tab/dialog DOM mounts) + smooth scroll into view
+  // Locate target (onEnter → rAF → 180ms for the dialog animation) then glide focus
   useLayoutEffect(() => {
     if (!open || !step) return;
     let cancelled = false;
     let tries = 0;
+    setReady(false);
     const tick = () => {
       if (cancelled) return;
       const el = document.querySelector(step.selector) as HTMLElement | null;
       if (el) {
         try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
-        setTimeout(() => { if (!cancelled) measure(); }, 380);
+        setTimeout(() => {
+          if (cancelled) return;
+          requestAnimationFrame(() => {
+            if (cancelled) return;
+            measure();
+            setReady(true);
+          });
+        }, 380);
         return;
       }
-      setRect(null);
       if (tries++ < 16) setTimeout(tick, 200);
     };
-    const t = setTimeout(tick, (step.delay ?? 0) + 250);
+    const t = setTimeout(() => requestAnimationFrame(tick), (step.delay ?? 0) + 180);
     return () => { cancelled = true; clearTimeout(t); };
   }, [open, index, step, measure]);
 
   // Keep the spotlight glued to the target
   useEffect(() => {
     if (!open) return;
-    const on = () => measure();
+    let raf = 0;
+    const on = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener('resize', on);
     window.addEventListener('scroll', on, true);
-    const iv = setInterval(on, 400);
+    const iv = setInterval(on, 500);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', on);
       window.removeEventListener('scroll', on, true);
       clearInterval(iv);
@@ -197,6 +220,7 @@ const SupervisorTour = ({
     ro.observe(el);
     return () => ro.disconnect();
   }, [open, index]);
+
 
   const finish = useCallback(() => {
     localStorage.setItem(tourStorageKey(teamNumber), new Date().toISOString());
