@@ -18,8 +18,6 @@ import {
   ShoppingBag, 
   Mic2,
   Calendar,
-  Clock,
-  Sparkles,
   Sun,
   Moon
 } from 'lucide-react';
@@ -68,8 +66,15 @@ const ChildFlow = ({ onBack }: Props) => {
   const [showAllFields, setShowAllFields] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
-  const [isDark, setIsDark] = useState<boolean>(true);
   
+  // Правильна ініціалізація та керування темою
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
   const haptics = useHaptics();
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
@@ -79,31 +84,26 @@ const ChildFlow = ({ onBack }: Props) => {
   // Сповіщення про розклад у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
-  // Ініціалізація теми оформлення
+  // Синхронізація теми з класом тегу <html>
   useEffect(() => {
     const root = document.documentElement;
-    if (root.classList.contains('light')) {
-      setIsDark(false);
+    if (isDark) {
+      root.classList.add('dark');
+      root.classList.remove('light');
+      localStorage.setItem('theme', 'dark');
     } else {
-      setIsDark(true);
+      root.classList.remove('dark');
+      root.classList.add('light');
+      localStorage.setItem('theme', 'light');
     }
-  }, []);
+  }, [isDark]);
 
   const toggleTheme = () => {
     haptics.impact('light');
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.remove('dark');
-      root.classList.add('light');
-      setIsDark(false);
-    } else {
-      root.classList.remove('light');
-      root.classList.add('dark');
-      setIsDark(true);
-    }
+    setIsDark((prev) => !prev);
   };
 
-  // Авто-вхід при валідній збереженій сесії
+  // Авто-вхід при збереженій дійсній сесії
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -252,12 +252,12 @@ const ChildFlow = ({ onBack }: Props) => {
     const shortId = child.id.slice(0, 6).toUpperCase();
 
     return (
-      <div className="relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 select-none">
+      <div className="relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 text-foreground transition-colors duration-300 select-none">
         
-        {/* Анімоване рідке фонове сяйво */}
+        {/* М'який фоновий переливний градієнт */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[480px] h-[480px] bg-primary/[0.07] dark:bg-primary/[0.12] rounded-full blur-[120px] animate-pulse" />
-          <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[420px] h-[380px] bg-sky-500/[0.04] dark:bg-sky-500/[0.08] rounded-full blur-[130px]" />
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[450px] h-[450px] bg-primary/[0.08] dark:bg-primary/[0.12] rounded-full blur-[120px]" />
+          <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[400px] h-[350px] bg-sky-500/[0.05] dark:bg-sky-500/[0.08] rounded-full blur-[130px]" />
         </div>
 
         <div className="relative z-10 flex flex-col gap-3">
@@ -265,18 +265,18 @@ const ChildFlow = ({ onBack }: Props) => {
           <header className="flex items-center justify-between gap-2">
             <button
               onClick={() => { haptics.impact('light'); handleExit(); }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card/80 hover:bg-card active:scale-95 border border-border/50 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shadow-sm"
             >
               <ArrowLeft className="w-3.5 h-3.5 text-primary" strokeWidth={2} />
               <span>Вийти</span>
             </button>
 
             <div className="flex items-center gap-1.5">
-              {/* Перемикач теми: світла / темна */}
+              {/* Перемикач теми */}
               <button
                 onClick={toggleTheme}
                 title="Змінити тему"
-                className="p-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-muted-foreground hover:text-foreground transition-all shadow-sm"
+                className="p-2 rounded-xl bg-card/80 hover:bg-card active:scale-95 border border-border/50 text-muted-foreground hover:text-foreground transition-all shadow-sm"
               >
                 {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
               </button>
@@ -284,7 +284,7 @@ const ChildFlow = ({ onBack }: Props) => {
               {/* ID учасника */}
               <button
                 onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-xs font-mono text-muted-foreground hover:text-foreground transition-all shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/80 hover:bg-card active:scale-95 border border-border/50 text-xs font-mono text-muted-foreground hover:text-foreground transition-all shadow-sm"
               >
                 <span className="text-muted-foreground/70">ID:</span>
                 <span className="font-bold text-foreground tracking-wider">{shortId}</span>
@@ -294,7 +294,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </header>
 
           {/* Головна картка ідентифікації */}
-          <Card className="p-4 sm:p-5 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/60 shadow-md dark:shadow-xl relative overflow-hidden transition-all duration-300">
+          <Card className="p-4 sm:p-5 bg-card/85 backdrop-blur-md border-border/60 shadow-sm relative overflow-hidden transition-all duration-300">
             {/* Статусний рядок */}
             <div className="flex items-center justify-between mb-3.5">
               <div className="flex items-center gap-1.5">
@@ -305,7 +305,7 @@ const ChildFlow = ({ onBack }: Props) => {
                   Залізна зміна
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Учасник
               </span>
@@ -329,7 +329,7 @@ const ChildFlow = ({ onBack }: Props) => {
                   {child.full_name}
                 </h1>
                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                  <span className="px-2 py-0.5 rounded-md bg-muted/60 dark:bg-muted/40 border border-border/50 text-[11px] font-medium text-foreground/90">
+                  <span className="px-2 py-0.5 rounded-md bg-muted/60 border border-border/50 text-[11px] font-medium text-foreground">
                     Команда №{child.team_number}
                   </span>
                   {child.team_name && (
@@ -342,7 +342,7 @@ const ChildFlow = ({ onBack }: Props) => {
             </div>
 
             {/* Віджет Айрон-доларів */}
-            <div className="p-3.5 sm:p-4 rounded-xl bg-surface-1/70 dark:bg-surface-1/40 border border-border/50 flex items-center justify-between gap-3 shadow-inner">
+            <div className="p-3.5 sm:p-4 rounded-xl bg-muted/40 border border-border/50 flex items-center justify-between gap-3 shadow-inner">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
                   <Coins className="w-4.5 h-4.5 text-primary" strokeWidth={1.8} />
@@ -351,7 +351,7 @@ const ChildFlow = ({ onBack }: Props) => {
                   <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase block leading-none">
                     Гаманець
                   </span>
-                  <span className="text-xs font-semibold text-foreground/90 mt-0.5 block">
+                  <span className="text-xs font-semibold text-foreground mt-0.5 block">
                     Айрон-долари
                   </span>
                 </div>
@@ -373,7 +373,7 @@ const ChildFlow = ({ onBack }: Props) => {
             onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
           >
             <TabsList
-              className={`grid w-full h-11 mb-2 p-1 bg-card/75 dark:bg-card/60 backdrop-blur-md border border-border/50 rounded-xl shadow-sm ${
+              className={`grid w-full h-11 mb-2 p-1 bg-card/80 backdrop-blur-md border border-border/50 rounded-xl shadow-sm ${
                 ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][
                   (talent.active ? 1 : 0) + (fair.hasFairAccess ? 1 : 0)
                 ]
@@ -429,7 +429,7 @@ const ChildFlow = ({ onBack }: Props) => {
               <TransactionHistory childId={child.id} collapsible />
 
               {/* Персональні дані */}
-              <Card className="p-4 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-3 shadow-sm">
+              <Card className="p-4 bg-card/85 backdrop-blur-md border-border/50 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between border-b border-border/40 pb-2">
                   <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
                     Персональні дані
@@ -439,7 +439,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
                 {/* Сітка: № у списку та Команда */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 rounded-xl bg-surface-1/50 dark:bg-surface-1/40 border border-border/40">
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40">
                     <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
                       <Hash className="w-3.5 h-3.5 text-primary" />
                       <span>№ у списку</span>
@@ -449,7 +449,7 @@ const ChildFlow = ({ onBack }: Props) => {
                     </p>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-surface-1/50 dark:bg-surface-1/40 border border-border/40">
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/40">
                     <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
                       <Users className="w-3.5 h-3.5 text-primary" />
                       <span>Команда</span>
@@ -460,10 +460,10 @@ const ChildFlow = ({ onBack }: Props) => {
                   </div>
                 </div>
 
-                {/* Список деталей: без зайвих кнопок дзвінка/копіювання */}
+                {/* Список деталей: чистий телефон без зайвих кнопок */}
                 <div className="space-y-1.5 text-xs pt-0.5">
                   {child.team_name && (
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Tag className="w-3.5 h-3.5 text-muted-foreground/80" />
                         <span>Категорія:</span>
@@ -473,9 +473,9 @@ const ChildFlow = ({ onBack }: Props) => {
                   )}
 
                   {child.phone && (
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="w-3.5 h-3.5 text-emerald-500/90" />
+                        <Phone className="w-3.5 h-3.5 text-emerald-500" />
                         <span>Телефон:</span>
                       </div>
                       <span className="font-mono font-medium text-foreground">{child.phone}</span>
@@ -483,9 +483,9 @@ const ChildFlow = ({ onBack }: Props) => {
                   )}
 
                   {child.note_from_table && (
-                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/30">
                       <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="w-3.5 h-3.5 text-sky-400/90" />
+                        <MapPin className="w-3.5 h-3.5 text-sky-500" />
                         <span>Локація / Примітка:</span>
                       </div>
                       <span className="font-semibold text-foreground break-words text-right">
@@ -498,7 +498,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
               {/* Усі поля з таблиці */}
               {rawEntries.length > 0 && (
-                <Card className="p-0 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 overflow-hidden shadow-sm">
+                <Card className="p-0 bg-card/85 backdrop-blur-md border-border/50 overflow-hidden shadow-sm">
                   <button
                     onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
                     className="w-full flex items-center justify-between p-3.5 hover:bg-muted/30 transition-colors"
@@ -533,65 +533,20 @@ const ChildFlow = ({ onBack }: Props) => {
               )}
             </TabsContent>
 
-            {/* ВМІСТ 2: РОЗКЛАД (ПОКРАЩЕНА ДЕМОНСТРАЦІЯ) */}
+            {/* ВМІСТ 2: РОЗКЛАД (РЕАЛЬНІ ДАНІ БЕЗ ШАБЛОНІВ) */}
             <TabsContent value="schedule" className="mt-0 space-y-3">
               {phase?.currentPhase === 'PREPARING' ? (
                 <PhaseBanner status={phase} teamNumber={child.team_number} />
               ) : (
-                <div className="space-y-3">
-                  {/* Головний компонент розкладу */}
-                  <ScheduleView
-                    myTeam={child.team_number}
-                    lockTeam
-                    onFairAction={() => setScannerOpen(true)}
-                  />
-
-                  {/* Швидкі орієнтири дня для зручності */}
-                  <Card className="p-3.5 bg-card/80 backdrop-blur-md border-border/50 space-y-2.5">
-                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-xs font-bold text-foreground uppercase tracking-wide">
-                          Ключові активності
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-semibold text-primary">Сьогодні</span>
-                    </div>
-
-                    <div className="space-y-2 text-xs">
-                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-surface-1/50 border border-border/40">
-                        <span className="font-mono font-bold text-primary pt-0.5">09:00</span>
-                        <div>
-                          <p className="font-bold text-foreground">Ранкова залізна руханка</p>
-                          <p className="text-[10px] text-muted-foreground">Головний плац табору</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-primary/10 border border-primary/20">
-                        <span className="font-mono font-bold text-primary pt-0.5">14:00</span>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-foreground">Командний воркшоп</p>
-                            <span className="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[9px] font-bold">Зараз</span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground">Хаб Команд</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-surface-1/50 border border-border/40">
-                        <span className="font-mono font-bold text-muted-foreground pt-0.5">20:00</span>
-                        <div>
-                          <p className="font-bold text-foreground">Вечірня карпатська ватра</p>
-                          <p className="text-[10px] text-muted-foreground">Підсумки дня та нагородження</p>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                </div>
+                <ScheduleView
+                  myTeam={child.team_number}
+                  lockTeam
+                  onFairAction={() => setScannerOpen(true)}
+                />
               )}
             </TabsContent>
 
-            {/* ВМІСТ 3: ЯРМАРОК */}
+            {/* ВМІСТ 3: ЯРМАРОК (РЕАЛЬНІ ДАНІ) */}
             {fair.hasFairAccess && (
               <TabsContent value="fair" className="mt-0 space-y-3">
                 {fair.isLiveFairRunning ? (
@@ -601,7 +556,7 @@ const ChildFlow = ({ onBack }: Props) => {
                     childTeam={child.team_number}
                   />
                 ) : (
-                  <Card className="p-4 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-2">
+                  <Card className="p-4 bg-card/85 backdrop-blur-md border-border/50 space-y-2 shadow-sm">
                     <div className="flex items-center gap-2 mb-2">
                       <ShoppingBag className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
                       <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
@@ -652,7 +607,7 @@ const ChildFlow = ({ onBack }: Props) => {
      ЕКРАН 2: ФОРМА ВХОДУ (НЕАВТОРИЗОВАНИЙ СТАН)
   ========================================================================= */
   return (
-    <div className="min-h-[100dvh] px-4 py-5 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between select-none">
+    <div className="min-h-[100dvh] px-4 py-5 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between text-foreground select-none">
       {loading && <FullScreenLoader label="Шукаємо твій профіль..." />}
       
       <div>
@@ -668,7 +623,7 @@ const ChildFlow = ({ onBack }: Props) => {
           <button
             onClick={toggleTheme}
             title="Змінити тему"
-            className="p-2 rounded-xl bg-card/60 border border-border/50 text-muted-foreground hover:text-foreground transition-all"
+            className="p-2 rounded-xl bg-card/80 border border-border/50 text-muted-foreground hover:text-foreground transition-all shadow-sm"
           >
             {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
           </button>
@@ -687,7 +642,7 @@ const ChildFlow = ({ onBack }: Props) => {
             </p>
           </div>
 
-          <Card className="p-4 sm:p-5 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-4 shadow-lg">
+          <Card className="p-4 sm:p-5 bg-card/85 backdrop-blur-md border-border/50 space-y-4 shadow-sm">
             <div className="space-y-1.5">
               <Label htmlFor="name" className="text-xs font-semibold text-foreground">
                 Прізвище та ім'я
@@ -698,7 +653,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 value={fullName}
                 onChange={(e) => { setFullName(e.target.value); if (suggestions.length) setSuggestions([]); }}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="h-12 text-base bg-surface-1/50 border-border/60 focus:border-primary/60"
+                className="h-12 text-base bg-muted/30 border-border/60 focus:border-primary"
               />
             </div>
 
@@ -714,17 +669,17 @@ const ChildFlow = ({ onBack }: Props) => {
                 value={team}
                 onChange={(e) => setTeam(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="h-12 text-base bg-surface-1/50 border-border/60 focus:border-primary/60"
+                className="h-12 text-base bg-muted/30 border-border/60 focus:border-primary"
               />
               <p className="text-[11px] text-muted-foreground/70 leading-snug">
-                Не пам'ятаєш команду? Запитай у свого <strong className="text-foreground/90 font-medium">супроводу</strong> або куратора.
+                Не пам'ятаєш команду? Запитай у свого <strong className="text-foreground font-medium">супроводу</strong> або куратора.
               </p>
             </div>
 
             <Button 
               onClick={() => { haptics.impact('light'); handleLogin(); }} 
               disabled={loading} 
-              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98] transition-transform shadow-md"
+              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98] transition-transform shadow-sm"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти в кабінет'}
             </Button>
@@ -732,7 +687,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
           {/* Підказки неточного пошуку */}
           {suggestions.length > 0 && (
-            <Card className="p-4 bg-card/90 dark:bg-card/80 backdrop-blur-md border-border/60 animate-slide-up space-y-3">
+            <Card className="p-4 bg-card/90 backdrop-blur-md border-border/60 animate-slide-up space-y-3 shadow-sm">
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-xs font-semibold text-foreground">
@@ -747,7 +702,7 @@ const ChildFlow = ({ onBack }: Props) => {
                     <button
                       key={item.id}
                       onClick={() => { haptics.impact('light'); loginAs(item); }}
-                      className="w-full p-3 rounded-xl bg-surface-1/80 hover:bg-muted/60 border border-border/40 text-left transition-all active:scale-[0.98] flex items-center gap-3"
+                      className="w-full p-3 rounded-xl bg-muted/40 hover:bg-muted/70 border border-border/40 text-left transition-all active:scale-[0.98] flex items-center gap-3"
                     >
                       <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
                         <User className="w-4 h-4 text-primary" />
