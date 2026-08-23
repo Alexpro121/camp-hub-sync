@@ -1,41 +1,70 @@
 import { useState } from "react";
-import { Lightbulb, ShoppingBag, ScanLine, PartyPopper, QrCode, Coins, BadgeCheck, X, Info } from "lucide-react";
+import { 
+  Lightbulb, 
+  ShoppingBag, 
+  Radio, 
+  CheckCircle2, 
+  Store, 
+  UserCheck, 
+  Coins, 
+  X, 
+  Info,
+  Send,
+  Sparkles
+} from "lucide-react";
 
 interface Props {
   variant: "child" | "supervisor";
   className?: string;
 }
 
+// Покрокові інструкції для дітей (Air Pay)
 const CHILD_STEPS = [
-  { Icon: ShoppingBag, text: "Обирай товари на стендах вожатих." },
-  {
-    Icon: ScanLine,
-    text: "Натисни «Відкрити QR-сканер», наведи камеру на QR-код вожатого або введи 5-значний код з його екрана.",
+  { 
+    Icon: ShoppingBag, 
+    text: "Обирай товари або смаколики на ярмаркових наметах табору." 
   },
-  { Icon: PartyPopper, text: "Отримуй підтвердження Iron Pay з чеком та конфеті!" },
+  {
+    Icon: Send,
+    text: "У кабінеті вкажи суму, перевір номер каси команди та натисни «Надіслати запит на касу».",
+  },
+  { 
+    Icon: CheckCircle2, 
+    text: "Супровід миттєво підтвердить оплату на своєму екрані — забирай покупку та переглядай чек в історії!" 
+  },
 ];
 
+// Покрокові інструкції для супроводу (Air Pay Каса)
 const SUP_STEPS = [
-  { Icon: Coins, text: "Вкажи суму покупки або вибери швидкий пресет (10, 20, 50 💰)." },
-  { Icon: QrCode, text: "Покажи QR-код чи 5-значний код з екрана дитині." },
+  { 
+    Icon: Store, 
+    text: "Тримай касу відкритою — діти надсилають запити на оплату зі своїх телефонів прямо по повітрю." 
+  },
+  { 
+    Icon: Radio, 
+    text: "У блоці «Вхідні запити» з'явиться ім'я дитини та сума. Натисни «Списати», щоб провести оплату за 1 секунду." 
+  },
   {
-    Icon: BadgeCheck,
-    text: "При успішній оплаті вирине зелене сповіщення з ПІБ дитини, а QR-код автоматично оновиться для наступного покупця.",
+    Icon: UserCheck,
+    text: "Якщо у дитини розрядився телефон — скористайся блоком «Пряме списання» та обери її зі списку своєї команди.",
   },
 ];
 
 const TIP = {
   child:
-    "Обирай одразу декілька товарів (наприклад, лимонад + смаколики) та сплачуй за все разом однією сумою! Це зручніше, ніж сканувати QR-код за кожну дрібницю окремо.",
+    "Рахуй загальну суму покупок і надсилай один запит за все разом (наприклад, лимонад + смаколики). Це значно швидше та зручніше!",
   supervisor:
-    "Якщо дитина купує 2–3 речі одночасно — порахуй загальну суму та покажи один QR-код за все разом! Це зекономить час і вам, і дитині.",
+    "Ви можете увімкнути перемикач «Дозволити покупки іншим командам», щоб приймати оплату від усіх учасників табору.",
 };
 
-/** Shared how-to card for the fair: separate copy for children and supervisors. */
+/**
+ * Інтерактивна інструкція Air Pay для ярмарку.
+ */
 const FairHowTo = ({ variant, className = "" }: Props) => {
   const steps = variant === "child" ? CHILD_STEPS : SUP_STEPS;
-  const title = variant === "child" ? "Як купувати на ярмарку?" : "Як продавати на ярмарку?";
+  const title = variant === "child" ? "Як купувати на ярмарку (Air Pay)?" : "Як працює каса Air Pay?";
   const storageKey = `fair-howto-hidden:${variant}`;
+  
   const [hidden, setHidden] = useState(() => {
     try {
       return localStorage.getItem(storageKey) === "1";
@@ -49,65 +78,87 @@ const FairHowTo = ({ variant, className = "" }: Props) => {
     try {
       localStorage.setItem(storageKey, next ? "1" : "0");
     } catch {
-      /* ignore */
+      // ignore
     }
   };
 
+  // Згорнутий стан (акуратна кнопка)
   if (hidden) {
     return (
-      <div className={`relative z-10 -mt-2 flex justify-end ${className}`}>
+      <div className={`relative z-10 flex justify-end select-none ${className}`}>
         <button
           type="button"
           onClick={() => setState(false)}
           aria-label={title}
-          className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-200 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-amber-500/20 active:scale-95"
+          className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20 active:scale-95 transition-all shadow-sm"
         >
           <Info className="h-3.5 w-3.5" strokeWidth={2} />
-          Інструкція
+          <span>Інструкція</span>
         </button>
       </div>
     );
   }
 
+  // Розгорнутий стан
   return (
-    <div className={`rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 ${className}`}>
-      <div className="flex items-center gap-2">
-        <ShoppingBag className="h-4 w-4 shrink-0 text-amber-400" strokeWidth={1.9} />
-        <p className="flex-1 text-[13px] font-semibold tracking-tight text-amber-200">{title}</p>
+    <div className={`rounded-3xl border border-amber-500/30 bg-amber-500/[0.06] dark:bg-amber-500/[0.04] backdrop-blur-md p-4 sm:p-5 select-none transition-all ${className}`}>
+      
+      {/* Шапка інструкції */}
+      <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-2.5">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400">
+            <Radio className="h-3.5 w-3.5 animate-pulse" strokeWidth={2.2} />
+          </div>
+          <p className="text-xs sm:text-sm font-bold tracking-tight text-amber-200">
+            {title}
+          </p>
+        </div>
+
         <button
           type="button"
           onClick={() => setState(true)}
           aria-label="Закрити інструкцію"
-          className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-200/90 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-amber-500/20 active:scale-95"
+          className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold text-amber-200/90 hover:bg-amber-500/20 active:scale-95 transition-all"
         >
-          <X className="h-3 w-3" strokeWidth={2.4} /> Закрити
+          <X className="h-3 w-3" strokeWidth={2.4} /> 
+          <span>Приховати</span>
         </button>
       </div>
 
+      {/* Крок 1 */}
       <ol className="mt-3 space-y-2.5">
         {steps.slice(0, 1).map(({ Icon, text }, i) => (
-          <li key={i} className="flex gap-2.5 text-xs leading-relaxed text-amber-100/85">
-            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" strokeWidth={1.9} />
+          <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed text-amber-100/90">
+            <div className="w-5 h-5 rounded-md bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+              <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+            </div>
             <span>
-              <span className="font-semibold text-amber-200">Крок 1:</span> {text}
+              <strong className="font-bold text-amber-300">Крок 1:</strong> {text}
             </span>
           </li>
         ))}
       </ol>
 
-      <div className="my-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-        <span className="inline-flex items-center gap-1.5 font-bold text-amber-300">
-          <Lightbulb className="h-3.5 w-3.5" strokeWidth={2} /> ВАЖЛИВА ПОРАДА:
-        </span>{" "}
-        {TIP[variant]}
+      {/* Важлива порада */}
+      <div className="my-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200 shadow-inner">
+        <span className="inline-flex items-center gap-1.5 font-black text-amber-300 uppercase tracking-wider text-[10px] block mb-0.5">
+          <Lightbulb className="h-3.5 w-3.5 text-amber-400" strokeWidth={2.2} /> 
+          Корисна порада:
+        </span>
+        <p className="text-amber-100/90 font-medium">
+          {TIP[variant]}
+        </p>
       </div>
 
+      {/* Кроки 2 і 3 */}
       <ol className="space-y-2.5">
         {steps.slice(1).map(({ Icon, text }, i) => (
-          <li key={i} className="flex gap-2.5 text-xs leading-relaxed text-amber-100/85">
-            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" strokeWidth={1.9} />
+          <li key={i} className="flex items-start gap-2.5 text-xs leading-relaxed text-amber-100/90">
+            <div className="w-5 h-5 rounded-md bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+              <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+            </div>
             <span>
-              <span className="font-semibold text-amber-200">Крок {i + 2}:</span> {text}
+              <strong className="font-bold text-amber-300">Крок {i + 2}:</strong> {text}
             </span>
           </li>
         ))}
