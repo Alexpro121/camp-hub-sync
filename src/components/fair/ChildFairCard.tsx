@@ -202,7 +202,11 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                   type="number"
                   inputMode="numeric"
                   value={targetTeam}
-                  onChange={(e) => setTargetTeam(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    setTargetTeam(raw);
+                  }}
+                  onBlur={() => setTargetTeam(String(numericTargetTeam))}
                   className="h-11 font-mono font-bold text-sm bg-surface-1/50 border-border/60 rounded-xl"
                   placeholder="Номер команди"
                 />
