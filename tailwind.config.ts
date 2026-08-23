@@ -16,6 +16,7 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+        brand: ['Montserrat', 'Inter', 'sans-serif'],
 
       },
       colors: {
