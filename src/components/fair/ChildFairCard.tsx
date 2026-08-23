@@ -132,7 +132,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
       });
 
       setStatus('pending');
-      toast.info(`Запит надіслано на Касу Команди №${targetTeam}`);
+      toast.info(`Запит надіслано на Касу Команди №${numericTargetTeam}`);
     } catch (err) {
       console.error('[ChildFairCard] Помилка відправки запиту:', err);
       setStatus('idle');
