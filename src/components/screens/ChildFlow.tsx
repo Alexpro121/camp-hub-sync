@@ -19,6 +19,7 @@ import {
   ShoppingBag, 
   Mic2 
 } from 'lucide-react';
+import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
