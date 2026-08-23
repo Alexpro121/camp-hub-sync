@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   ArrowLeft, 
   Coins, 
@@ -66,7 +66,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   
-  // Тема оформлення виключно для кабінету дитини
+  // Керування темою оформлення для кабінету дитини
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('child_theme_mode');
@@ -82,23 +82,23 @@ const ChildFlow = ({ onBack }: Props) => {
   // Сповіщення про розклад у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
-  // Ізольоване збереження теми дитини + автоматичне повернення темної теми при виході для адміна/супроводу
+  // Ізольоване збереження теми дитини + автоматичне повернення темної теми для адміна/супроводу при виході
   useEffect(() => {
     localStorage.setItem('child_theme_mode', isDark ? 'dark' : 'light');
 
     return () => {
-      // При виході з кабінету дитини повертаємо корінь у темну тему
+      // При виході з кабінету дитини обов'язково повертаємо темний режим для адміна та супроводу
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
     };
   }, [isDark]);
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     haptics.impact('light');
     setIsDark((prev) => !prev);
-  };
+  }, [haptics]);
 
-  // Авто-вхід при валідній сесії
+  // Авто-вхід при збереженій дійсній сесії
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -114,20 +114,27 @@ const ChildFlow = ({ onBack }: Props) => {
     return () => { cancelled = true; };
   }, []);
 
-  // Realtime оновлення профілю
+  // Realtime слухач оновлень даних дитини
   useEffect(() => {
-    if (!child) return;
+    if (!child?.id) return;
     const channel = supabase
-      .channel(`child-${child.id}`)
+      .channel(`child-sync-${child.id}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'children', filter: `id=eq.${child.id}` },
-        (payload) => setChild(payload.new as Child)
+        (payload) => {
+          if (payload.new) {
+            setChild((prev) => ({ ...prev, ...(payload.new as Child) }));
+          }
+        }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => { 
+      supabase.removeChannel(channel); 
+    };
   }, [child?.id]);
 
-  // Realtime сповіщення про нарахування Айрон-доларів
+  // Realtime сповіщення про нарахування Айрон-доларів з Dynamic Island
   useEffect(() => {
     const childId = child?.id;
     if (!childId) return;
@@ -146,7 +153,10 @@ const ChildFlow = ({ onBack }: Props) => {
         }
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => { 
+      supabase.removeChannel(channel); 
+    };
   }, [child?.id, island, haptics]);
 
   const loginAs = async (candidate: { id: string }) => {
@@ -236,6 +246,11 @@ const ChildFlow = ({ onBack }: Props) => {
     return name.slice(0, 2).toUpperCase() || 'УЧ';
   };
 
+  // Оптимістичне оновлення балансу при оплаті
+  const handleBalancePaid = (newBalance: number) => {
+    setChild((prev) => prev ? { ...prev, iron_dollars: newBalance } : prev);
+  };
+
   /* =========================================================================
      ЕКРАН 1: ПРОФІЛЬ УЧАСНИКА (АВТОРИЗОВАНИЙ СТАН)
   ========================================================================= */
@@ -256,7 +271,7 @@ const ChildFlow = ({ onBack }: Props) => {
         
         {/* ================= ГЛОБАЛЬНИЙ ІЗОЛЬОВАНИЙ CSS-РУШІЙ ТЕМИ ================= */}
         <style>{`
-          /* Світла тема: повне перефарбування всіх вкладених карток та компонентів */
+          /* Повне перефарбування всіх вкладених карток та компонентів у світлій темі */
           #child-flow-root.theme-light {
             color-scheme: light;
           }
@@ -292,7 +307,7 @@ const ChildFlow = ({ onBack }: Props) => {
             border-color: #e2e8f0 !important;
           }
 
-          /* Вкладки (Tabs) у світлій темі */
+          /* Вкладки (Tabs) */
           #child-flow-root.theme-light [role="tablist"] {
             background-color: #e2e8f0 !important;
             border-color: #cbd5e1 !important;
@@ -306,13 +321,13 @@ const ChildFlow = ({ onBack }: Props) => {
             color: #64748b !important;
           }
 
-          /* Історія транзакцій та елементи списку */
+          /* Елементи списку */
           #child-flow-root.theme-light .divide-y > div,
           #child-flow-root.theme-light [class*="border-border"] {
             border-color: #e2e8f0 !important;
           }
 
-          /* Збереження брендових акцентів */
+          /* Брендові акценти */
           #child-flow-root.theme-light .text-primary,
           #child-flow-root.theme-light [class*="text-primary"],
           #child-flow-root.theme-light [class*="text-[#FA5A15]"] {
@@ -528,7 +543,8 @@ const ChildFlow = ({ onBack }: Props) => {
 
             {/* ВМІСТ 1: ПРОФІЛЬ */}
             <TabsContent value="profile" className="space-y-3 mt-0">
-              {fair.isLiveFairRunning && child && (!phase || phase.currentPhase !== 'PREPARING') && (
+              {/* Картка оплати ярмарку показується завжди при відкритті або доступі */}
+              {child && (fair.isLiveFairRunning || fair.hasFairAccess) && (
                 <ChildFairCard
                   balance={child.iron_dollars}
                   childName={child.full_name}
@@ -591,7 +607,7 @@ const ChildFlow = ({ onBack }: Props) => {
                   </div>
                 </div>
 
-                {/* Список деталей: чистий телефон без зайвих кнопок */}
+                {/* Список деталей */}
                 <div className="space-y-1.5 text-xs pt-0.5">
                   {child.team_name && (
                     <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
@@ -745,6 +761,7 @@ const ChildFlow = ({ onBack }: Props) => {
           open={scannerOpen}
           onClose={() => setScannerOpen(false)}
           balance={child.iron_dollars}
+          onPaid={handleBalancePaid}
           childName={child.full_name}
           childTeam={child.team_number}
         />
