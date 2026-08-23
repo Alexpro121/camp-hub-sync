@@ -17,7 +17,6 @@ import {
   Pencil, 
   Download, 
   Sparkles,
-  Users,
   Search,
   CheckCircle2,
   Radio,
@@ -45,38 +44,48 @@ import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   draft: { 
     label: 'Чернетка', 
-    cls: 'bg-muted/60 text-muted-foreground border-border/60',
+    cls: 'bg-muted text-muted-foreground border-border',
     dot: 'bg-muted-foreground'
   },
   collecting: { 
     label: 'Збір номерів', 
-    cls: 'bg-[#FA5A15]/15 text-[#FA5A15] border-[#FA5A15]/30',
-    dot: 'bg-[#FA5A15] animate-pulse'
+    cls: 'bg-primary/20 text-primary border-primary/40',
+    dot: 'bg-primary animate-pulse'
   },
   generated: { 
     label: 'Сценарій сформовано', 
-    cls: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-    dot: 'bg-amber-500'
+    cls: 'bg-warning/20 text-warning border-warning/40',
+    dot: 'bg-warning'
   },
   finished: { 
-    label: 'Опубліковано для табору', 
-    cls: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
-    dot: 'bg-emerald-500'
+    label: 'Опубліковано', 
+    cls: 'bg-success/20 text-success border-success/40',
+    dot: 'bg-success'
   },
 };
 
-/** Стабільні колірні акценти команд для швидкого візуального розрізнення */
+/** Стабільні акценти команд для темного інтерфейсу */
 const TEAM_ACCENTS = [
-  'border-sky-500/30 bg-sky-500/[0.04]',
-  'border-emerald-500/30 bg-emerald-500/[0.04]',
-  'border-amber-500/30 bg-amber-500/[0.04]',
-  'border-purple-500/30 bg-purple-500/[0.04]',
-  'border-rose-500/30 bg-rose-500/[0.04]',
-  'border-indigo-500/30 bg-indigo-500/[0.04]',
-  'border-teal-500/30 bg-teal-500/[0.04]',
-  'border-[#FA5A15]/30 bg-[#FA5A15]/[0.04]',
+  'bg-sky-500/10 text-sky-300 border-sky-500/30',
+  'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+  'bg-amber-500/10 text-amber-300 border-amber-500/30',
+  'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30',
+  'bg-rose-500/10 text-rose-300 border-rose-500/30',
+  'bg-indigo-500/10 text-indigo-300 border-indigo-500/30',
+  'bg-teal-500/10 text-teal-300 border-teal-500/30',
+  'bg-orange-500/10 text-orange-300 border-orange-500/30',
 ];
 const teamAccent = (team: number) => TEAM_ACCENTS[Math.abs(team) % TEAM_ACCENTS.length];
+
+/** Схиляння слова "виступ" */
+function formatActsCount(count: number): string {
+  const abs = Math.abs(count) % 100;
+  const rem = abs % 10;
+  if (abs > 10 && abs < 20) return `${count} виступів`;
+  if (rem > 1 && rem < 5) return `${count} виступи`;
+  if (rem === 1) return `${count} виступ`;
+  return `${count} виступів`;
+}
 
 const TalentAdmin = () => {
   const { shiftId, shift } = useActiveShift();
@@ -119,12 +128,12 @@ const TalentAdmin = () => {
     setBusy(false);
     if (error) { toast.error('Не вдалося створити подію'); return; }
     await supabase.from('broadcasts').insert({
-      message: 'Розпочато збір номерів на Вечір талантів! Супровід може додавати виступи.',
+      message: 'Розпочато збір номерів на Вечір талантів! Супровід може подавати заявки.',
       color: 'gradient',
       target_teams: [],
       sent_by: 'Супровід',
     });
-    toast.success('Збір номерів успішно розпочато');
+    toast.success('Збір номерів розпочато');
     load();
   };
 
@@ -146,7 +155,7 @@ const TalentAdmin = () => {
     await persistOrder(ordered as TalentEntry[]);
     await supabase.from('talent_events').update({ status: 'generated' }).eq('id', event.id);
     setBusy(false);
-    toast.success('Сценарій та чергу виступів сформовано');
+    toast.success('Сценарій та порядок виступів сформовано');
     load();
   };
 
@@ -173,10 +182,10 @@ const TalentAdmin = () => {
       'Команда': `№${e.team_number}`,
       'Назва номера': e.title,
       'Опис / Учасники / Реквізит': e.description ?? '',
-      'Перерва після номера (хв)': e.break_needed_after ?? 0,
+      'Пауза після номера (кількість виступів)': e.break_needed_after ? `${e.break_needed_after} вист.` : '0',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 34 }, { wch: 48 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 36 }, { wch: 48 }, { wch: 30 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Програма виступів');
     const safeName = (shift?.name || 'Зміна').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
@@ -188,12 +197,12 @@ const TalentAdmin = () => {
     if (!event) return;
     await setStatus('finished');
     await supabase.from('broadcasts').insert({
-      message: 'Сценарій Вечора талантів опубліковано — переглядайте чергу виступів у хабі!',
+      message: 'Сценарій Вечора талантів опубліковано — переглядайте порядок виступів у хабі!',
       color: 'gradient',
       target_teams: [],
       sent_by: 'Супровід',
     });
-    toast.success('Сценарій успішно опубліковано для всього табору');
+    toast.success('Сценарій опубліковано для табору');
   };
 
   // Фільтрація номерів при пошуку
@@ -215,23 +224,22 @@ const TalentAdmin = () => {
   ========================================================================= */
   if (!event) {
     return (
-      <Card className="p-6 sm:p-8 bg-card/85 backdrop-blur-md border-border/60 text-center space-y-4 shadow-xl select-none">
-        <div className="relative w-16 h-16 mx-auto rounded-3xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shadow-inner">
-          <Mic2 className="w-8 h-8 text-[#FA5A15]" />
-          <div className="absolute inset-0 rounded-3xl bg-[#FA5A15]/20 blur-lg animate-pulse" />
+      <Card className="p-6 sm:p-8 bg-gradient-card border-border/50 text-center space-y-4 shadow-xl select-none">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center shadow-inner">
+          <Mic2 className="w-8 h-8 text-primary" />
         </div>
         
         <div>
-          <h2 className="text-xl font-bold text-foreground">Вечір талантів</h2>
+          <h2 className="text-xl font-black uppercase tracking-wide text-foreground">Вечір талантів</h2>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-            Створіть подію, щоб відкрити супроводу команд можливість подавати номери та реквізит.
+            Створіть подію, щоб відкрити супроводу можливість подавати номери та формувати програму виступів.
           </p>
         </div>
 
         <Button 
           onClick={startCollecting} 
           disabled={busy} 
-          className="w-full h-12 font-bold uppercase tracking-wider bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-all shadow-md gap-2"
+          className="w-full h-12 font-bold uppercase tracking-wider bg-gradient-primary text-primary-foreground active:scale-[0.98] transition-transform shadow-glow gap-2"
         >
           {busy ? (
             <Loader2 className="w-5 h-5 animate-spin" />
@@ -249,7 +257,7 @@ const TalentAdmin = () => {
   const meta = STATUS_META[event.status] ?? STATUS_META.draft;
 
   /* =========================================================================
-     СТАН 2: ГОЛОВНА ПАНЕЛЬ КЕРУВАННЯ ВЕЧОРОМ ТАЛАНТІВ
+     СТАН 2: ГОЛОВНИЙ ПУЛЬТ КЕРУВАННЯ
   ========================================================================= */
   return (
     <div className="space-y-3 select-none">
@@ -257,13 +265,13 @@ const TalentAdmin = () => {
 
       {/* Діалог підтвердження видалення номера */}
       <AlertDialog open={!!deleteCandidateId} onOpenChange={(open) => !open && setDeleteCandidateId(null)}>
-        <AlertDialogContent className="max-w-md bg-card border-border/60">
+        <AlertDialogContent className="max-w-md bg-gradient-card border-border/60">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-lg font-bold text-foreground">
-              Видалити цей номер з програми?
+              Видалити цей номер зі сценарію?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground">
-              Цей виступ буде назавжди видалено зі списку програми. Ви зможете додати його лише наново.
+              Цей виступ буде видалено зі списку програми. Ви зможете додати його лише наново через збір заявок.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">
@@ -272,27 +280,27 @@ const TalentAdmin = () => {
               onClick={confirmRemove} 
               className="h-10 bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
             >
-              Видалити номер
+              Видалити
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Головна картка статусу події */}
-      <Card className="p-4 sm:p-5 bg-card/85 backdrop-blur-md border-border/60 space-y-4 shadow-sm relative overflow-hidden">
+      {/* Картка статусу події та швидких дій */}
+      <Card className="p-4 sm:p-5 bg-gradient-card border-border/60 space-y-3.5 shadow-md">
         
-        {/* Верхній рядок з заголовком та бейджем */}
+        {/* Заголовок і статус */}
         <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/25 flex items-center justify-center shrink-0">
-              <Mic2 className="w-4 h-4 text-[#FA5A15]" />
+            <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
+              <Mic2 className="w-4 h-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-sm sm:text-base text-foreground tracking-tight truncate">
+              <p className="font-bold uppercase text-sm sm:text-base tracking-wide text-foreground truncate">
                 {event.title || 'Вечір талантів'}
               </p>
               <p className="text-[10px] text-muted-foreground font-mono">
-                Система координації сцени
+                Координація сцени
               </p>
             </div>
           </div>
@@ -303,41 +311,41 @@ const TalentAdmin = () => {
           </Badge>
         </div>
 
-        {/* Швидка статистика у сітці */}
+        {/* Швидка статистика */}
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="p-2.5 rounded-xl bg-surface-1/50 border border-border/40">
+          <div className="p-2.5 rounded-xl bg-surface-1/60 border border-border/40">
             <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Номерів</span>
             <span className="text-base sm:text-lg font-black font-mono text-foreground mt-0.5 block">{entries.length}</span>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-surface-1/50 border border-border/40">
+          <div className="p-2.5 rounded-xl bg-surface-1/60 border border-border/40">
             <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Команд</span>
             <span className="text-base sm:text-lg font-black font-mono text-foreground mt-0.5 block">{uniqueTeamsCount}</span>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-surface-1/50 border border-border/40">
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block">Пауз/Реквізит</span>
-            <span className="text-base sm:text-lg font-black font-mono text-amber-500 mt-0.5 block">{totalBreaks}</span>
+          <div className="p-2.5 rounded-xl bg-surface-1/60 border border-border/40">
+            <span className="text-[10px] text-muted-foreground uppercase font-semibold block">З паузами</span>
+            <span className="text-base sm:text-lg font-black font-mono text-warning mt-0.5 block">{totalBreaks}</span>
           </div>
         </div>
 
-        {/* Панель основних дій */}
+        {/* Кнопки керування */}
         <div className="space-y-2 pt-1">
           <div className="grid grid-cols-2 gap-2">
             {event.status !== 'collecting' ? (
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 onClick={() => setStatus('collecting')} 
-                className="h-11 text-xs font-bold uppercase tracking-wider border-border/60 hover:bg-muted/50 active:scale-95 transition-all"
+                className="h-11 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all"
               >
-                <Radio className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                <Radio className="w-3.5 h-3.5 mr-1.5 text-primary" />
                 Відкрити збір
               </Button>
             ) : (
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 onClick={() => setStatus('draft')} 
-                className="h-11 text-xs font-bold uppercase tracking-wider border-border/60 hover:bg-muted/50 active:scale-95 transition-all text-amber-500"
+                className="h-11 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all text-warning"
               >
                 Закрити збір
               </Button>
@@ -346,18 +354,18 @@ const TalentAdmin = () => {
             <Button 
               onClick={generate} 
               disabled={busy || entries.length === 0} 
-              className="h-11 text-xs font-bold uppercase tracking-wider bg-surface-1 hover:bg-muted/70 text-foreground border border-border/60 active:scale-95 transition-all"
+              className="h-11 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all"
             >
-              <Wand2 className="w-3.5 h-3.5 mr-1.5 text-[#FA5A15]" />
+              <Wand2 className="w-3.5 h-3.5 mr-1.5 text-primary" />
               Сформувати
             </Button>
           </div>
 
-          {/* Кнопка публікації сценарію */}
+          {/* Публікація */}
           <Button 
             onClick={publish} 
             disabled={entries.length === 0 || event.status === 'finished'} 
-            className="w-full h-11 font-bold uppercase text-xs tracking-wider bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2"
+            className="w-full h-11 font-bold uppercase text-xs tracking-wider bg-gradient-primary text-primary-foreground active:scale-[0.98] transition-transform shadow-glow flex items-center justify-center gap-2"
           >
             {event.status === 'finished' ? (
               <>
@@ -367,33 +375,33 @@ const TalentAdmin = () => {
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Опублікувати для табору</span>
+                <span>Опублікувати сценарій</span>
               </>
             )}
           </Button>
 
-          {/* Додаткові утиліти: Експорт та Новий вечір */}
-          <div className="flex items-center justify-between gap-2 pt-1">
+          {/* Експорт та Нова подія */}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
             <Button 
-              variant="ghost" 
+              variant="outline" 
               onClick={exportXlsx} 
               disabled={entries.length === 0} 
-              className="flex-1 h-9 text-xs text-muted-foreground hover:text-foreground font-semibold"
+              className="flex-1 h-9 text-xs font-semibold"
             >
-              <Download className="w-3.5 h-3.5 mr-1.5 text-sky-400" />
-              <span>Експорт .xlsx</span>
+              <Download className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              <span>Експорт (.xlsx)</span>
             </Button>
 
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" className="flex-1 h-9 text-xs text-muted-foreground hover:text-foreground font-semibold">
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5 text-purple-400" />
+                  <Sparkles className="w-3.5 h-3.5 mr-1.5 text-primary" />
                   <span>Новий вечір</span>
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="max-w-md bg-card border-border/60">
+              <AlertDialogContent className="max-w-md bg-gradient-card border-border/60">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-lg font-bold text-foreground">
+                  <AlertDialogTitle className="text-lg font-black uppercase text-foreground">
                     Розпочати новий вечір талантів?
                   </AlertDialogTitle>
                   <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground">
@@ -402,8 +410,8 @@ const TalentAdmin = () => {
                 </AlertDialogHeader>
                 <AlertDialogFooter className="gap-2 sm:gap-0">
                   <AlertDialogCancel className="h-10">Скасувати</AlertDialogCancel>
-                  <AlertDialogAction onClick={startCollecting} className="h-10 bg-[#FA5A15] hover:bg-[#FF7D3B] text-white font-bold">
-                    Підтвердити створення
+                  <AlertDialogAction onClick={startCollecting} className="h-10 bg-gradient-primary font-bold shadow-glow">
+                    Підтвердити
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -413,12 +421,12 @@ const TalentAdmin = () => {
 
       </Card>
 
-      {/* Пошук номерів, якщо їх більше 4 */}
+      {/* Пошук якщо номерів багато */}
       {entries.length > 4 && (
         <div className="relative">
           <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-3.5" />
           <Input
-            placeholder="Пошук за назвою або командою..."
+            placeholder="Пошук за назвою або номером команди..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 h-10 text-xs bg-card/60 border-border/50 rounded-xl"
@@ -428,31 +436,32 @@ const TalentAdmin = () => {
 
       {/* =========================================================================
           СПИСОК НОМЕРІВ ТА ПОРЯДОК ВИСТУПІВ
-      ========================================================================= */}
+      ========================================================================= */ }
       <div className="space-y-2">
         {filteredEntries.map((e, i) => (
           <Card 
             key={e.id} 
-            className={`p-3.5 border rounded-2xl flex items-center justify-between gap-3 transition-all ${teamAccent(e.team_number)}`}
+            className={`p-3.5 border rounded-2xl flex items-center justify-between gap-3 transition-smooth ${teamAccent(e.team_number)}`}
           >
             {/* Порядковий номер */}
-            <div className="w-10 h-10 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 text-[#FA5A15] flex items-center justify-center font-mono font-black text-xs shrink-0 tabular-nums shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-gradient-primary text-primary-foreground flex items-center justify-center font-mono font-black text-xs shrink-0 tabular-nums shadow-sm">
               №{i + 1}
             </div>
 
-            {/* Інформація про номер */}
+            {/* Інформація про виступ */}
             <div className="flex-1 min-w-0 pr-1">
               <p className="text-sm font-bold text-foreground truncate tracking-tight">
                 {e.title}
               </p>
               
               <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground mt-0.5">
-                <span className="font-semibold text-foreground/80">Команда #{e.team_number}</span>
+                <span className="font-semibold text-foreground/90">Команда #{e.team_number}</span>
                 
+                {/* Пауза як кількість виступів */}
                 {e.break_needed_after > 0 && (
-                  <span className="inline-flex items-center gap-1 text-amber-500 font-medium font-mono bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                  <span className="inline-flex items-center gap-1 text-warning font-medium bg-warning/15 px-2 py-0.5 rounded-md border border-warning/30 text-[10px]">
                     <Coffee className="w-3 h-3" />
-                    <span>{e.break_needed_after} хв пауза</span>
+                    <span>Пауза: {formatActsCount(e.break_needed_after)}</span>
                   </span>
                 )}
               </div>
@@ -464,44 +473,41 @@ const TalentAdmin = () => {
               )}
             </div>
 
-            {/* Блок дій: Переміщення та Редагування */}
+            {/* Дії: Вгору/Вниз, Редагування, Видалення */}
             <div className="flex items-center gap-1 shrink-0">
-              {/* Стрілки вгору/вниз */}
               <div className="flex flex-col gap-1">
                 <button
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
-                  aria-label="Перемістити вгору"
-                  className="h-6 w-8 rounded-md bg-card hover:bg-muted/60 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-90 transition-all disabled:opacity-20"
+                  aria-label="Вгору"
+                  className="h-6 w-8 rounded-md bg-surface-1 hover:bg-muted/60 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-90 transition-smooth disabled:opacity-20"
                 >
                   <ChevronUp className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => move(i, 1)}
                   disabled={i === entries.length - 1}
-                  aria-label="Перемістити вниз"
-                  className="h-6 w-8 rounded-md bg-card hover:bg-muted/60 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-90 transition-all disabled:opacity-20"
+                  aria-label="Вниз"
+                  className="h-6 w-8 rounded-md bg-surface-1 hover:bg-muted/60 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-90 transition-smooth disabled:opacity-20"
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* Редагувати */}
               <Button 
                 size="icon" 
                 variant="ghost" 
-                className="w-8 h-8 rounded-lg hover:bg-card active:scale-90 transition-all" 
+                className="w-8 h-8 rounded-lg hover:bg-surface-1 active:scale-90" 
                 onClick={() => setEditing(e)} 
                 aria-label="Редагувати"
               >
-                <Pencil className="w-3.5 h-3.5 text-[#FA5A15]" />
+                <Pencil className="w-3.5 h-3.5 text-primary" />
               </Button>
 
-              {/* Видалити */}
               <Button 
                 size="icon" 
                 variant="ghost" 
-                className="w-8 h-8 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive active:scale-90 transition-all" 
+                className="w-8 h-8 rounded-lg hover:bg-destructive/20 text-muted-foreground hover:text-destructive active:scale-90" 
                 onClick={() => setDeleteCandidateId(e.id)} 
                 aria-label="Видалити"
               >
@@ -511,13 +517,13 @@ const TalentAdmin = () => {
           </Card>
         ))}
 
-        {/* Пустий стан списку */}
+        {/* Пустий стан */}
         {entries.length === 0 && (
-          <Card className="p-8 text-center bg-card/60 border-border/50 space-y-2 rounded-2xl">
-            <Clock className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+          <Card className="p-8 text-center bg-card/50 border-border/50 space-y-2 rounded-2xl">
+            <Clock className="w-8 h-8 text-muted-foreground/40 mx-auto" />
             <p className="text-xs sm:text-sm font-semibold text-foreground">Заявки відсутні</p>
             <p className="text-[11px] text-muted-foreground max-w-xs mx-auto">
-              Супровід команд ще не подав номери на виступ. Відкрийте збір, щоб розпочати прийом.
+              Супровід команд ще не додав номери. Відкрийте збір, щоб розпочати прийом виступів.
             </p>
           </Card>
         )}
