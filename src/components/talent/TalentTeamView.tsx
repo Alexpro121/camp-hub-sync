@@ -84,7 +84,9 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
 
   return (
     <div className="space-y-3">
+      <TalentEntryEditDialog entry={editing} open={!!editing} onClose={() => setEditing(null)} onSaved={load} />
       <Card className="p-4 bg-gradient-card space-y-3">
+
         <div className="flex items-center gap-2">
           <Mic2 className="w-5 h-5 text-primary" />
           <p className="font-bold uppercase text-sm tracking-wide flex-1">{event.title}</p>
