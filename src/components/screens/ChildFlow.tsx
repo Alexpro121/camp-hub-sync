@@ -32,6 +32,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
+import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
@@ -553,7 +554,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 />
               )}
               
-              {(!phase || phase.currentPhase !== 'PREPARING') && (
+              {TRAIN_FEATURE_ENABLED && (!phase || phase.currentPhase !== 'PREPARING') && (
                 <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
               )}
 

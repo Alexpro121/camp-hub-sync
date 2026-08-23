@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { useHaptics } from '@/hooks/useHaptics';
 
 export const tourStorageKey = (team: number) =>
@@ -113,13 +114,13 @@ const SupervisorTour = ({
       text: 'Потрібно перевести дитину в іншу команду або зробити рівноцінний обмін «дитина на дитину»? Усе робиться тут.',
       onEnter: () => { setBankOpen(false); setEditChild(null); onTabChange('transfers'); },
     },
-    {
+    ...(TRAIN_FEATURE_ENABLED ? [{
       targetTab: 'coupes',
       selector: '[data-tour="step-7-coupes-root"]',
       title: 'Розселення по купе',
       text: 'Керуй розміщенням пасажирів у потязі, вказуй ролі (Учасник, Супровід, Спікер) та контролюй посадку.',
       onEnter: () => onTabChange('coupes'),
-    },
+    }] : []),
     {
       targetTab: 'notifications',
       selector: '[data-tour="step-8-notifications-root"]',

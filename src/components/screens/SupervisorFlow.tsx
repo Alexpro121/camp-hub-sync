@@ -36,7 +36,7 @@ import ScheduleView from '@/components/schedule/ScheduleView';
 import TalentTeamView from '@/components/talent/TalentTeamView';
 import CoupeManager from '@/components/coupes/CoupeManager';
 import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
-import { TRAIN_TITLE } from '@/lib/trips';
+import { TRAIN_TITLE, TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
@@ -85,7 +85,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           live: fair.isLiveFairRunning,
         } as DockItem]
       : []),
-    { value: 'coupes', label: 'Потяг', icon: Train },
+    ...(TRAIN_FEATURE_ENABLED ? [{ value: 'coupes', label: 'Потяг', icon: Train } as DockItem] : []),
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
   ];
@@ -421,12 +421,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         </TabsContent>
 
         {/* 5. ПОТЯГ ТА КУПЕ */}
-        <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
-          <TrainPublishStatus />
-          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-1 font-bold">{TRAIN_TITLE}</p>
-          <CoupeSwapSettings myTeam={authedTeam} />
-          <CoupeManager myTeam={authedTeam} />
-        </TabsContent>
+        {TRAIN_FEATURE_ENABLED && (
+          <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
+            <TrainPublishStatus />
+            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-1 font-bold">{TRAIN_TITLE}</p>
+            <CoupeSwapSettings myTeam={authedTeam} />
+            <CoupeManager myTeam={authedTeam} />
+          </TabsContent>
+        )}
 
         {/* 6. ТРАНСФЕРИ */}
         <TabsContent value="transfers" className="mt-2 animate-fade-in">
