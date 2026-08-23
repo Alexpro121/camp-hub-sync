@@ -299,7 +299,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                 {finalAmount} А$
               </p>
               <h3 className="text-sm font-bold text-foreground">
-                Запит надіслано на Касу №{targetTeam}
+                Запит надіслано на Касу №{numericTargetTeam}
               </h3>
               <p className="text-xs text-muted-foreground max-w-xs">
                 Повідомте супровід своє ім'я. Очікуємо підтвердження списання...
