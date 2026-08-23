@@ -151,10 +151,20 @@ export async function queuedWrite(
     await run({ ...action, id: 'live', created_at: Date.now() });
     return { queued: false };
   } catch (error) {
+    // Business rejections (rule violations) are final — retrying them forever
+    // would poison the queue, so they are surfaced to the caller instead.
+    if (isPermanentError(error)) return { queued: false, error };
     enqueue(action);
     return { queued: true, error };
   }
 }
+
+const PERMANENT = /insufficient_funds|forbidden|not_authenticated|fair_closed|child_not_found|invalid_amount|awaiting_target_consent|violates row-level security/i;
+
+function isPermanentError(error: unknown): boolean {
+  return PERMANENT.test(String((error as any)?.message ?? error ?? ''));
+}
+
 
 /**
  * Atomic, replay-safe Iron Dollar change. Online it hits the server function
