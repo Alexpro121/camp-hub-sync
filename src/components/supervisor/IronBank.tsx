@@ -76,7 +76,7 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md bg-gradient-card border-primary/20 gpu-accelerated duration-250 ease-[var(--ease-out-expo)] max-sm:!left-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:!w-screen max-sm:!max-w-none max-sm:rounded-t-3xl max-sm:data-[state=open]:!animate-[sheet-up_0.25s_var(--ease-out-expo)]">
+      <DialogContent className="max-w-md bg-gradient-card border-primary/20 gpu-accelerated duration-200 ease-[var(--ease-out-expo)] max-sm:!left-0 max-sm:!top-auto max-sm:!bottom-0 max-sm:!translate-x-0 max-sm:!translate-y-0 max-sm:!w-screen max-sm:!max-w-none max-sm:rounded-t-3xl max-sm:data-[state=open]:!animate-[sheet-up_0.25s_var(--ease-out-expo)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl font-black uppercase">
             <Wallet className="w-5 h-5 text-primary" /> Банк Айрон Доларів

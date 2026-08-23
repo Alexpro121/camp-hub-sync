@@ -117,7 +117,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       <DialogContent
         className="
           bg-gradient-card scrollbar-thin overflow-y-auto gpu-accelerated
-          p-0 gap-0 duration-250 ease-[var(--ease-out-expo)]
+          p-0 gap-0 duration-200 ease-[var(--ease-out-expo)]
           max-sm:!max-w-none max-sm:!w-screen max-sm:!h-[100dvh] max-sm:!max-h-[100dvh]
           max-sm:!rounded-none max-sm:!border-0 max-sm:!translate-x-0 max-sm:!translate-y-0
           max-sm:!left-0 max-sm:!top-0 max-sm:sheet-up
