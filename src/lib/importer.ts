@@ -16,6 +16,9 @@ export interface ImportRow {
   raw_data: Record<string, any>;
   _issues: string[];
   _sourceRow: number;
+  /** Same team + same name, but a conflicting/missing phone — needs a human check. */
+  _duplicateWarning?: string;
+
 }
 
 export interface ImportResult {
