@@ -2,29 +2,43 @@ import { useEffect, useRef } from 'react';
 import { useFairAccess, type FairAccess } from './useFairAccess';
 import { pushIsland } from '@/lib/islandBus';
 
+/** Глобальний прапорець для запобігання дублюванню сповіщень між компонентами */
+let globalFairAnnounced = false;
+
 /**
- * Aggressive fair unlock: the moment a `category === 'fair'` event (or an event
- * named "Ярмарок") enters its minute, the golden tab is unlocked everywhere and
- * a Dynamic Island announcement fires once. The mode never turns off before the
- * exact end minute of the schedule event.
+ * Хук агресивного розблокування ярмарку:
+ * Щойно настає час події з категорією 'fair' або назвою "Ярмарок",
+ * золота вкладка миттєво відкривається для всіх, а в Dynamic Island
+ * надсилається єдине чітке системне сповіщення.
  */
 export function useAggressiveFairUnlock(enabled = true): FairAccess {
   const access = useFairAccess(enabled);
-  const announced = useRef(false);
+  const localAnnounced = useRef(false);
 
   useEffect(() => {
     if (!enabled) return;
-    if (access.isLiveFairRunning && !announced.current) {
-      announced.current = true;
+
+    // Якщо ярмарок відкрився і сповіщення ще не було відправлено
+    if (access.isLiveFairRunning && !localAnnounced.current && !globalFairAnnounced) {
+      localAnnounced.current = true;
+      globalFairAnnounced = true;
+
       pushIsland(
-        '🛍️ Розпочалася Ярмарка! Торгівлю та каси стендів відкрито.',
-        'gradient',
+        'Розпочався ярмарок! Торгівлю та каси стендів відкрито.',
+        'warning',
         'Ярмарок',
-        9000,
+        9000
       );
     }
-    if (!access.isLiveFairRunning) announced.current = false;
+
+    // Скидаємо прапорці після завершення ярмарку
+    if (!access.isLiveFairRunning) {
+      localAnnounced.current = false;
+      globalFairAnnounced = false;
+    }
   }, [enabled, access.isLiveFairRunning]);
 
   return access;
 }
+
+export default useAggressiveFairUnlock;
