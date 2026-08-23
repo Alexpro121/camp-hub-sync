@@ -80,7 +80,13 @@
     /* Animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-spring: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Fluid easing tokens (iOS / Telegram feel) */
+    --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   }
+
 
   .dark {
     /* Same scheme — app is always dark */
