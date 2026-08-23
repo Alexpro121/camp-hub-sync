@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { normalizeName } from '@/lib/normalize';
+import { ADMIN_TEAM, TEAM_MAX, TEAM_MIN, isValidTeamNumber, normalizeName } from '@/lib/normalize';
 
 export type StdKey =
   | 'is_present' | 'row_number' | 'team_number' | 'full_name'
@@ -16,6 +16,9 @@ export interface ImportRow {
   raw_data: Record<string, any>;
   _issues: string[];
   _sourceRow: number;
+  /** Same team + same name, but a conflicting/missing phone — needs a human check. */
+  _duplicateWarning?: string;
+
 }
 
 export interface ImportResult {
@@ -160,7 +163,8 @@ export function buildRows(matrix: any[][], headerIdx: number, headerMap: Record<
   });
 
   const rows: ImportRow[] = [];
-  const seen = new Set<string>();
+  /** team|normalized name -> already accepted row (strict, phone-independent key). */
+  const seen = new Map<string, ImportRow>();
   let skipped = 0;
 
   for (let i = headerIdx + 1; i < matrix.length; i++) {
@@ -182,12 +186,29 @@ export function buildRows(matrix: any[][], headerIdx: number, headerMap: Record<
 
     if (!full_name && !team_number) { skipped++; continue; }
 
-    const phone = colOf.phone !== undefined ? normalizePhone(r[colOf.phone]) : null;
-    const key = `${team_number}|${normalizeName(full_name)}|${phone ?? ''}`;
-    if (full_name && seen.has(key)) { skipped++; continue; }
-    seen.add(key);
+    // [C-1] Hard guard: 99 is the admin account, anything outside 1..98 is invalid.
+    if (!isValidTeamNumber(team_number)) {
+      issues.push(`Команда №${team_number} недопустима (дозволено ${TEAM_MIN}..${TEAM_MAX}, ${ADMIN_TEAM} — адмін)`);
+      skipped++;
+      continue;
+    }
 
-    rows.push({
+    const phone = colOf.phone !== undefined ? normalizePhone(r[colOf.phone]) : null;
+    // [H-1] Deduplicate strictly by team + name: phone formatting can no longer
+    // smuggle the same child in twice.
+    const key = `${team_number}|${normalizeName(full_name)}`;
+    const prev = full_name ? seen.get(key) : undefined;
+    if (prev) {
+      skipped++;
+      if ((prev.phone ?? '') !== (phone ?? '')) {
+        prev._duplicateWarning =
+          `Дубль/однофамілець у рядку ${i + 1}: телефон «${phone ?? '—'}» ≠ «${prev.phone ?? '—'}»`;
+        if (!prev._issues.includes('Потребує перевірки')) prev._issues.push('Потребує перевірки');
+      }
+      continue;
+    }
+
+    const row: ImportRow = {
       is_present: colOf.is_present !== undefined ? normalizePresence(r[colOf.is_present]) : false,
       row_number: colOf.row_number !== undefined ? parseIntSafe(r[colOf.row_number]) : null,
       team_number,
@@ -198,8 +219,11 @@ export function buildRows(matrix: any[][], headerIdx: number, headerMap: Record<
       raw_data,
       _issues: issues,
       _sourceRow: i + 1,
-    });
+    };
+    if (full_name) seen.set(key, row);
+    rows.push(row);
   }
+
   return { rows, skipped };
 }
 

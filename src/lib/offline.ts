@@ -12,9 +12,14 @@ export interface QueuedAction {
   fn?: 'increment_iron_dollars';
   /** Guarantees a replayed action is applied exactly once. */
   idempotencyKey?: string;
+  /** [L-1] Optimistic lock: when the server row is newer, text fields are merged. */
+  clientUpdatedAt?: string;
+  /** Text columns that must be merged (appended) instead of overwritten. */
+  mergeFields?: string[];
   label: string;
   created_at: number;
 }
+
 
 const KEY = 'helpsuprov:offline-queue';
 /** IndexedDB store — no 5 MB localStorage ceiling. */
@@ -79,7 +84,43 @@ function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
   writeQueue(q);
 }
 
+/** Formats a merge marker so a colleague's note is never silently overwritten. */
+export function mergeNotes(serverText: string | null, clientText: string | null, at = new Date()): string {
+  const server = (serverText ?? '').trim();
+  const client = (clientText ?? '').trim();
+  if (!server) return client;
+  if (!client || server === client || server.includes(client)) return server;
+  const stamp = at.toLocaleString('uk-UA', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+  return `${server}\n— офлайн-нотатка (${stamp}) —\n${client}`;
+}
+
+/**
+ * [L-1] Optimistic locking. If the server row changed after the client edit was
+ * captured, merge the configured text columns instead of clobbering them.
+ */
+async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
+  if (!a.clientUpdatedAt || !a.mergeFields?.length || !a.matchId) return a.values;
+  try {
+    const { data } = await supabase
+      .from(a.table as any)
+      .select(['updated_at', ...a.mergeFields].join(', '))
+      .eq('id', a.matchId)
+      .maybeSingle();
+    const server = data as Record<string, any> | null;
+    if (!server?.updated_at) return a.values;
+    if (new Date(server.updated_at).getTime() <= new Date(a.clientUpdatedAt).getTime()) return a.values;
+    const merged = { ...a.values };
+    for (const f of a.mergeFields) {
+      merged[f] = mergeNotes(server[f] ?? null, a.values[f] ?? null, new Date(a.created_at));
+    }
+    return merged;
+  } catch {
+    return a.values;
+  }
+}
+
 async function run(a: QueuedAction) {
+
   if (a.op === 'rpc' && a.fn) {
     const { error } = await supabase.rpc(a.fn, {
       ...(a.values as any),
@@ -87,8 +128,10 @@ async function run(a: QueuedAction) {
     });
     if (error) throw error;
   } else if (a.op === 'update' && a.matchId) {
-    const { error } = await supabase.from(a.table as any).update(a.values).eq('id', a.matchId);
+    const values = await resolveConflicts(a);
+    const { error } = await supabase.from(a.table as any).update(values).eq('id', a.matchId);
     if (error) throw error;
+
   } else {
     const { error } = await supabase.from(a.table as any).insert(a.values);
     if (error) throw error;

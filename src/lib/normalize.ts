@@ -1,16 +1,29 @@
-// Normalize Ukrainian names for fuzzy matching: lowercase, trim, remove extra spaces
+// Normalize Ukrainian names for fuzzy matching: lowercase, trim, unify apostrophes.
+// `ь`/`ъ` before a iotated vowel (я ю є ї е) is treated as an apostrophe, so
+// "Лукьянов" === "Лук'янов".
 export function normalizeName(s: string | null | undefined): string {
   if (!s) return '';
   return s
     .toLowerCase()
+    .trim()
     .replace(/ё/g, 'е')
-    .replace(/[''`ʼ]/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[`ʼ'’‘ʻ\u02BC]/g, "'")
+    .replace(/[ьъ](?=[яюєїe])/g, "'")
+    .replace(/\s+/g, ' ');
 }
 
 export function namesMatch(a: string, b: string): boolean {
   return normalizeName(a) === normalizeName(b);
+}
+
+/** Allowed roster team numbers. 99 is reserved for the admin account. */
+export const TEAM_MIN = 1;
+export const TEAM_MAX = 98;
+export const ADMIN_TEAM = 99;
+
+export function isValidTeamNumber(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && Number.isInteger(n)
+    && n >= TEAM_MIN && n <= TEAM_MAX;
 }
 
 export function parseTeamNumber(v: any): number {
@@ -18,6 +31,7 @@ export function parseTeamNumber(v: any): number {
   const s = String(v ?? '').replace(/[^\d]/g, '');
   return s ? parseInt(s, 10) : 0;
 }
+
 
 /* ---------- Fuzzy matching for child login ---------- */
 
