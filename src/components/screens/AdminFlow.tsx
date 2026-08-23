@@ -10,7 +10,9 @@ import { clearSavedSession, saveSession } from '@/lib/session';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import type { Shift, ShiftType } from '@/types/app';
+import type { Child, Shift, ShiftType } from '@/types/app';
+import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
+
 
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
