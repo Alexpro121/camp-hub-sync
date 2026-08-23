@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
-import { CalendarDays, Users } from 'lucide-react';
+import { CalendarDays, Users, Clock, Sparkles, Radio } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -21,22 +21,29 @@ import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 
 interface Props {
   myTeam?: number | null;
-  /** Child mode: only the own team's schedule is visible. */
+  /** Режим для дитини: доступний лише розклад власної команди на сьогодні */
   lockTeam?: boolean;
-  /** Staff view flag — switches the live fair CTA to the cash register. */
+  /** Режим супроводу: доступні всі дні зміни та фільтр за командами */
   isStaff?: boolean;
-  /** Opens the fair register (staff) or the QR scanner (child). */
+  /** Дія переходу на касу/оплату ярмарку */
   onFairAction?: () => void;
 }
 
 const todayISO = () => localISO();
 
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const MONTHS = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+const MONTHS = [
+  'січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
+  'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'
+];
 
 const dayParts = (iso: string) => {
   const d = new Date(`${iso}T00:00:00`);
-  return { day: String(d.getDate()).padStart(2, '0'), weekday: WEEKDAYS[d.getDay()], month: MONTHS[d.getMonth()] };
+  return { 
+    day: String(d.getDate()).padStart(2, '0'), 
+    weekday: WEEKDAYS[d.getDay()], 
+    month: MONTHS[d.getMonth()] 
+  };
 };
 
 const countdown = (min: number) => {
@@ -46,7 +53,12 @@ const countdown = (min: number) => {
   return `${h} год ${String(m % 60).padStart(2, '0')} хв`;
 };
 
-const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFairAction }: Props) => {
+const ScheduleView = ({ 
+  myTeam = null, 
+  lockTeam = false, 
+  isStaff = false, 
+  onFairAction 
+}: Props) => {
   const TEAMS = useAllTeams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
@@ -57,24 +69,29 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
   const [now, setNow] = useState(new Date());
   const activeDayRef = useRef<HTMLButtonElement>(null);
 
-  // Live midnight rollover: yesterday's tab jumps to today automatically.
+  // Автоматичне перемикання на поточну добу після опівночі
   useAutoTodayDate(activeDay, setActiveDay);
 
+  // Оновлення поточного часу кожні 30 секунд для точного таймлайну
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
+  // Завантаження розкладу та Realtime-слухач
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout>;
+    
     const load = async () => {
       const { data: sch } = await supabase
         .from('schedules')
         .select('*')
         .eq('is_published', true)
         .order('date', { ascending: true });
+      
       const list = (sch || []) as Schedule[];
       setSchedules(list);
+      
       const ids = list.map((s) => s.id);
       if (ids.length) {
         const { data: its } = await supabase
@@ -86,33 +103,46 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
       } else {
         setItems([]);
       }
+      
       setActiveDay((cur) => (lockTeam ? todayISO() : cur ?? todayISO()));
       setLoading(false);
     };
+
     load();
-    const debounced = () => { clearTimeout(debounce); debounce = setTimeout(load, 600); };
+
+    const debounced = () => { 
+      clearTimeout(debounce); 
+      debounce = setTimeout(load, 600); 
+    };
+
     const ch = supabase
       .channel('schedule-view')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, debounced)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_items' }, debounced)
       .subscribe();
+
     const live = supabase
       .channel(SCHEDULE_CHANNEL)
       .on('broadcast', { event: SCHEDULE_UPDATED }, debounced)
       .subscribe();
-    return () => { clearTimeout(debounce); supabase.removeChannel(ch); supabase.removeChannel(live); };
-  }, []);
+
+    return () => { 
+      clearTimeout(debounce); 
+      supabase.removeChannel(ch); 
+      supabase.removeChannel(live); 
+    };
+  }, [lockTeam]);
 
   useEffect(() => {
     activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeDay, loading]);
 
-  /** One tab per date — several schedule batches of the same day are merged.
-   *  Children never see future days: no spoilers for tomorrow. */
+  // Список доступних днів (дітям показується лише сьогоднішній день)
   const days = useMemo(
     () => (lockTeam ? [todayISO()] : [...new Set([...schedules.map((s) => s.date), todayISO()])].sort()),
     [schedules, lockTeam],
   );
+
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
     [schedules],
@@ -127,7 +157,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
     [team],
   );
 
-  /** Events of the selected day, with ISO start/end (auto +1 day past midnight). */
+  // Події обраного дня
   const dayEvents = useMemo<NormalizedScheduleItem[]>(() => {
     if (!activeDay) return [];
     const ids = idsForDate(activeDay);
@@ -138,7 +168,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
     );
   }, [items, activeDay, idsForDate, matchesTeam]);
 
-  /** Previous night's events that are still running right now (cross-midnight). */
+  // Нічні події, що перейшли через північ
   const carryOver = useMemo<NormalizedScheduleItem[]>(() => {
     if (!activeDay) return [];
     const prevDate = shiftISODate(activeDay, -1);
@@ -156,122 +186,156 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
     [carryOver, dayEvents],
   );
 
-  /** Minutes since 00:00 of the selected day (can be < 0 or > 1440 for other days). */
   const nowRel = activeDay ? minutesSinceDayStart(activeDay, now) : -1;
   const isToday = nowRel >= 0 && nowRel < 1440;
 
+  // Поточна подія просто зараз
   const currentEvent = useMemo(
     () => (isToday ? visibleEvents.find((e) => nowRel >= e.startMin && nowRel < e.endMin) ?? null : null),
     [visibleEvents, nowRel, isToday],
   );
 
+  // Наступна найближча подія
   const nextUp = useMemo(() => {
     if (!isToday) return null;
     const e = visibleEvents.find((x) => x.startMin > nowRel);
     return e ? { event: e, inMin: e.startMin - nowRel } : null;
   }, [visibleEvents, nowRel, isToday]);
 
-  if (loading) return <InlineLoader label="Завантаження розкладу" />;
+  if (loading) return <InlineLoader label="Завантаження розкладу..." />;
 
   if (!schedules.length) {
     return (
-      <Card className="p-8 text-center bg-gradient-card">
-        <CalendarDays className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
-        <p className="text-sm text-muted-foreground">Розклад ще не опубліковано</p>
+      <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
+        <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
+        <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
+        <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
       </Card>
     );
   }
 
-  const tabCls = 'shrink-0 rounded-xl px-4 py-2 text-xs font-semibold transition-all duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-95';
+  const tabCls = 'shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all duration-300 active:scale-95 select-none';
 
   return (
-    <div className="space-y-3">
-      {/* Days — a child only ever gets today, so the picker is hidden for them */}
+    <div className="space-y-3.5 select-none">
+      
+      {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
       {days.length > 1 && (
-      <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-        {days.map((d) => {
-          const p = dayParts(d);
-          const active = d === activeDay;
-          return (
-            <button
-              key={d}
-              ref={active ? activeDayRef : undefined}
-              onClick={() => setActiveDay(d)}
-              className={`${tabCls} flex flex-col items-center leading-tight ${
-                active
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
-                  : 'border border-white/10 bg-slate-900/70 text-slate-300'
-              }`}
-            >
-              <span className="text-[10px] uppercase tracking-[0.18em] opacity-70">{p.weekday}</span>
-              <span className="font-mono text-sm font-bold tabular-nums">{p.day}</span>
-              <span className="text-[9px] opacity-70">{p.month}</span>
-            </button>
-          );
-        })}
-      </div>
+        <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
+          {days.map((d) => {
+            const p = dayParts(d);
+            const active = d === activeDay;
+            return (
+              <button
+                key={d}
+                ref={active ? activeDayRef : undefined}
+                onClick={() => setActiveDay(d)}
+                className={`${tabCls} flex flex-col items-center leading-tight border ${
+                  active
+                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_16px_rgba(250,90,21,0.35)] scale-[1.02]'
+                    : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span className="text-[9px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
+                <span className="font-mono text-base font-black tabular-nums my-0.5">{p.day}</span>
+                <span className="text-[9px] font-medium opacity-80">{p.month}</span>
+              </button>
+            );
+          })}
+        </div>
       )}
 
-      {/* Team filter */}
+      {/* 2. ФІЛЬТР ЗА КОМАНДАМИ */}
       {lockTeam ? (
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/70 px-3 py-2">
-          <Users className="h-3.5 w-3.5 text-amber-400" strokeWidth={1.75} />
-          <p className="text-[11px] font-medium text-slate-300">
+        <div className="flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
+          <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
+          <p className="text-xs font-semibold text-foreground">
             Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
           </p>
         </div>
       ) : (
-        <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
           <button
             onClick={() => setFilterTeam(null)}
-            className={`${tabCls} ${filterTeam === null ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20' : 'border border-white/10 bg-slate-900/70 text-slate-300'}`}
-          >Всі команди</button>
+            className={`${tabCls} ${
+              filterTeam === null 
+                ? 'bg-primary text-primary-foreground font-bold shadow-md shadow-primary/20' 
+                : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Всі команди
+          </button>
+
           {myTeam != null && (
             <button
               onClick={() => setFilterTeam(myTeam)}
-              className={`${tabCls} ${filterTeam === myTeam ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20' : 'border border-white/10 bg-slate-900/70 text-slate-300'}`}
-            >Моя команда (К{myTeam})</button>
+              className={`${tabCls} ${
+                filterTeam === myTeam 
+                  ? 'bg-primary text-primary-foreground font-bold shadow-md shadow-primary/20' 
+                  : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Моя команда (№{myTeam})
+            </button>
           )}
+
           {TEAMS.filter((t) => t !== myTeam).map((t) => (
             <button
               key={t}
               onClick={() => setFilterTeam(filterTeam === t ? null : t)}
-              className={`${tabCls} font-mono tabular-nums ${filterTeam === t ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20' : 'border border-white/10 bg-slate-900/70 text-slate-300'}`}
-            >{t}</button>
+              className={`${tabCls} font-mono font-bold tabular-nums ${
+                filterTeam === t 
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' 
+                  : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              К#{t}
+            </button>
           ))}
         </div>
       )}
 
-      {/* Next up */}
+      {/* 3. КАРТКА «ДАЛІ ЗА РОЗКЛАДОМ» */}
       {nextUp && (
-        <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-4 shadow-xl backdrop-blur-xl">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Далі за розкладом</p>
-          <div className="mt-1.5 flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-base font-bold tracking-tight text-white">{sentenceCase(nextUp.event.title)}</p>
-              <p className="font-mono text-xs font-medium tabular-nums text-slate-400">
+        <Card className="rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/[0.08] via-card/85 to-card/85 p-4 sm:p-4.5 shadow-md backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              Далі за розкладом
+            </span>
+            <span className="text-[10px] font-mono text-muted-foreground">через {countdown(nextUp.inMin)}</span>
+          </div>
+
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <div className="min-w-0 pr-2">
+              <p className="truncate text-base sm:text-lg font-bold tracking-tight text-foreground">
+                {sentenceCase(nextUp.event.title)}
+              </p>
+              <p className="font-mono text-xs font-semibold tabular-nums text-muted-foreground mt-0.5">
                 {nextUp.event.timeStart} – {nextUp.event.timeEnd}
               </p>
             </div>
-            <p className="shrink-0 font-mono text-2xl font-bold tabular-nums leading-none text-amber-400">
+
+            <p className="shrink-0 font-mono text-2xl sm:text-3xl font-black tabular-nums leading-none text-primary">
               {countdown(nextUp.inMin)}
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
+      {/* Пустий стан дня */}
       {visibleEvents.length === 0 && (
-        <Card className="p-6 text-center bg-card/50">
-          <CalendarDays className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" strokeWidth={1.5} />
-          <p className="text-sm text-muted-foreground">
+        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
+          <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
+          <p className="text-sm font-bold text-foreground">
             {idsForDate(activeDay).length
               ? 'Подій на цей день немає'
-              : 'Розклад на цей день готується оргкомітетом табору'}
+              : 'Розклад на цей день готується супроводом табору'}
           </p>
         </Card>
       )}
 
-      {/* Chronological timeline */}
+      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ */}
       <div className="space-y-2.5">
         {visibleEvents.map((e) => {
           const isNow = currentEvent?.id === e.id;
@@ -289,6 +353,7 @@ const ScheduleView = ({ myTeam = null, lockTeam = false, isStaff = false, onFair
           );
         })}
       </div>
+
     </div>
   );
 };
