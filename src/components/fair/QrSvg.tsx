@@ -16,34 +16,34 @@ interface Props {
 }
 
 /**
- * Векторний SVG-рендер QR-кодів із брендовим логотипом "Залізна Зміна" в центрі.
- * Рівень корекції помилок 'H' (30%) забезпечує стабільне та миттєве сканування.
+ * Оптимізований QR-рендер: використовує level="Q" (25%) замість "H", 
+ * що робить крапки більшими, чистішими та естетичнішими.
  */
 const QrSvg = memo(({ 
   value, 
-  size = 210, 
+  size = 230, 
   className,
-  level = 'H', // Максимальний рівень корекції для безпомилкового сканування з логотипом
+  level = 'Q', // Оптимальний баланс: менше шуму, великі крапки, миттєве зчитування
   bgColor = '#ffffff',
-  fgColor = '#0B0D13',
+  fgColor = '#090C15',
   includeMargin = true,
   includeLogo = true,
   logoSrc = DEFAULT_LOGO_URL,
 }: Props) => {
   if (!value) return null;
 
-  // Пропорційний розмір логотипа (~22% від ширини QR)
-  const logoSize = Math.round(size * 0.22);
+  // Розмір логотипа та захисного вирізу
+  const logoSize = Math.round(size * 0.20);
 
   const imageSettings = includeLogo ? {
     src: logoSrc,
     height: logoSize,
     width: logoSize,
-    excavate: true, // Створює чіткий виріз під логотипом для оптичного контрасту
+    excavate: true, // Чистий захисний виріз навколо логотипа
   } : undefined;
 
   return (
-    <div className="relative inline-flex items-center justify-center p-2.5 rounded-2xl bg-white shadow-md border border-slate-200/80 overflow-hidden select-none">
+    <div className="relative inline-flex items-center justify-center p-3 rounded-3xl bg-white shadow-2xl border border-slate-200/80 overflow-hidden select-none">
       <QRCodeSVG
         value={value}
         size={size}
