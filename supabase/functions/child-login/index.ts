@@ -1,9 +1,17 @@
 import { admin, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 /* ---------- name matching (mirrors src/lib/normalize.ts) ---------- */
 function normalizeName(s: string | null | undefined): string {
   if (!s) return '';
-  return s.toLowerCase().replace(/ё/g, 'е').replace(/[''`ʼ]/g, "'").replace(/\s+/g, ' ').trim();
+  // `ь`/`ъ` before a iotated vowel is treated as an apostrophe: Лукьянов === Лук'янов.
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/ё/g, 'е')
+    .replace(/[`ʼ'\u2018\u2019\u02BC]/g, "'")
+    .replace(/[ьъ](?=[яюєїe])/g, "'")
+    .replace(/\s+/g, ' ');
 }
 
 function levenshtein(a: string, b: string): number {
