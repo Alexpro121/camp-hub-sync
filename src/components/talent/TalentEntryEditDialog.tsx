@@ -56,30 +56,37 @@ const TalentEntryEditDialog = ({ entry, open, onClose, onSaved }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="bg-gradient-card gpu-accelerated w-[calc(100vw-2rem)] max-w-[26rem] sm:max-w-md max-h-[85dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
-        <DialogHeader>
-          <DialogTitle className="text-base font-black uppercase">Редагувати номер</DialogTitle>
+      <DialogContent className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100vw-2rem)] max-w-lg max-h-[90dvh] flex flex-col p-0 overflow-hidden bg-gradient-card border border-border/60 shadow-2xl rounded-2xl z-50">
+        <DialogHeader className="p-5 pb-3 border-b border-border/40 shrink-0 text-left">
+          <DialogTitle className="text-lg font-black uppercase tracking-wide">Редагувати номер</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="p-5 space-y-4 overflow-y-auto overscroll-contain flex-1">
           <div className="space-y-1.5">
-            <Label className="text-xs">Назва номера</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Танець «Вогонь»" className="h-11" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="text-xs">Опис / Учасники / Реквізит</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              placeholder="Хто виступає, що потрібно на сцені, музика…"
-              className="text-base"
+            <Label htmlFor="talent-title" className="text-xs font-semibold uppercase text-muted-foreground">Назва виступу *</Label>
+            <Input
+              id="talent-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-11 bg-surface-1"
+              placeholder="Наприклад, Танець «Вогонь»"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Скільки номерів перерви потрібно після виступу</Label>
+            <Label htmlFor="talent-desc" className="text-xs font-semibold uppercase text-muted-foreground">Опис / Учасники / Реквізит</Label>
+            <Textarea
+              id="talent-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="bg-surface-1 resize-none text-sm"
+              placeholder="Хто виступає, що потрібно на сцені, посилання на фонограму…"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Скільки номерів перерви потрібно після виступу</Label>
             <div className="grid grid-cols-4 gap-2">
               {BREAK_OPTIONS.map((n) => (
                 <button
@@ -88,27 +95,30 @@ const TalentEntryEditDialog = ({ entry, open, onClose, onSaved }: Props) => {
                   onClick={() => { haptics.selection(); setBreaks(n); }}
                   className={`h-11 rounded-xl border text-sm font-bold transition-smooth ${
                     breaks === n
-                      ? 'bg-gradient-primary text-primary-foreground border-transparent'
-                      : 'bg-surface-1 border-border/50 text-muted-foreground'
+                      ? 'bg-gradient-primary text-primary-foreground border-primary shadow-glow'
+                      : 'bg-surface-1 border-border/40 text-foreground hover:bg-surface-2'
                   }`}
                 >
                   {n}
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground">Наприклад, 2 — щоб встигнути переодягнутись.</p>
+            <p className="text-[11px] text-muted-foreground">Наприклад, 2 — щоб встигнути переодягнутися.</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          <Button variant="secondary" onClick={onClose} className="h-11 font-bold uppercase text-xs">Скасувати</Button>
-          <Button onClick={save} disabled={saving} className="h-11 font-bold uppercase text-xs">
+        <DialogFooter className="p-4 border-t border-border/40 bg-surface-1/80 backdrop-blur-sm flex flex-row gap-2 justify-end shrink-0">
+          <Button type="button" variant="ghost" onClick={onClose} className="flex-1 sm:flex-none h-11 font-bold uppercase text-xs">
+            Скасувати
+          </Button>
+          <Button type="button" onClick={save} disabled={saving || !title.trim()} className="flex-1 sm:flex-none h-11 bg-gradient-primary font-bold uppercase text-xs shadow-glow">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1.5" /> Зберегти зміни</>}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
+
 
 export default TalentEntryEditDialog;
