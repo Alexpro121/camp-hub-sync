@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
+import { TEAM_MAX } from '@/lib/normalize';
 import FairHowTo from './FairHowTo';
 
 interface Props {
@@ -34,7 +35,8 @@ const PRESET_AMOUNTS = [5, 10, 15, 20];
 const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props) => {
   const [selectedAmount, setSelectedAmount] = useState<number>(20);
   const [customAmount, setCustomAmount] = useState<string>('');
-  const [targetTeam, setTargetTeam] = useState<number>(childTeam || 1);
+  const [targetTeam, setTargetTeam] = useState<string>(String(childTeam || 1));
+  const numericTargetTeam = Math.min(TEAM_MAX, Math.max(1, parseInt(targetTeam, 10) || 1));
   const [status, setStatus] = useState<PayStatus>('idle');
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
 
@@ -112,7 +114,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
 
     try {
       // Відправляємо запит у канал каси відповідної команди супроводу
-      const supervisorChannel = supabase.channel(`supervisor_fair_team_${targetTeam}`);
+      const supervisorChannel = supabase.channel(`supervisor_fair_team_${numericTargetTeam}`);
       await supervisorChannel.subscribe();
 
       await supervisorChannel.send({
@@ -124,20 +126,20 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
           childName: childName || 'Учасник',
           childTeam: childTeam ?? 0,
           amount: finalAmount,
-          targetTeam,
+          targetTeam: numericTargetTeam,
           timestamp: Date.now(),
         },
       });
 
       setStatus('pending');
-      toast.info(`Запит надіслано на Касу Команди №${targetTeam}`);
+      toast.info(`Запит надіслано на Касу Команди №${numericTargetTeam}`);
     } catch (err) {
       console.error('[ChildFairCard] Помилка відправки запиту:', err);
       setStatus('idle');
       setCurrentRequestId(null);
       toast.error('Не вдалося надіслати запит. Перевірте зʼєднання');
     }
-  }, [finalAmount, balance, targetTeam, childId, childName, childTeam, haptics]);
+  }, [finalAmount, balance, numericTargetTeam, childId, childName, childTeam, haptics]);
 
   // Скасування активного запиту дитиною
   const handleCancelRequest = () => {
@@ -200,7 +202,11 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                   type="number"
                   inputMode="numeric"
                   value={targetTeam}
-                  onChange={(e) => setTargetTeam(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    setTargetTeam(raw);
+                  }}
+                  onBlur={() => setTargetTeam(String(numericTargetTeam))}
                   className="h-11 font-mono font-bold text-sm bg-surface-1/50 border-border/60 rounded-xl"
                   placeholder="Номер команди"
                 />
@@ -293,7 +299,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                 {finalAmount} А$
               </p>
               <h3 className="text-sm font-bold text-foreground">
-                Запит надіслано на Касу №{targetTeam}
+                Запит надіслано на Касу №{numericTargetTeam}
               </h3>
               <p className="text-xs text-muted-foreground max-w-xs">
                 Повідомте супровід своє ім'я. Очікуємо підтвердження списання...
@@ -323,7 +329,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                 -{finalAmount} А$
               </p>
               <p className="text-xs text-muted-foreground">
-                Супровід підтвердив операцію на Касі №{targetTeam}. Гарних покупок!
+                Супровід підтвердив операцію на Касі №{numericTargetTeam}. Гарних покупок!
               </p>
             </div>
 
