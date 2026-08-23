@@ -207,9 +207,11 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
     try {
       await run(a);
       done++;
-    } catch {
-      rest.push(a);
+    } catch (e) {
+      // Permanently rejected actions are dropped instead of blocking the queue.
+      if (!isPermanentError(e)) rest.push(a);
     }
+
   }
   syncing = false;
   writeQueue(rest);
