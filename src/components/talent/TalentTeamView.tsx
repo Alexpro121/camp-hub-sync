@@ -141,13 +141,20 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
 
       {showOrder && entries.length > 0 && (
         <div className="space-y-2">
-          <h3 className="font-bold uppercase text-sm tracking-wide px-1">Порядок виступів</h3>
+          <div className="flex items-baseline justify-between px-1">
+            <h3 className="font-bold uppercase text-sm tracking-wide">Порядок виступів</h3>
+            <span className="text-[11px] text-muted-foreground">{entries.length} номерів · всі команди</span>
+          </div>
           {entries.map((e, i) => (
-            <Card key={e.id} className={`p-3 flex items-center gap-3 ${e.team_number === myTeam ? 'bg-gradient-card border-primary/40' : 'bg-surface-1 border-border/40'}`}>
+            <Card key={e.id} className={`p-3 flex items-start gap-3 ${e.team_number === myTeam ? 'bg-gradient-card border-primary/40' : 'bg-surface-1 border-border/40'}`}>
               <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center font-black text-sm shrink-0">{i + 1}</div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate">{e.title}</p>
+                <p className="text-sm font-bold break-words">{e.title}</p>
                 <p className="text-[11px] text-muted-foreground">Команда #{e.team_number}</p>
+                {e.description && <p className="text-[11px] text-muted-foreground/80 mt-0.5 break-words">{e.description}</p>}
+                {e.break_needed_after > 0 && (
+                  <p className="text-[11px] text-warning flex items-center gap-1 mt-0.5"><Coffee className="w-3 h-3" /> перерва {e.break_needed_after}</p>
+                )}
               </div>
             </Card>
           ))}
