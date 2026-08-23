@@ -120,13 +120,20 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
             <Card key={e.id} className="p-3 bg-surface-1 border-border/40 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate">{e.title}</p>
+                {e.description && <p className="text-[11px] text-muted-foreground truncate">{e.description}</p>}
                 {e.break_needed_after > 0 && (
                   <p className="text-[11px] text-warning flex items-center gap-1"><Coffee className="w-3 h-3" /> перерва {e.break_needed_after}</p>
                 )}
               </div>
               {collecting && (
-                <Button size="icon" variant="ghost" onClick={() => remove(e.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                <>
+                  <Button size="icon" variant="ghost" onClick={() => setEditing(e)} aria-label="Редагувати">
+                    <Pencil className="w-4 h-4 text-primary" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => remove(e.id)} aria-label="Видалити"><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                </>
               )}
+
             </Card>
           ))}
         </div>
