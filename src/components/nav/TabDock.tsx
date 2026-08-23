@@ -2,6 +2,8 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
+
 
 export interface DockItem {
   value: string;
