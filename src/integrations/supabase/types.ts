@@ -850,6 +850,16 @@ export type Database = {
         }
         Returns: Json
       }
+      pay_fair_push_charge: {
+        Args: {
+          p_amount: number
+          p_child_id: string
+          p_label?: string
+          p_supervisor_team?: number
+          p_tx_id: string
+        }
+        Returns: Json
+      }
       resolve_fair_code: { Args: { p_code: string }; Returns: Json }
       search_child_for_transfer: {
         Args: { p_my_team: number; p_query: string; p_shift_id: string }

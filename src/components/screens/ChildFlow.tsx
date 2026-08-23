@@ -546,6 +546,7 @@ const ChildFlow = ({ onBack }: Props) => {
               {/* Картка оплати ярмарку показується завжди при відкритті або доступі */}
               {child && (fair.isLiveFairRunning || fair.hasFairAccess) && (
                 <ChildFairCard
+                  childId={child.id}
                   balance={child.iron_dollars}
                   childName={child.full_name}
                   childTeam={child.team_number}
@@ -712,6 +713,7 @@ const ChildFlow = ({ onBack }: Props) => {
               <TabsContent value="fair" className="mt-0 space-y-3">
                 {fair.isLiveFairRunning ? (
                   <ChildFairCard
+                    childId={child.id}
                     balance={child.iron_dollars}
                     childName={child.full_name}
                     childTeam={child.team_number}

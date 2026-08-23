@@ -39,6 +39,7 @@ interface FeedRow {
 
 interface PushPaymentRequest {
   requestId: string;
+  childId?: string;
   childName: string;
   childTeam: number;
   amount: number;
@@ -218,15 +219,34 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     const txId = `air_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     try {
-      const { data, error: rpcErr } = await supabase.rpc('pay_fair_purchase', {
-        p_tx_id: txId,
+      let targetChildId = req.childId;
+      if (!targetChildId) {
+        const { data: foundChild } = await supabase
+          .from('children')
+          .select('id')
+          .eq('full_name', req.childName)
+          .eq('team_number', req.childTeam)
+          .maybeSingle();
+        targetChildId = foundChild?.id;
+      }
+      if (!targetChildId) {
+        throw new Error('Дитину не знайдено в базі');
+      }
+
+      const { data, error: rpcErr } = await supabase.rpc('pay_fair_push_charge', {
+        p_child_id: targetChildId,
         p_amount: req.amount,
-        p_supervisor_id: userId,
+        p_tx_id: txId,
         p_supervisor_team: myTeam,
         p_label: `Air Pay · Каса №${myTeam}`,
       });
 
       if (rpcErr) throw rpcErr;
+
+      const res = data as { status?: string; balance_after?: number };
+      if (res?.status === 'insufficient_funds') {
+        throw new Error('Недостатньо коштів на балансі');
+      }
 
       // Сповіщаємо дитину про миттєвий успіх
       const responseChannel = supabase.channel(`fair_push_response_${req.requestId}`);
@@ -236,7 +256,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
         event: 'FAIR_PUSH_CONFIRMED',
         payload: {
           requestId: req.requestId,
-          newBalance: (data as { balance_after?: number })?.balance_after,
+          newBalance: res?.balance_after,
           amount: req.amount,
         },
       });
@@ -252,19 +272,19 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
 
       setPushQueue((prev) => prev.filter((p) => p.requestId !== req.requestId));
       toast.success(`Списано ${req.amount} А$ з балансу ${req.childName}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Помилка списання:', err);
       const responseChannel = supabase.channel(`fair_push_response_${req.requestId}`);
       await responseChannel.subscribe();
       await responseChannel.send({
         type: 'broadcast',
         event: 'FAIR_PUSH_REJECTED',
-        payload: { requestId: req.requestId, reason: 'Помилка списання або недостатній баланс' },
+        payload: { requestId: req.requestId, reason: err?.message || 'Помилка списання або недостатній баланс' },
       });
       supabase.removeChannel(responseChannel);
       
       setPushQueue((prev) => prev.filter((p) => p.requestId !== req.requestId));
-      toast.error('Не вдалося списати кошти');
+      toast.error(err?.message || 'Не вдалося списати кошти');
     } finally {
       setProcessingPushId(null);
     }

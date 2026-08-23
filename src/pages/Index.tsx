@@ -101,10 +101,7 @@ const Index = () => {
       
       {/* Інтро-сплеш при першому вході */}
       {showIntro && (
-        <IntroSplash 
-          onFinish={handleIntroFinish} 
-          onDone={handleIntroFinish} 
-        />
+        <IntroSplash onComplete={handleIntroFinish} />
       )}
 
       {/* Системна кнопка «Назад» для Telegram Mini App */}

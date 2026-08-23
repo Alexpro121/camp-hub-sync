@@ -34,9 +34,7 @@ export function useIsMobile(breakpoint: number = DEFAULT_MOBILE_BREAKPOINT): boo
       return () => mql.removeEventListener("change", updateMatches);
     } else {
       // Fallback для старих версій iOS Safari / WebKit
-      // @ts-expect-error legacy Safari support
       mql.addListener(updateMatches);
-      // @ts-expect-error legacy Safari support
       return () => mql.removeListener(updateMatches);
     }
   }, [breakpoint]);
