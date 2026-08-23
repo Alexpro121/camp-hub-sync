@@ -33,29 +33,41 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
 
   useEffect(() => { baseline.current = child.iron_dollars; }, [child.id, child.iron_dollars]);
 
+  /** Snapshot of the row version this edit session started from (optimistic lock). */
+  const clientUpdatedAt = useRef(child.updated_at ?? new Date().toISOString());
+  useEffect(() => { clientUpdatedAt.current = child.updated_at ?? new Date().toISOString(); }, [child.id, child.updated_at]);
+
+  const writeProfile = () => queuedWrite({
+    table: 'children',
+    op: 'update',
+    matchId: child.id,
+    clientUpdatedAt: clientUpdatedAt.current,
+    mergeFields: ['supervisor_notes'],
+    label: `Профіль · ${child.full_name}`,
+    values: {
+      phone: phone || null,
+      telegram_username: telegram || null,
+      supervisor_notes: notes || null,
+    },
+  });
+
   // Auto-save with debounce (profile fields only — the balance is atomic, see below)
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(async () => {
       setSaving(true);
-      await supabase.from('children').update({
-        phone: phone || null,
-        telegram_username: telegram || null,
-        supervisor_notes: notes || null,
-      }).eq('id', child.id);
+      await writeProfile();
       setSaving(false);
     }, 800);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone, telegram, notes, open, child.id]);
 
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase.from('children').update({
-      phone: phone || null,
-      telegram_username: telegram || null,
-      supervisor_notes: notes || null,
-    }).eq('id', child.id);
+    const { error } = await writeProfile();
     if (error) { setSaving(false); toast.error('Помилка'); return; }
+
 
     // Balance goes through the atomic server function: concurrent supervisors
     // can never overwrite each other, and a retry can never double-credit.
