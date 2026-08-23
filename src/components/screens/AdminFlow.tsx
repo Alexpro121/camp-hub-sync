@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag, Copy, Search, ChevronDown, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
