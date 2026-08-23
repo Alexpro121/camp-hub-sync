@@ -93,7 +93,8 @@ const RoleSelect = ({ onSelect }: Props) => {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') pick('child'); }}
               className="card-hero spotlight group p-3.5 sm:p-5 md:p-6 cursor-pointer select-none overflow-hidden"
             >
-              <div className="flex items-center justify-between gap-3 sm:gap-4">
+              <div className="card-hero-bg" />
+              <div className="relative z-10 flex items-center justify-between gap-3 sm:gap-4">
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                   <div className="relative flex-shrink-0">
                     <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-b from-[#1E2A42] to-[#0F1626] border border-white/20 flex items-center justify-center shadow-lg group-hover:border-[#FA5A15]/80 group-hover:shadow-[0_0_24px_rgba(250,90,21,0.5)] transition-all duration-300">
