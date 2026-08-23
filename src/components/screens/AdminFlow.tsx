@@ -915,7 +915,26 @@ const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStat
           </div>
         </div>
       )}
+
+      {kids.length > 0 && onPickChild && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowKids((v) => !v)}
+            className="w-full h-10 rounded-lg bg-surface-1 border border-border/40 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-smooth"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${showKids ? 'rotate-180' : ''}`} />
+            {showKids ? 'Сховати дітей' : `Показати дітей (${kids.length})`}
+          </button>
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)] ${showKids ? 'grid-rows-[1fr] mt-2' : 'grid-rows-[0fr]'}`}>
+            <div className="overflow-hidden">
+              <ChildPickList kids={kids} onPick={onPickChild} />
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
+
   );
 };
 
