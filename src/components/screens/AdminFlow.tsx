@@ -778,7 +778,7 @@ const StatsTab = () => {
         <ShiftStatsCard
           key={r.shift.id}
           stats={r}
-          children={children.filter((c) => c.shift_id === r.shift.id)}
+          kids={children.filter((c) => c.shift_id === r.shift.id)}
           onPickChild={setEditing}
         />
       ))}
@@ -795,7 +795,7 @@ const StatsTab = () => {
             {orphans.total} дітей у {orphans.teams} командах · {orphans.iron} Айрон $.
             Не прив'язані до жодної зміни.
           </p>
-          <ChildPickList children={orphanKids} onPick={setEditing} />
+          <ChildPickList kids={orphanKids} onPick={setEditing} />
         </Card>
       )}
     </div>
@@ -803,11 +803,11 @@ const StatsTab = () => {
 };
 
 /** Compact, tappable child rows — a click opens the full editor. */
-const ChildPickList = ({ children, onPick }: { children: Child[]; onPick: (c: Child) => void }) => {
-  if (!children.length) return null;
+const ChildPickList = ({ kids, onPick }: { kids: Child[]; onPick: (c: Child) => void }) => {
+  if (!kids.length) return null;
   return (
     <div className="space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
-      {children.map((c) => (
+      {kids.map((c) => (
         <button
           key={c.id}
           type="button"
@@ -850,7 +850,8 @@ const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   </Card>
 );
 
-const ShiftStatsCard = ({ stats: r }: { stats: ShiftStats }) => {
+const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStats; kids?: Child[]; onPickChild?: (c: Child) => void }) => {
+  const [showKids, setShowKids] = useState(false);
   const status = shiftStatus(r.shift);
   const statusMeta: Record<typeof status, { label: string; cls: string }> = {
     active:   { label: 'Активна',   cls: 'bg-success/20 text-success border-success/40' },
