@@ -688,13 +688,14 @@ interface ShiftStats {
 const StatsTab = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ShiftStats[]>([]);
+  const [children, setChildren] = useState<Child[]>([]);
   const [orphans, setOrphans] = useState<{ total: number; teams: number; iron: number } | null>(null);
+  const [editing, setEditing] = useState<Child | null>(null);
 
   const load = async () => {
-    setLoading(true);
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('id, shift_id, team_number, is_present, has_logged_in, iron_dollars'),
+      supabase.from('children').select('*').order('team_number'),
       supabase.from('transfers').select('child_id'),
     ]);
 
@@ -725,6 +726,7 @@ const StatsTab = () => {
       iron: orphanKids.reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0),
     } : null);
 
+    setChildren((kids || []) as Child[]);
     setRows(stats);
     setLoading(false);
   };
@@ -756,9 +758,14 @@ const StatsTab = () => {
   const totalKids = rows.reduce((s, r) => s + r.total, 0) + (orphans?.total || 0);
   const totalIron = rows.reduce((s, r) => s + r.ironTotal, 0) + (orphans?.iron || 0);
   const totalTransfers = rows.reduce((s, r) => s + r.transfers, 0);
+  const orphanKids = children.filter((c) => !c.shift_id);
 
   return (
     <div className="space-y-3">
+      {editing && (
+        <ChildEditDialog child={editing} open={!!editing} onClose={() => setEditing(null)} />
+      )}
+
       {/* Aggregate cards */}
       <div className="grid grid-cols-3 gap-2">
         <StatBox icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={totalKids} />
@@ -767,11 +774,18 @@ const StatsTab = () => {
       </div>
 
       <h3 className="font-bold uppercase text-sm tracking-wide px-1 pt-2">По змінах</h3>
-      {rows.map((r) => <ShiftStatsCard key={r.shift.id} stats={r} />)}
+      {rows.map((r) => (
+        <ShiftStatsCard
+          key={r.shift.id}
+          stats={r}
+          children={children.filter((c) => c.shift_id === r.shift.id)}
+          onPickChild={setEditing}
+        />
+      ))}
 
       {orphans && (
-        <Card className="p-4 bg-card/40 border-dashed">
-          <div className="flex items-center gap-2 mb-2">
+        <Card className="p-4 bg-card/40 border-dashed space-y-2">
+          <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Без зміни
@@ -781,11 +795,35 @@ const StatsTab = () => {
             {orphans.total} дітей у {orphans.teams} командах · {orphans.iron} Айрон $.
             Не прив'язані до жодної зміни.
           </p>
+          <ChildPickList children={orphanKids} onPick={setEditing} />
         </Card>
       )}
     </div>
   );
 };
+
+/** Compact, tappable child rows — a click opens the full editor. */
+const ChildPickList = ({ children, onPick }: { children: Child[]; onPick: (c: Child) => void }) => {
+  if (!children.length) return null;
+  return (
+    <div className="space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
+      {children.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onPick(c)}
+          className="w-full flex items-center gap-2 rounded-lg bg-surface-1 border border-border/40 px-3 py-2 text-left hover:border-primary/40 active:scale-[0.99] transition-smooth"
+        >
+          <span className="text-[10px] font-black tabular-nums w-8 shrink-0 text-muted-foreground">#{c.team_number}</span>
+          <span className="text-xs font-medium truncate flex-1">{c.full_name}</span>
+          <span className="text-[11px] tabular-nums text-primary shrink-0">{c.iron_dollars} $</span>
+          <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        </button>
+      ))}
+    </div>
+  );
+};
+
 
 /** "1-6" / "7, 8" compact team range label. */
 const formatTeams = (teams: number[]): string => {
