@@ -11,8 +11,7 @@ import {
   XCircle, 
   Loader2, 
   UserCheck,
-  Search,
-  Plus
+  Search
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import FairHowTo from './FairHowTo';
@@ -346,7 +345,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     }
   };
 
-  // Журнал чеків
+  // Слухач чеків
   useEffect(() => {
     if (!userId) return;
     let mounted = true;
@@ -508,7 +507,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
                       variant="outline"
                       onClick={() => handleRejectPush(req)}
                       disabled={processingPushId === req.requestId}
-                      className="h-11 text-xs font-bold border-border/60 hover:bg-muted/60 rounded-xl active:scale-95"
+                      className="h-11 text-xs font-bold border-border/60 hover:bg-muted/60 rounded-xl"
                     >
                       <XCircle className="w-4 h-4 mr-1.5 text-destructive" />
                       Відхилити
@@ -549,7 +548,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
             <span className="text-[10px] text-muted-foreground">Без телефону дитини</span>
           </div>
 
-          {/* Вибір дитини зі списку своєї команди */}
+          {/* Пошук та вибір дитини */}
           <div className="space-y-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-3" />
@@ -617,3 +616,88 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
                   placeholder="Інша сума..."
                   value={customDirectAmount}
                   onChange={(e) => setCustomDirectAmount(e.target.value.replace(/[^\d]/g, ''))}
+                  className="h-10 text-xs bg-surface-1/50 border-border/60 rounded-xl"
+                />
+                
+                <Button
+                  onClick={handleDirectCharge}
+                  disabled={directBusy}
+                  className="h-10 px-4 text-xs font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white rounded-xl shadow-md active:scale-95 shrink-0"
+                >
+                  {directBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Списати'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* 4. ДОЗВІЛ ДЛЯ ІНШИХ КОМАНД */}
+      {isLive && (
+        <Card className="p-4 border-border/50 bg-card/85 backdrop-blur-xl rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <Users className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" strokeWidth={1.75} />
+              <div className="min-w-0">
+                <Label htmlFor="allow-other-teams" className="text-xs sm:text-sm font-bold text-foreground cursor-pointer">
+                  Дозволити покупки іншим командам
+                </Label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {allowOtherTeams
+                    ? 'Купувати на цій касі можуть діти з будь-якої команди'
+                    : `Купувати можуть лише діти вашої Команди №${myTeam ?? '—'}`}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="allow-other-teams"
+              checked={allowOtherTeams}
+              onCheckedChange={toggleAllowOtherTeams}
+              disabled={!userId}
+            />
+          </div>
+        </Card>
+      )}
+
+      <FairHowTo variant="supervisor" />
+
+      {/* 5. ЖУРНАЛ ОПЕРАЦІЙ AIR PAY */}
+      <Card className="p-4 border-border/50 bg-card/85 backdrop-blur-xl rounded-3xl shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+            <h3 className="text-sm font-bold tracking-tight text-foreground">Журнал покупок (Air Pay)</h3>
+          </div>
+          <Badge variant="secondary" className="font-mono text-xs font-bold text-[#FA5A15] bg-[#FA5A15]/10 border-[#FA5A15]/20">
+            +{standTotal} А$
+          </Badge>
+        </div>
+
+        {feed.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">Очікуємо перші покупки на ярмарку</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {feed.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between rounded-xl border border-border/40 bg-surface-1/40 p-2.5 animate-fade-in text-xs"
+              >
+                <div className="min-w-0 pr-2">
+                  <p className="font-bold text-foreground truncate">{r.child_name}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Команда №{r.team_number} · {time(r.created_at)}
+                  </p>
+                </div>
+                <span className="font-mono font-bold text-emerald-500 text-sm shrink-0">
+                  +{r.amount} А$
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+export default SupervisorFairView;
