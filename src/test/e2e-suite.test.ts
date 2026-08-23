@@ -192,3 +192,23 @@ describe('B1 · login name matching', () => {
     expect(parseTeamNumber('8 команда')).toBe(8);
   });
 });
+
+
+// ---- BLOCK 10 hardening guards ----
+describe('B10 · hardening guards', () => {
+  it('rejects out-of-range team numbers on import', () => {
+    expect(isValidTeamNumber(99)).toBe(false);
+    expect(isValidTeamNumber(0)).toBe(false);
+    expect(isValidTeamNumber(120)).toBe(false);
+    expect(isValidTeamNumber(12)).toBe(true);
+  });
+  it("treats ь before a iotated vowel as an apostrophe", () => {
+    expect(normalizeName("Лукьянов Іван")).toBe(normalizeName("Лук'янов Іван"));
+  });
+  it('keeps permanent server rejections out of the offline queue', () => {
+    expect(isPermanentError(new Error('insufficient_funds'))).toBe(true);
+    expect(isPermanentError(new Error('fair_closed'))).toBe(true);
+    expect(isPermanentError(new Error('awaiting_target_consent'))).toBe(true);
+    expect(isPermanentError(new Error('Failed to fetch'))).toBe(false);
+  });
+});

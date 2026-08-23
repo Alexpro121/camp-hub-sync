@@ -105,7 +105,6 @@ const ChildSwapDialog = ({
     } catch (e: any) {
       const msg = String(e?.message ?? '');
       if (/awaiting_target_consent/.test(msg)) {
-        island.showInfo?.('Очікуємо згоду', 'Обмін відбудеться після підтвердження іншої дитини');
         toast.info('Очікуємо підтвердження іншої дитини');
       } else if (/fair_closed|forbidden/.test(msg)) {
         toast.error('Обміни зараз недоступні');
