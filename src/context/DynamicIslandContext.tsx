@@ -130,13 +130,14 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     }
   }, []);
   const toggleExpanded = useCallback(() => {
+    haptics.impact('light');
     setExpanded((v) => {
       const next = !v;
       // Expanding restarts an 8s countdown; it always collapses and hides after it.
       setState((s) => { startAutoDismissTimer(s, next); return s; });
       return next;
     });
-  }, [startAutoDismissTimer]);
+  }, [startAutoDismissTimer, haptics]);
 
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {

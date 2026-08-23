@@ -211,8 +211,10 @@ const TeamsView = ({
                 </div>
               </Card>
 
-              {openTeam === tn && (
-                <div className="mt-2 space-y-1.5 pl-2 stagger animate-accordion-down overflow-hidden">
+              <div className="accordion-grid" data-open={openTeam === tn ? 'true' : 'false'}>
+                <div className="min-h-0">
+                <div className="mt-2 space-y-1.5 pl-2">
+
                   {teamKids.map((c, ci) => (
                     <Card
                       key={c.id}
@@ -257,7 +259,9 @@ const TeamsView = ({
                     </Card>
                   ))}
                 </div>
-              )}
+                </div>
+              </div>
+
             </div>
           );
         })}

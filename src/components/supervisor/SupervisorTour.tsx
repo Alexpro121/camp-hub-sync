@@ -48,6 +48,7 @@ const SupervisorTour = ({
 }: Props) => {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const [ready, setReady] = useState(false);
   const [cardSize, setCardSize] = useState({ w: 320, h: 240 });
   const cardRef = useRef<HTMLDivElement>(null);
   const haptics = useHaptics();
@@ -139,6 +140,14 @@ const SupervisorTour = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Mark the body while the tour runs — dialogs then render without their own dim,
+  // so the tour overlay stays a single, monolithic, never-flashing layer.
+  useEffect(() => {
+    if (!open) return;
+    document.body.setAttribute('data-tour-active', 'true');
+    return () => { document.body.removeAttribute('data-tour-active'); };
+  }, [open]);
+
   // Run the step's onEnter whenever it becomes current
   useEffect(() => {
     if (!open || !step) return;
@@ -149,37 +158,52 @@ const SupervisorTour = ({
   const measure = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(step.selector) as HTMLElement | null;
-    setRect(el ? el.getBoundingClientRect() : null);
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect((prev) => {
+      if (prev && Math.abs(prev.top - r.top) < 0.5 && Math.abs(prev.left - r.left) < 0.5
+        && Math.abs(prev.width - r.width) < 0.5 && Math.abs(prev.height - r.height) < 0.5) return prev;
+      return r;
+    });
   }, [step]);
 
-  // Locate target (retry while tab/dialog DOM mounts) + smooth scroll into view
+  // Locate target (onEnter → rAF → 180ms for the dialog animation) then glide focus
   useLayoutEffect(() => {
     if (!open || !step) return;
     let cancelled = false;
     let tries = 0;
+    setReady(false);
     const tick = () => {
       if (cancelled) return;
       const el = document.querySelector(step.selector) as HTMLElement | null;
       if (el) {
         try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
-        setTimeout(() => { if (!cancelled) measure(); }, 380);
+        setTimeout(() => {
+          if (cancelled) return;
+          requestAnimationFrame(() => {
+            if (cancelled) return;
+            measure();
+            setReady(true);
+          });
+        }, 380);
         return;
       }
-      setRect(null);
       if (tries++ < 16) setTimeout(tick, 200);
     };
-    const t = setTimeout(tick, (step.delay ?? 0) + 250);
+    const t = setTimeout(() => requestAnimationFrame(tick), (step.delay ?? 0) + 180);
     return () => { cancelled = true; clearTimeout(t); };
   }, [open, index, step, measure]);
 
   // Keep the spotlight glued to the target
   useEffect(() => {
     if (!open) return;
-    const on = () => measure();
+    let raf = 0;
+    const on = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener('resize', on);
     window.addEventListener('scroll', on, true);
-    const iv = setInterval(on, 400);
+    const iv = setInterval(on, 500);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', on);
       window.removeEventListener('scroll', on, true);
       clearInterval(iv);
@@ -198,6 +222,7 @@ const SupervisorTour = ({
     return () => ro.disconnect();
   }, [open, index]);
 
+
   const finish = useCallback(() => {
     localStorage.setItem(tourStorageKey(teamNumber), new Date().toISOString());
     cleanup();
@@ -214,9 +239,9 @@ const SupervisorTour = ({
     if (next === index) return;
     steps[index]?.onLeave?.();
     haptics.selection();
-    setRect(null);
     setIndex(next);
   };
+
 
   const next = () => {
     if (isLast) { steps[index]?.onLeave?.(); finish(); return; }
@@ -255,48 +280,47 @@ const SupervisorTour = ({
   // Elements that dominate the screen (open dialogs) -> pin to the bottom third.
   const isHuge = rect ? rect.height > vh * 0.55 : false;
 
-  let topStyle: number | undefined;
-  let bottomStyle: string | undefined;
+  let topStyle: number;
 
   if (!rect || isHuge) {
-    bottomStyle = 'calc(16px + env(safe-area-inset-bottom))';
+    topStyle = vh - cardH - 16;
   } else if (spaceBelow >= Math.max(200, cardH + 24)) {
     topStyle = rect.bottom + SPOT_PAD + 12;
   } else if (spaceAbove >= cardH + 24) {
     topStyle = rect.top - SPOT_PAD - 12 - cardH;
   } else {
     // Nothing fits cleanly — dock to whichever side has more room.
-    if (spaceBelow >= spaceAbove) bottomStyle = 'calc(16px + env(safe-area-inset-bottom))';
-    else topStyle = PADDING;
+    topStyle = spaceBelow >= spaceAbove ? vh - cardH - 16 : PADDING;
   }
 
-  if (topStyle !== undefined) {
-    topStyle = Math.max(PADDING, Math.min(vh - cardH - PADDING, topStyle));
-  }
+  topStyle = Math.max(PADDING, Math.min(vh - cardH - PADDING, topStyle));
+
+  // Spotlight geometry — a single persistent element whose giant box-shadow
+  // IS the dim layer, so the background never remounts or re-fades.
+  const spotW = rect ? rect.width + SPOT_PAD * 2 : 0;
+  const spotH = rect ? rect.height + SPOT_PAD * 2 : 0;
+  const spotX = rect ? rect.left - SPOT_PAD : vw / 2;
+  const spotY = rect ? rect.top - SPOT_PAD : vh / 2;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999]"
-      style={{ pointerEvents: 'auto' }}
+      className="fixed inset-0 z-[9999] animate-fade-in"
+      style={{ pointerEvents: 'auto', animationDuration: '200ms' }}
       role="dialog"
       aria-modal="true"
       aria-label="Навчання супроводу"
     >
-      {/* Dim + spotlight cut-out */}
-      {rect ? (
-        <div
-          className="absolute rounded-2xl ring-2 ring-primary ring-offset-2 ring-offset-transparent pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] animate-pulse"
-          style={{
-            top: rect.top - SPOT_PAD,
-            left: rect.left - SPOT_PAD,
-            width: rect.width + SPOT_PAD * 2,
-            height: rect.height + SPOT_PAD * 2,
-            boxShadow: '0 0 0 9999px rgba(0,0,0,0.75), 0 0 26px 2px hsl(var(--primary) / 0.55)',
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 bg-black/75 transition-opacity duration-300" />
-      )}
+      {/* Monolithic dim + gliding spotlight cut-out (mounted once per tour) */}
+      <div
+        className="tour-spotlight absolute top-0 left-0 rounded-2xl pointer-events-none gpu-accelerated"
+        style={{
+          width: spotW,
+          height: spotH,
+          transform: `translate3d(${spotX}px, ${spotY}px, 0)`,
+          boxShadow:
+            '0 0 0 9999px rgba(0,0,0,0.75), 0 0 0 4px hsl(var(--primary) / 0.6), 0 0 25px hsl(var(--primary) / 0.4)',
+        }}
+      />
 
       {/* Click blocker: nothing outside the coach card is interactive */}
       <div
@@ -308,16 +332,17 @@ const SupervisorTour = ({
       {/* Coach card */}
       <div
         ref={cardRef}
-        className="absolute rounded-2xl border border-primary/30 bg-card/95 backdrop-blur-xl shadow-2xl p-4 animate-fade-in transition-[top,bottom,left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="tour-card absolute top-0 left-0 rounded-2xl border border-primary/30 bg-card/95 mobile-glass backdrop-blur-xl shadow-2xl p-4"
         style={{
           width: tooltipWidth,
-          left,
-          ...(topStyle !== undefined ? { top: topStyle } : {}),
-          ...(bottomStyle !== undefined ? { bottom: bottomStyle } : {}),
+          transform: `translate3d(${left}px, ${topStyle}px, 0)`,
+          opacity: ready || !rect ? 1 : 0.85,
           maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
           overflowY: 'auto',
         }}
       >
+        <div key={index} className="tour-content-in">
+
         <div className="flex items-start gap-2">
           <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-primary" />
@@ -369,8 +394,10 @@ const SupervisorTour = ({
         >
           Пропустити навчання
         </button>
+        </div>
       </div>
     </div>,
+
     document.body,
   );
 };

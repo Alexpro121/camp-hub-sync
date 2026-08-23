@@ -23,7 +23,7 @@ interface Props {
   onChange: (v: string) => void;
 }
 
-const EASE = 'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]';
+
 
 const TabDock = ({ items, value, onChange }: Props) => {
   const haptics = useHaptics();
@@ -48,14 +48,14 @@ const TabDock = ({ items, value, onChange }: Props) => {
         onClick={() => select(item.value)}
         title={item.live ? 'Каса відкрита' : item.label}
         className={cn(
-          'relative flex items-center justify-center gap-1.5 rounded-xl active:scale-90 transition-transform',
-          EASE,
+          'relative flex items-center justify-center gap-1.5 rounded-xl gpu-accelerated',
+          'active:scale-[0.92] transition-[transform,background-color,color,border-color] duration-300 ease-[var(--ease-spring)]',
           compact
             ? 'flex-1 min-w-[44px] min-h-[44px] h-11'
             : 'flex-1 min-h-[44px] px-3 py-2 text-xs font-medium',
           item.live && 'ring-1 ring-amber-400/60 shadow-[0_0_14px_rgba(245,158,11,0.35)]',
           activeTab
-            ? 'bg-primary/15 text-primary border border-primary/30 shadow-sm'
+            ? 'scale-100 bg-primary/15 text-primary border border-primary/30 shadow-sm'
             : 'text-muted-foreground border border-transparent hover:text-foreground hover:bg-muted/40',
         )}
       >
@@ -89,7 +89,7 @@ const TabDock = ({ items, value, onChange }: Props) => {
     return (
       <nav
         data-keyboard-open={keyboardOpen ? 'true' : 'false'}
-        className="fixed bottom-3 left-3 right-3 z-50 flex items-center justify-around gap-1 rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl shadow-2xl p-1.5"
+        className="fixed bottom-3 left-3 right-3 z-50 flex items-center justify-around gap-1 rounded-2xl border border-border/60 bg-card/90 mobile-glass backdrop-blur-xl shadow-2xl p-1.5 gpu-accelerated"
         style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
       >
 

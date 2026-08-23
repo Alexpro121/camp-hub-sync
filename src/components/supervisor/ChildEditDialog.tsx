@@ -116,11 +116,12 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="
-          bg-gradient-card scrollbar-thin overflow-y-auto
-          p-0 gap-0
+          bg-gradient-card scrollbar-thin overflow-y-auto gpu-accelerated
+          p-0 gap-0 duration-200 ease-[var(--ease-out-expo)]
           max-sm:!max-w-none max-sm:!w-screen max-sm:!h-[100dvh] max-sm:!max-h-[100dvh]
           max-sm:!rounded-none max-sm:!border-0 max-sm:!translate-x-0 max-sm:!translate-y-0
-          max-sm:!left-0 max-sm:!top-0
+          max-sm:!left-0 max-sm:!top-0 max-sm:sheet-up
+          max-sm:data-[state=open]:!animate-[sheet-up_0.25s_var(--ease-out-expo)]
           sm:max-w-md sm:max-h-[90vh] sm:rounded-2xl
         "
       >
