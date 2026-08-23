@@ -73,6 +73,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
   ];
 
+  // Keep the supervisor's own team expanded by default
+  useEffect(() => {
+    if (authedTeam !== null) setOpenTeam(authedTeam);
+  }, [authedTeam]);
+
   // Launch the onboarding tour on the supervisor's first entry
   useEffect(() => {
     if (authedTeam === null) return;
@@ -298,7 +303,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             openTeam={openTeam}
             onOpenTeamChange={setOpenTeam}
             editChild={editChild}
-            onEditChildChange={setEditChild}
+            onEditChildChange={(c) => { if (tourOpen && !c) return; setEditChild(c); }}
             onFirstTeamChild={setFirstTeamChild}
           />
         </TabsContent>

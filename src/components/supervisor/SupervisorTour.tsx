@@ -277,6 +277,7 @@ const SupervisorTour = ({
   return createPortal(
     <div
       className="fixed inset-0 z-[9999]"
+      style={{ pointerEvents: 'auto' }}
       role="dialog"
       aria-modal="true"
       aria-label="Навчання супроводу"
