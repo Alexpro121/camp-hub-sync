@@ -3,7 +3,12 @@ import * as XLSX from 'xlsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee, Pencil, Download } from 'lucide-react';
+import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee, Pencil, Download, Sparkles } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
@@ -186,9 +191,30 @@ const TalentAdmin = () => {
         <Button variant="outline" onClick={exportXlsx} disabled={entries.length === 0} className="w-full h-11 font-bold uppercase text-xs">
           <Download className="w-4 h-4 mr-1.5" /> Експорт програми (.xlsx)
         </Button>
-        <Button variant="ghost" onClick={startCollecting} className="w-full h-9 text-[11px] text-muted-foreground">
-          Новий вечір талантів
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" className="w-full h-9 text-[11px] text-muted-foreground">
+              <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Новий вечір талантів
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="max-w-md bg-gradient-card border-border/60">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-lg font-black uppercase text-foreground">
+                Розпочати новий вечір талантів?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm text-muted-foreground">
+                Поточну подію буде архівовано, а збір номерів розпочнеться заново. Цю дію неможливо скасувати.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2 sm:gap-0">
+              <AlertDialogCancel className="h-11">Скасувати</AlertDialogCancel>
+              <AlertDialogAction onClick={startCollecting} className="h-11 bg-gradient-primary font-bold shadow-glow">
+                Підтвердити
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </Card>
 
       <div className="space-y-2">

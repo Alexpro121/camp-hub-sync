@@ -78,13 +78,19 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     if (authedTeam !== null) setOpenTeam(authedTeam);
   }, [authedTeam]);
 
-  // Launch the onboarding tour on the supervisor's first entry
+  // Launch the onboarding tour strictly once — ever
   useEffect(() => {
     if (authedTeam === null) return;
-    if (localStorage.getItem(tourStorageKey(authedTeam))) return;
+    const GLOBAL_SEEN_KEY = 'helpsuprov:tour-seen-global';
+    const teamKey = tourStorageKey(authedTeam);
+    if (localStorage.getItem(teamKey) || localStorage.getItem(GLOBAL_SEEN_KEY)) return;
+    // Mark as seen immediately so an accidental refresh never re-triggers it
+    localStorage.setItem(teamKey, 'true');
+    localStorage.setItem(GLOBAL_SEEN_KEY, 'true');
     const t = setTimeout(() => setTourOpen(true), 900);
     return () => clearTimeout(t);
   }, [authedTeam]);
+
 
   const startTour = () => {
     setActiveTab('teams');
