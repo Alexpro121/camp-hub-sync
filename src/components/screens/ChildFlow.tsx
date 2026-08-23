@@ -66,7 +66,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   
-  // Керування темою з перевіркою localStorage
+  // Керування темою
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('zz_theme_mode');
@@ -83,26 +83,50 @@ const ChildFlow = ({ onBack }: Props) => {
   // Сповіщення про розклад у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
-  // Синхронізація теми з класом <html> та збереження
+  // ГЛОБАЛЬНЕ ЗАСТОСУВАННЯ ТЕМИ ТА CSS-ЗМІННИХ ДЛЯ ВСІХ ДОЧІРНІХ КОМПОНЕНТІВ
   useEffect(() => {
     const root = document.documentElement;
     if (isDark) {
       root.classList.add('dark');
       root.classList.remove('light');
       localStorage.setItem('zz_theme_mode', 'dark');
+
+      // CSS змінні для темної теми
+      root.style.setProperty('--background', '224 71% 4%');
+      root.style.setProperty('--foreground', '210 40% 98%');
+      root.style.setProperty('--card', '222 47% 11%');
+      root.style.setProperty('--card-foreground', '210 40% 98%');
+      root.style.setProperty('--popover', '224 71% 4%');
+      root.style.setProperty('--popover-foreground', '210 40% 98%');
+      root.style.setProperty('--muted', '217.2 32.6% 17.5%');
+      root.style.setProperty('--muted-foreground', '215 20.2% 65.1%');
+      root.style.setProperty('--border', '217.2 32.6% 17.5%');
+      root.style.setProperty('--surface-1', 'rgba(255, 255, 255, 0.04)');
     } else {
       root.classList.remove('dark');
       root.classList.add('light');
       localStorage.setItem('zz_theme_mode', 'light');
+
+      // CSS змінні для світлої теми
+      root.style.setProperty('--background', '210 40% 96.5%');
+      root.style.setProperty('--foreground', '222 47% 11%');
+      root.style.setProperty('--card', '0 0% 100%');
+      root.style.setProperty('--card-foreground', '222 47% 11%');
+      root.style.setProperty('--popover', '0 0% 100%');
+      root.style.setProperty('--popover-foreground', '222 47% 11%');
+      root.style.setProperty('--muted', '210 40% 93%');
+      root.style.setProperty('--muted-foreground', '215.4 16.3% 46.9%');
+      root.style.setProperty('--border', '214.3 31.8% 91.4%');
+      root.style.setProperty('--surface-1', 'rgba(0, 0, 0, 0.04)');
     }
   }, [isDark]);
 
   const toggleTheme = () => {
     haptics.impact('light');
-    setIsDark(prev => !prev);
+    setIsDark((prev) => !prev);
   };
 
-  // Авто-вхід при валідній сесії
+  // Авто-вхід при збереженій сесії
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -118,7 +142,7 @@ const ChildFlow = ({ onBack }: Props) => {
     return () => { cancelled = true; };
   }, []);
 
-  // Realtime слухач оновлень дитини
+  // Realtime слухач оновлень
   useEffect(() => {
     if (!child) return;
     const channel = supabase
@@ -251,10 +275,41 @@ const ChildFlow = ({ onBack }: Props) => {
     const shortId = child.id.slice(0, 6).toUpperCase();
 
     return (
-      <div className={`relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 select-none transition-colors duration-500 ${
+      <div className={`relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 select-none transition-colors duration-300 ${
         isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F1F5F9] text-slate-900'
       }`}>
         
+        {/* CSS-стилі для примусового оформлення всіх вкладених карток та компонентів */}
+        <style>{`
+          .light .bg-card,
+          .light [class*="bg-card"] {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+          }
+          .light [class*="text-muted-foreground"] {
+            color: #64748b !important;
+          }
+          .light [class*="bg-muted"],
+          .light [class*="bg-surface-1"] {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+            border-color: #e2e8f0 !important;
+          }
+          .light [data-state="active"] {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+          }
+          .light [data-state="inactive"] {
+            color: #64748b !important;
+          }
+          .light [data-state="inactive"]:hover {
+            color: #0f172a !important;
+          }
+        `}</style>
+
         {/* Анімований фоновий перелив */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
           <div className={`absolute -top-32 left-1/2 -translate-x-1/2 w-[450px] h-[450px] rounded-full blur-[120px] transition-all duration-700 ${
@@ -281,7 +336,7 @@ const ChildFlow = ({ onBack }: Props) => {
             </button>
 
             <div className="flex items-center gap-1.5">
-              {/* Перемикач теми */}
+              {/* Перемикач теми: світла / темна */}
               <button
                 onClick={toggleTheme}
                 title="Змінити тему"
@@ -414,10 +469,10 @@ const ChildFlow = ({ onBack }: Props) => {
             onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
           >
             <TabsList
-              className={`grid w-full h-11 mb-2 p-1 rounded-xl shadow-sm border ${
+              className={`grid w-full h-11 mb-2 p-1 rounded-xl shadow-sm border transition-colors ${
                 isDark 
-                  ? 'bg-[#0F1523]/80 border-white/10' 
-                  : 'bg-slate-200/70 border-slate-300/60'
+                  ? 'bg-[#0F1523]/80 border-white/10 text-slate-400' 
+                  : 'bg-slate-200/80 border-slate-300/80 text-slate-600'
               } ${
                 ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][
                   (talent.active ? 1 : 0) + (fair.hasFairAccess ? 1 : 0)
@@ -435,12 +490,12 @@ const ChildFlow = ({ onBack }: Props) => {
               {fair.hasFairAccess && (
                 <TabsTrigger value="fair" className="text-xs min-h-[36px] font-semibold rounded-lg relative gap-1.5">
                   <ShoppingBag
-                    className={`w-3.5 h-3.5 ${fair.isLiveFairRunning ? 'text-amber-400' : ''}`}
+                    className={`w-3.5 h-3.5 ${fair.isLiveFairRunning ? 'text-amber-500' : ''}`}
                     strokeWidth={1.9}
                   /> 
                   <span>Ярмарок</span>
                   {fair.isLiveFairRunning && (
-                    <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                   )}
                 </TabsTrigger>
               )}
@@ -470,7 +525,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
               )}
 
-              {/* Історія транзакцій */}
+              {/* Історія транзакцій (з повною підтримкою світлої теми) */}
               <TransactionHistory childId={child.id} collapsible />
 
               {/* Персональні дані */}
@@ -608,7 +663,7 @@ const ChildFlow = ({ onBack }: Props) => {
               )}
             </TabsContent>
 
-            {/* ВМІСТ 2: РОЗКЛАД (РЕАЛЬНИЙ КОМПОНЕНТ БЕЗ ШАБЛОНІВ) */}
+            {/* ВМІСТ 2: РОЗКЛАД */}
             <TabsContent value="schedule" className="mt-0 space-y-3">
               {phase?.currentPhase === 'PREPARING' ? (
                 <PhaseBanner status={phase} teamNumber={child.team_number} />
@@ -621,7 +676,7 @@ const ChildFlow = ({ onBack }: Props) => {
               )}
             </TabsContent>
 
-            {/* ВМІСТ 3: ЯРМАРОК (РЕАЛЬНІ ДАНІ) */}
+            {/* ВМІСТ 3: ЯРМАРОК */}
             {fair.hasFairAccess && (
               <TabsContent value="fair" className="mt-0 space-y-3">
                 {fair.isLiveFairRunning ? (
