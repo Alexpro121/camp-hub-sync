@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { AppNotification } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeftRight, Bell, Trash2, AlertTriangle, CircleDot } from 'lucide-react';
+import { ArrowLeftRight, Bell, Trash2, AlertTriangle, CircleDot, GraduationCap } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -14,12 +14,13 @@ import { InlineLoader } from '@/components/ui/loader';
 
 interface Props {
   myTeam: number;
+  onRestartTour?: () => void;
 }
 
 const SEEN_KEY = (team: number) => `helpsuprov:notif-seen:${team}`;
 const CLEARED_KEY = (team: number) => `helpsuprov:notif-cleared:${team}`;
 
-const NotificationsView = ({ myTeam }: Props) => {
+const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   // ISO timestamp before mount — anything newer is "unread" for this team
@@ -80,17 +81,31 @@ const NotificationsView = ({ myTeam }: Props) => {
     return <InlineLoader label="Завантаження подій" />;
   }
 
+  const tourButton = onRestartTour ? (
+    <Button
+      variant="secondary"
+      className="w-full h-11 text-xs font-bold"
+      onClick={onRestartTour}
+    >
+      <GraduationCap className="w-4 h-4 mr-2" /> Пройти навчання ще раз
+    </Button>
+  ) : null;
+
   if (visibleItems.length === 0) {
     return (
-      <Card className="p-8 text-center bg-gradient-card animate-fade-in">
-        <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-        <p className="text-muted-foreground text-sm">Стрічка порожня</p>
-      </Card>
+      <div data-tour="step-8-notifications-root" className="space-y-3">
+        <Card className="p-8 text-center bg-gradient-card animate-fade-in">
+          <Bell className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+          <p className="text-muted-foreground text-sm">Стрічка порожня</p>
+        </Card>
+        {tourButton}
+      </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div data-tour="step-8-notifications-root" className="space-y-3">
+      {tourButton}
       {/* Toolbar */}
       <div className="flex items-center justify-between px-1">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">

@@ -132,7 +132,7 @@ const TransfersView = ({ myTeam }: Props) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div data-tour="step-6-transfers-root" className="space-y-4">
       {/* Mode switch */}
       <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-surface-1 border border-border/40">
         <button

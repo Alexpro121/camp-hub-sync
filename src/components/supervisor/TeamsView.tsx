@@ -127,7 +127,7 @@ const TeamsView = ({ myTeam }: Props) => {
   return (
     <>
       {/* Sort selector */}
-      <div className="flex items-center gap-2 mb-3 px-1">
+      <div data-tour="step-1-sort" className="flex items-center gap-2 mb-3 px-1">
         <ArrowUpDown className="w-4 h-4 text-muted-foreground shrink-0" />
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
           <SelectTrigger className="h-11 text-sm flex-1 bg-surface-1 border-border/50">
@@ -153,6 +153,7 @@ const TeamsView = ({ myTeam }: Props) => {
           return (
             <div key={tn}>
               <Card
+                data-tour={isMine ? 'step-2-my-team' : undefined}
                 onClick={() => setOpenTeam(openTeam === tn ? null : tn)}
                 className={`p-4 cursor-pointer transition-smooth active:scale-[0.99] ${isMine ? 'bg-gradient-card border-primary/40' : 'bg-card/50 border-border/50'}`}
               >
@@ -176,15 +177,17 @@ const TeamsView = ({ myTeam }: Props) => {
 
               {openTeam === tn && (
                 <div className="mt-2 space-y-1.5 pl-2 stagger animate-accordion-down overflow-hidden">
-                  {teamKids.map((c) => (
+                  {teamKids.map((c, ci) => (
                     <Card
                       key={c.id}
+                      data-tour={isMine && ci === 0 ? 'step-4-child-card' : undefined}
                       className={`p-3.5 min-h-[60px] flex items-center gap-3 ${isMine ? 'cursor-pointer hover:border-primary/40' : 'opacity-75'} transition-smooth bg-surface-1 border-border/40`}
                       onClick={() => isMine && setEditChild(c)}
                     >
                       {isMine ? (
                         <button
                           type="button"
+                          data-tour={ci === 0 ? 'step-3-presence-toggle' : undefined}
                           onClick={(e) => { e.stopPropagation(); togglePresent(c); }}
                           className="p-1 -m-1 touch-manipulation select-none"
                           aria-label={c.is_present ? 'Позначити відсутнім' : 'Позначити присутнім'}
