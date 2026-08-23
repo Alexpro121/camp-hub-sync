@@ -83,11 +83,16 @@ const TabDock = ({ items, value, onChange }: Props) => {
   };
 
   if (isMobile) {
+    // The floating dock is hidden while the on-screen keyboard is up, so it can
+    // never cover an input inside a dialog.
+    if (keyboardOpen) return null;
     return (
       <nav
+        data-keyboard-open={keyboardOpen ? 'true' : 'false'}
         className="fixed bottom-3 left-3 right-3 z-50 flex items-center justify-around gap-1 rounded-2xl border border-border/60 bg-card/90 backdrop-blur-xl shadow-2xl p-1.5"
         style={{ paddingBottom: 'calc(0.375rem + env(safe-area-inset-bottom))' }}
       >
+
         {items.map((i) => (
           <div key={i.value} className="flex-1 flex animate-fade-in">
             <Item item={i} compact />
