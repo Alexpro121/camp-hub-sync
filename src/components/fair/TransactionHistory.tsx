@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, History, Loader2, ReceiptText } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,6 +23,7 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
 
   useEffect(() => {
     let mounted = true;
+    
     const load = async () => {
       const { data } = await supabase
         .from('iron_dollar_transactions')
@@ -39,7 +40,7 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
 
     load();
 
-    // Realtime підписка на нові транзакції дитини
+    // Realtime підписка на транзакції дитини
     const ch = supabase
       .channel(`iron_tx_history:${childId}`)
       .on('postgres_changes', {
@@ -54,6 +55,15 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
           return [newTx, ...prev].slice(0, limit);
         });
       })
+      .on('postgres_changes', {
+        event: 'UPDATE', 
+        schema: 'public', 
+        table: 'iron_dollar_transactions',
+        filter: `child_id=eq.${childId}`,
+      }, (p) => {
+        const updatedTx = p.new as IronTx;
+        setRows((prev) => prev.map(r => r.id === updatedTx.id ? updatedTx : r));
+      })
       .subscribe();
 
     return () => { 
@@ -66,12 +76,12 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
   const list = (
     <>
       {loading ? (
-        <div className="py-6 flex flex-col items-center justify-center gap-2">
+        <div className="py-6 flex flex-col items-center justify-center gap-2 select-none">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
           <span className="text-[11px] text-muted-foreground font-mono">Завантаження історії...</span>
         </div>
       ) : rows.length === 0 ? (
-        <div className="py-6 text-center space-y-1">
+        <div className="py-6 text-center space-y-1 select-none">
           <ReceiptText className="w-6 h-6 text-muted-foreground/40 mx-auto" />
           <p className="text-xs font-semibold text-foreground">Операцій ще немає</p>
           <p className="text-[10px] text-muted-foreground">Тут з'являться ваші покупки на ярмарку та нарахування</p>
@@ -137,6 +147,7 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
       <Card className="p-4 bg-card/85 backdrop-blur-md border-border/60 shadow-sm rounded-3xl transition-all">
         <button
           type="button"
+          aria-expanded={open}
           onClick={() => { haptics.impact('light'); setOpen((v) => !v); }}
           className="w-full flex items-center justify-between gap-2 min-h-[40px] text-left select-none active:scale-[0.99] transition-transform"
         >
@@ -154,9 +165,9 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
           />
         </button>
 
-        {/* Плавний контейнер списку (без жорсткого чорного кольору) */}
+        {/* Контейнер списку з захистом від зайвого перетягування екрана (overscroll-contain) */}
         {open && (
-          <div className="mt-3 max-h-[280px] overflow-y-auto space-y-2 pr-1 rounded-2xl bg-surface-1/30 p-2.5 border border-border/40 animate-fade-in">
+          <div className="mt-3 max-h-[280px] overflow-y-auto overscroll-contain space-y-2 pr-1 rounded-2xl bg-surface-1/30 p-2.5 border border-border/40 animate-fade-in">
             {list}
           </div>
         )}
@@ -169,7 +180,7 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
   // Звичайний блочний режим
   const body = (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 border-b border-border/40 pb-2">
+      <div className="flex items-center gap-2 border-b border-border/40 pb-2 select-none">
         <History className="w-4 h-4 text-primary" strokeWidth={2} />
         <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.2em] uppercase text-muted-foreground">
           Історія транзакцій
