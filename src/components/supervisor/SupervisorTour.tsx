@@ -280,48 +280,47 @@ const SupervisorTour = ({
   // Elements that dominate the screen (open dialogs) -> pin to the bottom third.
   const isHuge = rect ? rect.height > vh * 0.55 : false;
 
-  let topStyle: number | undefined;
-  let bottomStyle: string | undefined;
+  let topStyle: number;
 
   if (!rect || isHuge) {
-    bottomStyle = 'calc(16px + env(safe-area-inset-bottom))';
+    topStyle = vh - cardH - 16;
   } else if (spaceBelow >= Math.max(200, cardH + 24)) {
     topStyle = rect.bottom + SPOT_PAD + 12;
   } else if (spaceAbove >= cardH + 24) {
     topStyle = rect.top - SPOT_PAD - 12 - cardH;
   } else {
     // Nothing fits cleanly — dock to whichever side has more room.
-    if (spaceBelow >= spaceAbove) bottomStyle = 'calc(16px + env(safe-area-inset-bottom))';
-    else topStyle = PADDING;
+    topStyle = spaceBelow >= spaceAbove ? vh - cardH - 16 : PADDING;
   }
 
-  if (topStyle !== undefined) {
-    topStyle = Math.max(PADDING, Math.min(vh - cardH - PADDING, topStyle));
-  }
+  topStyle = Math.max(PADDING, Math.min(vh - cardH - PADDING, topStyle));
+
+  // Spotlight geometry — a single persistent element whose giant box-shadow
+  // IS the dim layer, so the background never remounts or re-fades.
+  const spotW = rect ? rect.width + SPOT_PAD * 2 : 0;
+  const spotH = rect ? rect.height + SPOT_PAD * 2 : 0;
+  const spotX = rect ? rect.left - SPOT_PAD : vw / 2;
+  const spotY = rect ? rect.top - SPOT_PAD : vh / 2;
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999]"
-      style={{ pointerEvents: 'auto' }}
+      className="fixed inset-0 z-[9999] animate-fade-in"
+      style={{ pointerEvents: 'auto', animationDuration: '200ms' }}
       role="dialog"
       aria-modal="true"
       aria-label="Навчання супроводу"
     >
-      {/* Dim + spotlight cut-out */}
-      {rect ? (
-        <div
-          className="absolute rounded-2xl ring-2 ring-primary ring-offset-2 ring-offset-transparent pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] animate-pulse"
-          style={{
-            top: rect.top - SPOT_PAD,
-            left: rect.left - SPOT_PAD,
-            width: rect.width + SPOT_PAD * 2,
-            height: rect.height + SPOT_PAD * 2,
-            boxShadow: '0 0 0 9999px rgba(0,0,0,0.75), 0 0 26px 2px hsl(var(--primary) / 0.55)',
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 bg-black/75 transition-opacity duration-300" />
-      )}
+      {/* Monolithic dim + gliding spotlight cut-out (mounted once per tour) */}
+      <div
+        className="tour-spotlight absolute top-0 left-0 rounded-2xl pointer-events-none gpu-accelerated"
+        style={{
+          width: spotW,
+          height: spotH,
+          transform: `translate3d(${spotX}px, ${spotY}px, 0)`,
+          boxShadow:
+            '0 0 0 9999px rgba(0,0,0,0.75), 0 0 0 4px hsl(var(--primary) / 0.6), 0 0 25px hsl(var(--primary) / 0.4)',
+        }}
+      />
 
       {/* Click blocker: nothing outside the coach card is interactive */}
       <div
@@ -333,16 +332,17 @@ const SupervisorTour = ({
       {/* Coach card */}
       <div
         ref={cardRef}
-        className="absolute rounded-2xl border border-primary/30 bg-card/95 backdrop-blur-xl shadow-2xl p-4 animate-fade-in transition-[top,bottom,left] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="tour-card absolute top-0 left-0 rounded-2xl border border-primary/30 bg-card/95 mobile-glass backdrop-blur-xl shadow-2xl p-4"
         style={{
           width: tooltipWidth,
-          left,
-          ...(topStyle !== undefined ? { top: topStyle } : {}),
-          ...(bottomStyle !== undefined ? { bottom: bottomStyle } : {}),
+          transform: `translate3d(${left}px, ${topStyle}px, 0)`,
+          opacity: ready || !rect ? 1 : 0.85,
           maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
           overflowY: 'auto',
         }}
       >
+        <div key={index} className="tour-content-in">
+
         <div className="flex items-start gap-2">
           <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-primary" />
