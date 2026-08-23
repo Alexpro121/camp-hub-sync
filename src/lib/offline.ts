@@ -92,8 +92,10 @@ async function run(a: QueuedAction) {
     });
     if (error) throw error;
   } else if (a.op === 'update' && a.matchId) {
-    const { error } = await supabase.from(a.table as any).update(a.values).eq('id', a.matchId);
+    const values = await resolveConflicts(a);
+    const { error } = await supabase.from(a.table as any).update(values).eq('id', a.matchId);
     if (error) throw error;
+
   } else {
     const { error } = await supabase.from(a.table as any).insert(a.values);
     if (error) throw error;
