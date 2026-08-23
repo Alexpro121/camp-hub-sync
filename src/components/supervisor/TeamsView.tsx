@@ -10,7 +10,17 @@ import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useHaptics } from '@/hooks/useHaptics';
 
-interface Props { myTeam: number; }
+interface Props {
+  myTeam: number;
+  /** Controlled accordion state (used by the onboarding tour). */
+  openTeam?: number | null;
+  onOpenTeamChange?: (team: number | null) => void;
+  /** Controlled child editor (used by the onboarding tour). */
+  editChild?: Child | null;
+  onEditChildChange?: (child: Child | null) => void;
+  /** Reports the first child of the supervisor's own team (tour demo target). */
+  onFirstTeamChild?: (child: Child | null) => void;
+}
 
 type SortMode = 'default' | 'iron_desc' | 'iron_asc' | 'has_notes' | 'present_first';
 
@@ -22,11 +32,28 @@ const SORT_LABELS: Record<SortMode, string> = {
   present_first: 'Спочатку присутні',
 };
 
-const TeamsView = ({ myTeam }: Props) => {
+const TeamsView = ({
+  myTeam,
+  openTeam: openTeamProp,
+  onOpenTeamChange,
+  editChild: editChildProp,
+  onEditChildChange,
+  onFirstTeamChild,
+}: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openTeam, setOpenTeam] = useState<number | null>(myTeam);
-  const [editChild, setEditChild] = useState<Child | null>(null);
+  const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
+  const [editChildLocal, setEditChildLocal] = useState<Child | null>(null);
+  const openTeam = openTeamProp !== undefined ? openTeamProp : openTeamLocal;
+  const setOpenTeam = (v: number | null) => {
+    setOpenTeamLocal(v);
+    onOpenTeamChange?.(v);
+  };
+  const editChild = editChildProp !== undefined ? editChildProp : editChildLocal;
+  const setEditChild = (v: Child | null) => {
+    setEditChildLocal(v);
+    onEditChildChange?.(v);
+  };
   const haptics = useHaptics();
   const [sortMode, setSortMode] = useState<SortMode>(() =>
     (localStorage.getItem('helpsuprov:team-sort') as SortMode) || 'default'
@@ -94,6 +121,15 @@ const TeamsView = ({ myTeam }: Props) => {
   };
 
   const teams = Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b);
+
+  useEffect(() => {
+    if (!onFirstTeamChild) return;
+    const mine = children
+      .filter((c) => c.team_number === myTeam)
+      .sort((a, b) => (a.row_number ?? 0) - (b.row_number ?? 0));
+    onFirstTeamChild(mine[0] ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [children, myTeam]);
 
   const sortKids = (kids: Child[]): Child[] => {
     const arr = [...kids];

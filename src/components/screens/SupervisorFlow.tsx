@@ -46,6 +46,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [openTeam, setOpenTeam] = useState<number | null>(null);
+  const [editChild, setEditChild] = useState<any | null>(null);
+  const [firstTeamChild, setFirstTeamChild] = useState<any | null>(null);
   
   const haptics = useHaptics();
   const talent = useTalentEventActive();
@@ -70,6 +73,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
   ];
 
+  // Keep the supervisor's own team expanded by default
+  useEffect(() => {
+    if (authedTeam !== null) setOpenTeam(authedTeam);
+  }, [authedTeam]);
+
   // Launch the onboarding tour on the supervisor's first entry
   useEffect(() => {
     if (authedTeam === null) return;
@@ -80,6 +88,8 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
   const startTour = () => {
     setActiveTab('teams');
+    setEditChild(null);
+    setBankOpen(false);
     setTourOpen(true);
   };
 
@@ -288,7 +298,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         {isMobile && <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />}
 
         <TabsContent value="teams" className="mt-3 animate-fade-in">
-          <TeamsView myTeam={authedTeam} />
+          <TeamsView
+            myTeam={authedTeam}
+            openTeam={openTeam}
+            onOpenTeamChange={setOpenTeam}
+            editChild={editChild}
+            onEditChildChange={(c) => { if (tourOpen && !c) return; setEditChild(c); }}
+            onFirstTeamChild={setFirstTeamChild}
+          />
         </TabsContent>
         <TabsContent value="schedule" className="mt-3 animate-fade-in">
           <ScheduleView
@@ -344,13 +361,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       <SupervisorTour
         open={tourOpen}
         teamNumber={authedTeam}
+        myTeam={authedTeam}
         activeTab={activeTab}
+        firstTeamChild={firstTeamChild}
         onTabChange={setActiveTab}
+        setOpenTeam={setOpenTeam}
+        setEditChild={setEditChild}
+        setBankOpen={setBankOpen}
         onClose={() => setTourOpen(false)}
       />
 
       {authedTeam !== null && (
-        <IronBank myTeam={authedTeam} open={bankOpen} onClose={() => setBankOpen(false)} />
+        <IronBank
+          myTeam={authedTeam}
+          open={bankOpen}
+          onClose={() => { if (!tourOpen) setBankOpen(false); }}
+        />
       )}
     </div>
   );

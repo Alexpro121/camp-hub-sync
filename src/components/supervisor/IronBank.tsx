@@ -88,7 +88,7 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
 
         <div className="space-y-4 mt-2">
           {/* Budget hero */}
-          <Card className={`p-5 border-0 ${negative ? 'bg-destructive/15' : 'bg-gradient-primary'} relative overflow-hidden`}>
+          <Card data-tour="step-5-bank-balance" className={`p-5 border-0 ${negative ? 'bg-destructive/15' : 'bg-gradient-primary'} relative overflow-hidden`}>
             <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-primary-foreground/10 blur-2xl" />
             <div className="relative">
               <div className="flex items-center justify-between mb-2">

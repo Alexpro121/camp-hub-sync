@@ -157,7 +157,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
           <TabsContent value="edit" className="mt-0">
         <div className="space-y-4 px-5 py-4 pb-32 sm:pb-5">
           {/* Iron dollars with +/- */}
-          <div className="p-4 rounded-xl bg-gradient-primary">
+          <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
             <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">
               <Coins className="w-4 h-4" /> Айрон Долари
             </Label>
@@ -199,7 +199,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
             <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base" />
           </div>
 
-          <div className="space-y-2">
+          <div data-tour="step-4-notes" className="space-y-2">
             <Label htmlFor="notes">Замітки</Label>
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base" />
           </div>
