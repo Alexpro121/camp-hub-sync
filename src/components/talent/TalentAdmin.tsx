@@ -3,7 +3,12 @@ import * as XLSX from 'xlsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee, Pencil, Download } from 'lucide-react';
+import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee, Pencil, Download, Sparkles } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
