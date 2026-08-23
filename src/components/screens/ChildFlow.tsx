@@ -65,6 +65,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [child, setChild] = useState<Child | null>(null);
   const [showAllFields, setShowAllFields] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   
   // Керування темою оформлення для кабінету дитини
@@ -495,9 +496,9 @@ const ChildFlow = ({ onBack }: Props) => {
 
           {/* Навігаційні вкладки */}
           <Tabs
-            defaultValue="profile"
+            value={activeTab}
             className="w-full"
-            onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
+            onValueChange={(v) => { haptics.impact('light'); setActiveTab(v); if (v === 'talent') talent.markSeen(); }}
           >
             <TabsList
               className={`grid w-full h-11 mb-2 p-1 rounded-xl shadow-sm border transition-colors ${
