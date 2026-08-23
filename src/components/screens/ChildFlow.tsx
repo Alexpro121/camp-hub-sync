@@ -66,12 +66,11 @@ const ChildFlow = ({ onBack }: Props) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   
-  // Керування темою
+  // Тема оформлення виключно для кабінету дитини
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('zz_theme_mode');
-    if (saved) return saved === 'dark';
-    return document.documentElement.classList.contains('dark') || !document.documentElement.classList.contains('light');
+    const saved = localStorage.getItem('child_theme_mode');
+    return saved ? saved === 'dark' : true;
   });
 
   const haptics = useHaptics();
@@ -83,42 +82,15 @@ const ChildFlow = ({ onBack }: Props) => {
   // Сповіщення про розклад у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
-  // ГЛОБАЛЬНЕ ЗАСТОСУВАННЯ ТЕМИ ТА CSS-ЗМІННИХ ДЛЯ ВСІХ ДОЧІРНІХ КОМПОНЕНТІВ
+  // Ізольоване збереження теми дитини + автоматичне повернення темної теми при виході для адміна/супроводу
   useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add('dark');
-      root.classList.remove('light');
-      localStorage.setItem('zz_theme_mode', 'dark');
+    localStorage.setItem('child_theme_mode', isDark ? 'dark' : 'light');
 
-      // CSS змінні для темної теми
-      root.style.setProperty('--background', '224 71% 4%');
-      root.style.setProperty('--foreground', '210 40% 98%');
-      root.style.setProperty('--card', '222 47% 11%');
-      root.style.setProperty('--card-foreground', '210 40% 98%');
-      root.style.setProperty('--popover', '224 71% 4%');
-      root.style.setProperty('--popover-foreground', '210 40% 98%');
-      root.style.setProperty('--muted', '217.2 32.6% 17.5%');
-      root.style.setProperty('--muted-foreground', '215 20.2% 65.1%');
-      root.style.setProperty('--border', '217.2 32.6% 17.5%');
-      root.style.setProperty('--surface-1', 'rgba(255, 255, 255, 0.04)');
-    } else {
-      root.classList.remove('dark');
-      root.classList.add('light');
-      localStorage.setItem('zz_theme_mode', 'light');
-
-      // CSS змінні для світлої теми
-      root.style.setProperty('--background', '210 40% 96.5%');
-      root.style.setProperty('--foreground', '222 47% 11%');
-      root.style.setProperty('--card', '0 0% 100%');
-      root.style.setProperty('--card-foreground', '222 47% 11%');
-      root.style.setProperty('--popover', '0 0% 100%');
-      root.style.setProperty('--popover-foreground', '222 47% 11%');
-      root.style.setProperty('--muted', '210 40% 93%');
-      root.style.setProperty('--muted-foreground', '215.4 16.3% 46.9%');
-      root.style.setProperty('--border', '214.3 31.8% 91.4%');
-      root.style.setProperty('--surface-1', 'rgba(0, 0, 0, 0.04)');
-    }
+    return () => {
+      // При виході з кабінету дитини повертаємо корінь у темну тему
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    };
   }, [isDark]);
 
   const toggleTheme = () => {
@@ -126,7 +98,7 @@ const ChildFlow = ({ onBack }: Props) => {
     setIsDark((prev) => !prev);
   };
 
-  // Авто-вхід при збереженій сесії
+  // Авто-вхід при валідній сесії
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -142,7 +114,7 @@ const ChildFlow = ({ onBack }: Props) => {
     return () => { cancelled = true; };
   }, []);
 
-  // Realtime слухач оновлень
+  // Realtime оновлення профілю
   useEffect(() => {
     if (!child) return;
     const channel = supabase
@@ -275,38 +247,81 @@ const ChildFlow = ({ onBack }: Props) => {
     const shortId = child.id.slice(0, 6).toUpperCase();
 
     return (
-      <div className={`relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 select-none transition-colors duration-300 ${
-        isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F1F5F9] text-slate-900'
-      }`}>
+      <div 
+        id="child-flow-root"
+        className={`relative min-h-[100dvh] w-full max-w-md mx-auto px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] safe-top safe-bottom flex flex-col justify-between gap-3 select-none transition-colors duration-300 overflow-x-hidden ${
+          isDark ? 'theme-dark bg-[#07090E] text-slate-100' : 'theme-light bg-[#F1F5F9] text-slate-900'
+        }`}
+      >
         
-        {/* CSS-стилі для примусового оформлення всіх вкладених карток та компонентів */}
+        {/* ================= ГЛОБАЛЬНИЙ ІЗОЛЬОВАНИЙ CSS-РУШІЙ ТЕМИ ================= */}
         <style>{`
-          .light .bg-card,
-          .light [class*="bg-card"] {
+          /* Світла тема: повне перефарбування всіх вкладених карток та компонентів */
+          #child-flow-root.theme-light {
+            color-scheme: light;
+          }
+          #child-flow-root.theme-light .bg-card,
+          #child-flow-root.theme-light [class*="bg-card"],
+          #child-flow-root.theme-light [class*="bg-[#0F1523]"],
+          #child-flow-root.theme-light [class*="bg-[#0f1523]"] {
             background-color: #ffffff !important;
             color: #0f172a !important;
             border-color: #e2e8f0 !important;
-            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06) !important;
           }
-          .light [class*="text-muted-foreground"] {
+
+          #child-flow-root.theme-light [class*="text-muted-foreground"],
+          #child-flow-root.theme-light [class*="text-slate-400"],
+          #child-flow-root.theme-light [class*="text-slate-500"] {
             color: #64748b !important;
           }
-          .light [class*="bg-muted"],
-          .light [class*="bg-surface-1"] {
+
+          #child-flow-root.theme-light [class*="text-white"],
+          #child-flow-root.theme-light [class*="text-slate-100"],
+          #child-flow-root.theme-light [class*="text-slate-200"],
+          #child-flow-root.theme-light [class*="text-slate-300"] {
+            color: #0f172a !important;
+          }
+
+          #child-flow-root.theme-light [class*="bg-muted"],
+          #child-flow-root.theme-light [class*="bg-surface-1"],
+          #child-flow-root.theme-light [class*="bg-[#0A0E18]"],
+          #child-flow-root.theme-light [class*="bg-[#151C2C]"] {
             background-color: #f8fafc !important;
             color: #0f172a !important;
             border-color: #e2e8f0 !important;
           }
-          .light [data-state="active"] {
+
+          /* Вкладки (Tabs) у світлій темі */
+          #child-flow-root.theme-light [role="tablist"] {
+            background-color: #e2e8f0 !important;
+            border-color: #cbd5e1 !important;
+          }
+          #child-flow-root.theme-light [role="tab"][data-state="active"] {
             background-color: #ffffff !important;
             color: #0f172a !important;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
           }
-          .light [data-state="inactive"] {
+          #child-flow-root.theme-light [role="tab"][data-state="inactive"] {
             color: #64748b !important;
           }
-          .light [data-state="inactive"]:hover {
-            color: #0f172a !important;
+
+          /* Історія транзакцій та елементи списку */
+          #child-flow-root.theme-light .divide-y > div,
+          #child-flow-root.theme-light [class*="border-border"] {
+            border-color: #e2e8f0 !important;
+          }
+
+          /* Збереження брендових акцентів */
+          #child-flow-root.theme-light .text-primary,
+          #child-flow-root.theme-light [class*="text-primary"],
+          #child-flow-root.theme-light [class*="text-[#FA5A15]"] {
+            color: #FA5A15 !important;
+          }
+          #child-flow-root.theme-light [class*="bg-[#FA5A15]"],
+          #child-flow-root.theme-light button[class*="bg-[#FA5A15]"] {
+            background-color: #FA5A15 !important;
+            color: #ffffff !important;
           }
         `}</style>
 
@@ -525,7 +540,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
               )}
 
-              {/* Історія транзакцій (з повною підтримкою світлої теми) */}
+              {/* Історія транзакцій */}
               <TransactionHistory childId={child.id} collapsible />
 
               {/* Персональні дані */}
@@ -741,7 +756,7 @@ const ChildFlow = ({ onBack }: Props) => {
      ЕКРАН 2: ФОРМА ВХОДУ (НЕАВТОРИЗОВАНИЙ СТАН)
   ========================================================================= */
   return (
-    <div className={`min-h-[100dvh] px-4 py-5 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between select-none transition-colors duration-500 ${
+    <div className={`min-h-[100dvh] w-full max-w-md mx-auto px-4 py-5 safe-top safe-bottom flex flex-col justify-between select-none transition-colors duration-500 overflow-x-hidden ${
       isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F1F5F9] text-slate-900'
     }`}>
       {loading && <FullScreenLoader label="Шукаємо твій профіль..." />}
