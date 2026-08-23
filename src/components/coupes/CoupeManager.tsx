@@ -137,7 +137,7 @@ const CoupeManager = ({
   const coupes = groupByCoupe(rows);
 
   return (
-    <div className="space-y-3">
+    <div data-tour="step-7-coupes-root" className="space-y-3">
       <div className="flex items-center gap-2 px-1">
         <p className="text-[11px] text-muted-foreground flex-1">
           {rows.length} пасажирів · {coupes.length} купе
