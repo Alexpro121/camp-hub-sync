@@ -114,7 +114,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
 
     try {
       // Відправляємо запит у канал каси відповідної команди супроводу
-      const supervisorChannel = supabase.channel(`supervisor_fair_team_${targetTeam}`);
+      const supervisorChannel = supabase.channel(`supervisor_fair_team_${numericTargetTeam}`);
       await supervisorChannel.subscribe();
 
       await supervisorChannel.send({
@@ -126,7 +126,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
           childName: childName || 'Учасник',
           childTeam: childTeam ?? 0,
           amount: finalAmount,
-          targetTeam,
+          targetTeam: numericTargetTeam,
           timestamp: Date.now(),
         },
       });
