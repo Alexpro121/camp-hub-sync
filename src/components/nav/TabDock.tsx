@@ -28,6 +28,8 @@ const EASE = 'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]';
 const TabDock = ({ items, value, onChange }: Props) => {
   const haptics = useHaptics();
   const isMobile = useIsMobile();
+  const keyboardOpen = useKeyboardOpen();
+
 
   const select = (v: string) => {
     if (v !== value) haptics.impact('light');
