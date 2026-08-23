@@ -259,7 +259,9 @@ const TeamsView = ({
                     </Card>
                   ))}
                 </div>
-              )}
+                </div>
+              </div>
+
             </div>
           );
         })}
