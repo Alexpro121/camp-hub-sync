@@ -48,6 +48,7 @@ const SupervisorTour = ({
 }: Props) => {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const [ready, setReady] = useState(false);
   const [cardSize, setCardSize] = useState({ w: 320, h: 240 });
   const cardRef = useRef<HTMLDivElement>(null);
   const haptics = useHaptics();
