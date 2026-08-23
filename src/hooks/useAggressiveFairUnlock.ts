@@ -2,14 +2,11 @@ import { useEffect, useRef } from 'react';
 import { useFairAccess, type FairAccess } from './useFairAccess';
 import { pushIsland } from '@/lib/islandBus';
 
-/** Глобальний прапорець для запобігання дублюванню сповіщень між компонентами */
+/** Глобальний прапорець для уникнення дублювання сповіщень */
 let globalFairAnnounced = false;
 
 /**
- * Хук агресивного розблокування ярмарку:
- * Щойно настає час події з категорією 'fair' або назвою "Ярмарок",
- * золота вкладка миттєво відкривається для всіх, а в Dynamic Island
- * надсилається єдине чітке системне сповіщення.
+ * Хук автоматичного розблокування ярмарку та красивого сповіщення в Dynamic Island.
  */
 export function useAggressiveFairUnlock(enabled = true): FairAccess {
   const access = useFairAccess(enabled);
@@ -18,20 +15,19 @@ export function useAggressiveFairUnlock(enabled = true): FairAccess {
   useEffect(() => {
     if (!enabled) return;
 
-    // Якщо ярмарок відкрився і сповіщення ще не було відправлено
+    // Відправляємо чітке сповіщення без обрізання тексту та без червоної помилки
     if (access.isLiveFairRunning && !localAnnounced.current && !globalFairAnnounced) {
       localAnnounced.current = true;
       globalFairAnnounced = true;
 
       pushIsland(
-        'Розпочався ярмарок! Торгівлю та каси стендів відкрито.',
-        'warning',
-        'Ярмарок',
-        9000
+        'Ярмарок відкрито!',
+        'success',
+        'Торгівлю та каси стендів запущено',
+        8000
       );
     }
 
-    // Скидаємо прапорці після завершення ярмарку
     if (!access.isLiveFairRunning) {
       localAnnounced.current = false;
       globalFairAnnounced = false;
