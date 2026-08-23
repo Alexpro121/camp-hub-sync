@@ -139,7 +139,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
       setCurrentRequestId(null);
       toast.error('Не вдалося надіслати запит. Перевірте зʼєднання');
     }
-  }, [finalAmount, balance, targetTeam, childId, childName, childTeam, haptics]);
+  }, [finalAmount, balance, numericTargetTeam, childId, childName, childTeam, haptics]);
 
   // Скасування активного запиту дитиною
   const handleCancelRequest = () => {
