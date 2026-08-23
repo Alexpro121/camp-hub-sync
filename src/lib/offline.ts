@@ -12,9 +12,14 @@ export interface QueuedAction {
   fn?: 'increment_iron_dollars';
   /** Guarantees a replayed action is applied exactly once. */
   idempotencyKey?: string;
+  /** [L-1] Optimistic lock: when the server row is newer, text fields are merged. */
+  clientUpdatedAt?: string;
+  /** Text columns that must be merged (appended) instead of overwritten. */
+  mergeFields?: string[];
   label: string;
   created_at: number;
 }
+
 
 const KEY = 'helpsuprov:offline-queue';
 /** IndexedDB store — no 5 MB localStorage ceiling. */
