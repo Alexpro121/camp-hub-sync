@@ -67,8 +67,12 @@ export const useSwapRequests = (childId: string | null, autoApprove: boolean) =>
       if (!accept) {
         await supabase.from('coupe_swap_requests').update({ status: 'rejected' }).eq('id', id);
       } else if (autoApprove) {
+        // The target child is the one calling here, which is the consent the
+        // server checks — marking 'approved' first would short-circuit the swap.
         const { error } = await supabase.rpc('execute_coupe_swap', { p_request_id: id });
         if (error) throw error;
+
+
       } else {
         await supabase.from('coupe_swap_requests').update({ status: 'pending_supervisor' }).eq('id', id);
       }

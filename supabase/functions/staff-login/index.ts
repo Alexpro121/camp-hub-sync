@@ -1,4 +1,5 @@
 import { admin as adminClient, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 const ADMIN_TEAM = 99;
 const SUPERVISOR_PREFIX = 'Супровід';
@@ -87,11 +88,41 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_credentials' }, 400);
     }
 
+    // [H-2] Password brute-force protection: stall after 3 misses, block after 10.
+    const rlKey = clientKey(req, `staff:${team}`);
+    const before = peek(rlKey);
+    if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
+    if (before.hits >= 3) await sleep(1200 * Math.min(before.hits, 5));
+
+    /** [H-3] Security audit trail for every successful staff sign-in. */
+    const audit = async (role: 'admin' | 'supervisor') => {
+      try {
+        await adminClient().from('notifications').insert({
+          type: 'staff_login',
+          title: role === 'admin' ? 'Вхід адміністратора' : 'Вхід супроводу',
+          message: `${role === 'admin' ? 'Адміністратор' : 'Супровід'} · Команда №${team} · ${new Date().toISOString()}`,
+          metadata: {
+            role,
+            team,
+            at: new Date().toISOString(),
+            ip: req.headers.get('x-forwarded-for') ?? null,
+            ua: (req.headers.get('user-agent') ?? '').slice(0, 200),
+          },
+        });
+      } catch (_e) { /* auditing must never block a valid login */ }
+    };
+
     if (team === ADMIN_TEAM) {
       const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD') ?? '';
       if (!adminPassword) return json({ error: 'not_configured' }, 503);
-      if (!passwordMatches(password, adminPassword)) return json({ error: 'invalid_credentials' }, 401);
+      if (!passwordMatches(password, adminPassword)) {
+        const v = recordFailure(rlKey, { slowAfter: 3 });
+        if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
+        return json({ error: 'invalid_credentials' }, 401);
+      }
+      resetFailures(rlKey);
       const session = await issueSession('staff-admin@ironhelp.local', 'admin', { team_number: ADMIN_TEAM });
+      await audit('admin');
       return json({ role: 'admin', team, session });
     }
 
@@ -105,10 +136,14 @@ Deno.serve(async (req) => {
       }
     }
     if (!ok) {
+      const v = recordFailure(rlKey, { slowAfter: 3 });
+      if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
       return json({ error: 'invalid_credentials' }, 401);
     }
+    resetFailures(rlKey);
 
     const session = await issueSession(`staff-team-${team}@ironhelp.local`, 'supervisor', { team_number: team });
+    await audit('supervisor');
     return json({ role: 'supervisor', team, session });
   } catch (e) {
     console.error('staff-login failed:', e instanceof Error ? e.message : e);

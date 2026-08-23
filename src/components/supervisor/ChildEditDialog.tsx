@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { queuedIronDollarChange } from '@/lib/offline';
+import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
 
 interface Props {
   child: Child;
@@ -82,9 +82,17 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
         supervisorId: auth?.user?.id ?? null,
         label: `${delta > 0 ? '+' : ''}${delta} IRON · ${child.full_name}`,
       });
+      // The server refuses to push a balance below zero — surface it plainly.
+      if (/insufficient_funds/.test(String((res.error as any)?.message ?? ''))) {
+        setSaving(false);
+        setIron(String(baseline.current));
+        toast.error('Недостатньо Айрон-доларів на балансі дитини');
+        return;
+      }
       queued = res.queued;
       baseline.current = parseInt(iron, 10) || 0;
     }
+
     setSaving(false);
 
     if (delta !== 0) {

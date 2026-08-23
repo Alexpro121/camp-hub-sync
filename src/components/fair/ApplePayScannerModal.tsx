@@ -253,7 +253,12 @@ const ApplePayScannerModal = ({ open, onClose, balance, onPaid, childName, child
         showFailure(`Оплата доступна лише для дітей Команди №${restricted[1] ?? payload.supervisor_team ?? ''}!`);
         return;
       }
+      if (/fair_closed/.test(msg)) {
+        showFailure('Ярмарок наразі закрито. Здійснювати покупки можна лише під час слоту ярмарку за розкладом або за дозволом адміністратора');
+        return;
+      }
       if (/double_scan_guard/.test(msg)) { showFailure('Захист від подвійного сканування'); return; }
+
       if (/unknown_preset/.test(msg)) { showFailure('Цінник більше не діє'); return; }
       if (/tx_already_used/.test(msg)) { showFailure('Цей QR-код вже використано'); return; }
       if (/invalid_amount/.test(msg)) { showFailure('Недійсна сума в QR-коді'); return; }

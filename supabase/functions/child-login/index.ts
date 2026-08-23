@@ -1,9 +1,17 @@
 import { admin, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 /* ---------- name matching (mirrors src/lib/normalize.ts) ---------- */
 function normalizeName(s: string | null | undefined): string {
   if (!s) return '';
-  return s.toLowerCase().replace(/ё/g, 'е').replace(/[''`ʼ]/g, "'").replace(/\s+/g, ' ').trim();
+  // `ь`/`ъ` before a iotated vowel is treated as an apostrophe: Лукьянов === Лук'янов.
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/ё/g, 'е')
+    .replace(/[`ʼ'\u2018\u2019\u02BC]/g, "'")
+    .replace(/[ьъ](?=[яюєїе])/g, "'")
+    .replace(/\s+/g, ' ');
 }
 
 function levenshtein(a: string, b: string): number {
@@ -114,6 +122,12 @@ Deno.serve(async (req) => {
       // Require the team number: narrows the searchable pool and blocks roster-wide scraping.
       if (!team || team < 1 || team > 999) return json({ error: 'invalid_team' }, 400);
 
+      // [H-2] Brute-force protection: 5 misses in a minute start stalling, 10 block.
+      const rlKey = clientKey(req, `child:${team}`);
+      const before = peek(rlKey);
+      if (before.blocked) return json({ error: 'too_many_attempts' }, 429);
+      if (before.slowDown) await sleep(1500);
+
       let q = svc.from('children').select('id, full_name, team_number, team_name');
       if (active?.id) q = q.eq('shift_id', active.id);
       q = q.eq('team_number', team);
@@ -126,17 +140,27 @@ Deno.serve(async (req) => {
       // We never return names, teams or partial hints, so the endpoint cannot be
       // used to enumerate the roster.
       const exact = pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
-      if (exact) return json({ exact: { id: exact.id } });
+      if (exact) { resetFailures(rlKey); return json({ exact: { id: exact.id } }); }
 
       // Allow only a single near-certain match (typo tolerance) and still reveal nothing.
-      const strong = pool
-        .map((item) => ({ item, s: score(fullName, item.full_name) }))
-        .filter((x) => x.s >= 0.92)
+      const scored = pool
+        .map((item) => ({ item, s: score(fullName, item.full_name), cov: tokenCoverage(fullName, item.full_name) }))
         .sort((a, b) => b.s - a.s);
-      if (strong.length === 1) return json({ exact: { id: strong[0].item.id } });
 
+      const strong = scored.filter((x) => x.s >= 0.92);
+      if (strong.length === 1) { resetFailures(rlKey); return json({ exact: { id: strong[0].item.id } }); }
+
+      // [M-1] Softer, still unique fallback: a partial surname match is enough
+      // when exactly one child in the team is plausible.
+      const soft = scored.filter((x) => x.cov >= 0.65 && x.s >= 0.7);
+      if (soft.length === 1) { resetFailures(rlKey); return json({ exact: { id: soft[0].item.id } }); }
+
+      const after = recordFailure(rlKey);
+      if (after.blocked) return json({ error: 'too_many_attempts' }, 429);
+      if (after.slowDown) await sleep(1500);
       return json({ suggestions: [] });
     }
+
 
     // claim
     const childId = typeof body?.childId === 'string' ? body.childId : '';
