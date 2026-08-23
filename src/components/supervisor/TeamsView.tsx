@@ -153,6 +153,7 @@ const TeamsView = ({ myTeam }: Props) => {
           return (
             <div key={tn}>
               <Card
+                data-tour={isMine ? 'step-2-my-team' : undefined}
                 onClick={() => setOpenTeam(openTeam === tn ? null : tn)}
                 className={`p-4 cursor-pointer transition-smooth active:scale-[0.99] ${isMine ? 'bg-gradient-card border-primary/40' : 'bg-card/50 border-border/50'}`}
               >
