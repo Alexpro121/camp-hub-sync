@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee } from 'lucide-react';
+import { Mic2, Play, Wand2, ChevronUp, ChevronDown, Trash2, Send, Loader2, Coffee, Pencil, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
 import { buildRunningOrder } from '@/lib/talent';
 import { useActiveShift } from '@/context/ActiveShiftContext';
+import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   draft: { label: 'Чернетка', cls: 'bg-muted text-muted-foreground border-border' },
@@ -16,11 +18,25 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   finished: { label: 'Опубліковано', cls: 'bg-success/20 text-success border-success/40' },
 };
 
+/** Stable per-team accent so the balance of the running order is readable at a glance. */
+const TEAM_ACCENTS = [
+  'bg-sky-500/15 text-sky-300 border-sky-500/40',
+  'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+  'bg-amber-500/15 text-amber-300 border-amber-500/40',
+  'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/40',
+  'bg-rose-500/15 text-rose-300 border-rose-500/40',
+  'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
+  'bg-teal-500/15 text-teal-300 border-teal-500/40',
+  'bg-orange-500/15 text-orange-300 border-orange-500/40',
+];
+const teamAccent = (team: number) => TEAM_ACCENTS[Math.abs(team) % TEAM_ACCENTS.length];
+
 const TalentAdmin = () => {
-  const { shiftId } = useActiveShift();
+  const { shiftId, shift } = useActiveShift();
   const [event, setEvent] = useState<TalentEvent | null>(null);
   const [entries, setEntries] = useState<TalentEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<TalentEntry | null>(null);
 
   const load = async () => {
     let q = supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
@@ -98,6 +114,24 @@ const TalentAdmin = () => {
     load();
   };
 
+  const exportXlsx = () => {
+    if (!entries.length) { toast.error('Немає номерів для експорту'); return; }
+    const rows = entries.map((e, i) => ({
+      '№ з/п': i + 1,
+      'Команда': `№${e.team_number}`,
+      'Назва номера': e.title,
+      'Опис / Учасники / Реквізит': e.description ?? '',
+      'Перерва після номера': e.break_needed_after ?? 0,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 7 }, { wch: 12 }, { wch: 34 }, { wch: 48 }, { wch: 20 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Програма');
+    const safeName = (shift?.name || 'Зміна').replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_');
+    XLSX.writeFile(wb, `Програма_Таланти_Команда_${safeName}.xlsx`);
+    toast.success('Програму експортовано');
+  };
+
   const publish = async () => {
     if (!event) return;
     await setStatus('finished');
@@ -126,6 +160,8 @@ const TalentAdmin = () => {
 
   return (
     <div className="space-y-3">
+      <TalentEntryEditDialog entry={editing} open={!!editing} onClose={() => setEditing(null)} onSaved={load} />
+
       <Card className="p-4 bg-gradient-card space-y-3">
         <div className="flex items-center gap-2">
           <Mic2 className="w-5 h-5 text-primary" />
@@ -147,6 +183,9 @@ const TalentAdmin = () => {
         <Button onClick={publish} disabled={entries.length === 0} className="w-full h-11 font-bold uppercase text-xs bg-gradient-primary">
           <Send className="w-4 h-4 mr-1.5" /> Опублікувати сценарій
         </Button>
+        <Button variant="outline" onClick={exportXlsx} disabled={entries.length === 0} className="w-full h-11 font-bold uppercase text-xs">
+          <Download className="w-4 h-4 mr-1.5" /> Експорт програми (.xlsx)
+        </Button>
         <Button variant="ghost" onClick={startCollecting} className="w-full h-9 text-[11px] text-muted-foreground">
           Новий вечір талантів
         </Button>
@@ -154,30 +193,48 @@ const TalentAdmin = () => {
 
       <div className="space-y-2">
         {entries.map((e, i) => (
-          <Card key={e.id} className="p-3 bg-surface-1 border-border/40 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-primary text-primary-foreground flex items-center justify-center font-black text-sm shrink-0">
-              {i + 1}
+          <Card key={e.id} className={`p-3 border flex items-center gap-2 transition-smooth ${teamAccent(e.team_number)}`}>
+            <div className="w-11 h-9 rounded-lg bg-gradient-primary text-primary-foreground flex items-center justify-center font-black text-xs shrink-0 tabular-nums">
+              №{i + 1}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold truncate">{e.title}</p>
+              <p className="text-sm font-bold truncate text-foreground">{e.title}</p>
               <p className="text-[11px] text-muted-foreground flex items-center gap-2">
                 Команда #{e.team_number}
                 {e.break_needed_after > 0 && (
                   <span className="flex items-center gap-0.5 text-warning"><Coffee className="w-3 h-3" />{e.break_needed_after}</span>
                 )}
               </p>
+              {e.description && <p className="text-[10px] text-muted-foreground/80 truncate">{e.description}</p>}
             </div>
-            <div className="flex flex-col shrink-0">
-              <button onClick={() => move(i, -1)} className="p-1 text-muted-foreground hover:text-foreground"><ChevronUp className="w-4 h-4" /></button>
-              <button onClick={() => move(i, 1)} className="p-1 text-muted-foreground hover:text-foreground"><ChevronDown className="w-4 h-4" /></button>
+            <div className="flex flex-col gap-1 shrink-0">
+              <button
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                aria-label="Вгору"
+                className="h-8 w-9 rounded-lg bg-surface-1 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-95 transition-smooth disabled:opacity-30"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => move(i, 1)}
+                disabled={i === entries.length - 1}
+                aria-label="Вниз"
+                className="h-8 w-9 rounded-lg bg-surface-1 border border-border/50 flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-95 transition-smooth disabled:opacity-30"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
             </div>
-            <Button size="icon" variant="ghost" className="shrink-0" onClick={() => remove(e.id)}>
+            <Button size="icon" variant="ghost" className="shrink-0" onClick={() => setEditing(e)} aria-label="Редагувати">
+              <Pencil className="w-4 h-4 text-primary" />
+            </Button>
+            <Button size="icon" variant="ghost" className="shrink-0" onClick={() => remove(e.id)} aria-label="Видалити">
               <Trash2 className="w-4 h-4 text-destructive" />
             </Button>
           </Card>
         ))}
         {entries.length === 0 && (
-          <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Вожаті ще не додали номери</p></Card>
+          <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Супровід ще не додав номери</p></Card>
         )}
       </div>
     </div>
