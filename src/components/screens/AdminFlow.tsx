@@ -553,6 +553,7 @@ const DataTab = () => {
   const [teamsCount, setTeamsCount] = useState(0);
   const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
+  const [pwFilter, setPwFilter] = useState('');
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -570,6 +571,21 @@ const DataTab = () => {
     if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
     setPasswords(data.passwords);
   };
+
+  const copyAll = async () => {
+    if (!passwords?.length) return;
+    const text = passwords.map((p) => `Команда #${p.team}: ${p.password}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Усі паролі скопійовано');
+    } catch {
+      toast.error('Не вдалося скопіювати');
+    }
+  };
+
+  const filtered = (passwords || []).filter((p) =>
+    !pwFilter.trim() || String(p.team).includes(pwFilter.replace(/[^\d]/g, '')),
+  );
 
   const wipe = async () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -603,16 +619,35 @@ const DataTab = () => {
           {pwLoading ? 'Завантаження…' : 'Показати паролі'}
         </Button>
         {passwords && (
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {passwords.map((p) => (
-              <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
-                <span className="text-sm font-bold">#{p.team}</span>
-                <span className="text-sm font-mono tracking-wider">{p.password}</span>
-              </div>
-            ))}
+          <div className="space-y-2">
+            <Button onClick={copyAll} variant="outline" className="w-full h-11 font-bold uppercase text-xs">
+              <Copy className="w-4 h-4 mr-1.5" /> Копіювати всі паролі
+            </Button>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={pwFilter}
+                onChange={(e) => setPwFilter(e.target.value)}
+                inputMode="numeric"
+                placeholder="Пошук за номером команди"
+                className="h-11 pl-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {filtered.map((p) => (
+                <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
+                  <span className="text-sm font-bold">#{p.team}</span>
+                  <span className="text-sm font-mono tracking-wider">{p.password}</span>
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-3">Нічого не знайдено</p>
+              )}
+            </div>
           </div>
         )}
       </Card>
+
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
