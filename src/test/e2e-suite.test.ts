@@ -7,7 +7,8 @@ import { parseSequentialTrainText, parseTrainTextGroupedByTeams } from '@/lib/tr
 import { resolveShiftPhase, resolveTeamShiftStatus, parseTeamsInput } from '@/lib/shift-resolver';
 import { generateShortCode, FAIR_CODE_LENGTH, isFairScheduleActive } from '@/lib/fair';
 import { detectCategory } from '@/lib/schedule-parser-fallback';
-import { levenshtein, findNameSuggestions, parseTeamNumber } from '@/lib/normalize';
+import { levenshtein, findNameSuggestions, parseTeamNumber, isValidTeamNumber, normalizeName } from '@/lib/normalize';
+import { isPermanentError } from '@/lib/offline';
 import { SINGLE_TRIP, TRAIN_TITLE, tripName } from '@/lib/trips';
 
 const item = (o: Partial<any>): any => ({

@@ -10,7 +10,7 @@ function normalizeName(s: string | null | undefined): string {
     .trim()
     .replace(/ё/g, 'е')
     .replace(/[`ʼ'\u2018\u2019\u02BC]/g, "'")
-    .replace(/[ьъ](?=[яюєїe])/g, "'")
+    .replace(/[ьъ](?=[яюєїе])/g, "'")
     .replace(/\s+/g, ' ');
 }
 

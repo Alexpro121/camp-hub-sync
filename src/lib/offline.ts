@@ -161,7 +161,7 @@ export async function queuedWrite(
 
 const PERMANENT = /insufficient_funds|forbidden|not_authenticated|fair_closed|child_not_found|invalid_amount|awaiting_target_consent|violates row-level security/i;
 
-function isPermanentError(error: unknown): boolean {
+export function isPermanentError(error: unknown): boolean {
   return PERMANENT.test(String((error as any)?.message ?? error ?? ''));
 }
 
