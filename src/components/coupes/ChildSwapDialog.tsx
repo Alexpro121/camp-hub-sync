@@ -103,7 +103,16 @@ const ChildSwapDialog = ({
       onOpenChange(false);
       onDone();
     } catch (e: any) {
-      toast.error(e.message || 'Не вдалося надіслати заявку');
+      const msg = String(e?.message ?? '');
+      if (/awaiting_target_consent/.test(msg)) {
+        island.showInfo?.('Очікуємо згоду', 'Обмін відбудеться після підтвердження іншої дитини');
+        toast.info('Очікуємо підтвердження іншої дитини');
+      } else if (/fair_closed|forbidden/.test(msg)) {
+        toast.error('Обміни зараз недоступні');
+      } else {
+        toast.error(msg || 'Не вдалося надіслати заявку');
+      }
+
     } finally {
       setBusy(false);
     }
