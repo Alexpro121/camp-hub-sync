@@ -56,7 +56,7 @@ const TalentEntryEditDialog = ({ entry, open, onClose, onSaved }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="bg-gradient-card sm:max-w-md gpu-accelerated">
+      <DialogContent className="bg-gradient-card gpu-accelerated w-[calc(100vw-2rem)] max-w-[26rem] sm:max-w-md max-h-[85dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-base font-black uppercase">Редагувати номер</DialogTitle>
         </DialogHeader>
