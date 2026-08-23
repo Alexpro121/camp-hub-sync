@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2, Train, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, ArrowLeftRight, Bell, Download, Wallet, CalendarDays, Mic2, Train, ShoppingBag, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
 import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
+import SupervisorTour, { tourStorageKey } from '@/components/supervisor/SupervisorTour';
 
 interface Props {
   onBack: () => void;
@@ -44,6 +45,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [activeTab, setActiveTab] = useState('teams');
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   
   const haptics = useHaptics();
   const talent = useTalentEventActive();
@@ -67,6 +69,19 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'transfers', label: 'Трансфери', icon: ArrowLeftRight },
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
   ];
+
+  // Launch the onboarding tour on the supervisor's first entry
+  useEffect(() => {
+    if (authedTeam === null) return;
+    if (localStorage.getItem(tourStorageKey(authedTeam))) return;
+    const t = setTimeout(() => setTourOpen(true), 900);
+    return () => clearTimeout(t);
+  }, [authedTeam]);
+
+  const startTour = () => {
+    setActiveTab('teams');
+    setTourOpen(true);
+  };
 
   const handleTabChange = (v: string) => {
     if (v === 'talent') talent.markSeen();
@@ -242,12 +257,24 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     <div className="min-h-[100dvh] max-w-3xl mx-auto pb-32 safe-bottom overflow-x-hidden">
       <div className="app-bar px-4 py-3 safe-top -mx-0 border-b border-border/40">
         <div className="flex items-center justify-between">
-          <button onClick={logout} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
+          <button onClick={logout} data-tour="step-8-logout-button" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
             <ArrowLeft className="w-4 h-4" /> Вийти
           </button>
-          <div className="text-right">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Моя команда</p>
-            <p className="text-lg font-black text-primary leading-none">#{authedTeam}</p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={startTour}
+              aria-label="Пройти навчання"
+              title="Пройти навчання"
+              className="flex items-center gap-1 h-9 px-2.5 rounded-xl border border-primary/30 bg-primary/10 text-primary text-[11px] font-bold active:scale-90 transition-transform"
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span className="hidden xs:inline sm:inline">Навчання</span>
+            </button>
+            <div className="text-right">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Моя команда</p>
+              <p className="text-lg font-black text-primary leading-none">#{authedTeam}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -290,7 +317,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TransfersView myTeam={authedTeam} />
         </TabsContent>
         <TabsContent value="notifications" className="mt-3 animate-fade-in">
-          <NotificationsView myTeam={authedTeam} />
+          <NotificationsView myTeam={authedTeam} onRestartTour={startTour} />
         </TabsContent>
       </Tabs>
 
@@ -299,6 +326,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
         <Button
           onClick={() => setBankOpen(true)}
+          data-tour="step-5-bank-button"
           className="h-14 w-14 rounded-full shadow-glow p-0 bg-gradient-primary tap shine hover:scale-110 transition-spring"
           title="Банк Айрон Доларів"
         >
@@ -312,6 +340,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <Download className="w-5 h-5" />
         </Button>
       </div>
+
+      <SupervisorTour
+        open={tourOpen}
+        teamNumber={authedTeam}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onClose={() => setTourOpen(false)}
+      />
 
       {authedTeam !== null && (
         <IronBank myTeam={authedTeam} open={bankOpen} onClose={() => setBankOpen(false)} />
