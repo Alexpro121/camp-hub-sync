@@ -6,6 +6,20 @@ interface Props {
   onComplete: () => void;
 }
 
+/** Check if intro should be shown (first visit or localStorage cleared). */
+export const shouldShowIntro = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const shown = localStorage.getItem('intro-shown');
+  return !shown;
+};
+
+/** Mark intro as shown. */
+const markIntroShown = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('intro-shown', 'true');
+  }
+};
+
 /** Fully isolated opaque radio-call intro. Nothing underneath can shine through. */
 const IntroSplash = ({ onComplete }: Props) => {
   const haptics = useHaptics();
@@ -16,6 +30,7 @@ const IntroSplash = ({ onComplete }: Props) => {
   const finish = () => {
     if (done.current) return;
     done.current = true;
+    markIntroShown();
     haptics.impact('light');
     setLeaving(true);
     window.setTimeout(onComplete, 320);
@@ -56,7 +71,7 @@ const IntroSplash = ({ onComplete }: Props) => {
           — АЛЛО, АЛЛО?
         </h2>
         <h1
-          className={`font-brand text-2xl xs:text-3xl sm:text-5xl font-black uppercase text-[#FA5A15] tracking-tight leading-tight drop-shadow-[0_0_35px_rgba(250,90,21,0.75)] mt-2 transition-all duration-500 ease-out will-change-transform ${
+          className={`font-brand text-2xl xs:text-3xl sm:text-5xl font-black uppercase text-[#FA5A15] tracking-tight leading-tight drop-shadow-[0_0_35px_rgba(250,90,21,0.75)] mt-2 transition-all duration-700 ease-out will-change-transform ${
             phase >= 2 ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95'
           }`}
         >
