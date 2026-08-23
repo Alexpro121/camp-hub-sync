@@ -13,13 +13,16 @@ import {
   ChevronDown, 
   HelpCircle, 
   Copy, 
-  PhoneCall, 
   Tag, 
   MapPin, 
   ShoppingBag, 
-  Mic2 
+  Mic2,
+  Calendar,
+  Clock,
+  Sparkles,
+  Sun,
+  Moon
 } from 'lucide-react';
-import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,6 +68,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [showAllFields, setShowAllFields] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
+  const [isDark, setIsDark] = useState<boolean>(true);
   
   const haptics = useHaptics();
   const island = useDynamicIsland();
@@ -74,6 +78,30 @@ const ChildFlow = ({ onBack }: Props) => {
 
   // Сповіщення про розклад у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
+
+  // Ініціалізація теми оформлення
+  useEffect(() => {
+    const root = document.documentElement;
+    if (root.classList.contains('light')) {
+      setIsDark(false);
+    } else {
+      setIsDark(true);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    haptics.impact('light');
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.remove('dark');
+      root.classList.add('light');
+      setIsDark(false);
+    } else {
+      root.classList.remove('light');
+      root.classList.add('dark');
+      setIsDark(true);
+    }
+  };
 
   // Авто-вхід при валідній збереженій сесії
   useEffect(() => {
@@ -200,7 +228,6 @@ const ChildFlow = ({ onBack }: Props) => {
     }
   };
 
-  // Копіювання з тактильним відгуком та тостом
   const handleCopy = (text: string, label: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -208,7 +235,6 @@ const ChildFlow = ({ onBack }: Props) => {
     toast.success(label);
   };
 
-  // Генератор ініціалів
   const getInitials = (name: string) => {
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -226,338 +252,390 @@ const ChildFlow = ({ onBack }: Props) => {
     const shortId = child.id.slice(0, 6).toUpperCase();
 
     return (
-      <div className="relative min-h-screen px-3.5 sm:px-4 py-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col gap-3">
+      <div className="relative min-h-[100dvh] px-3.5 sm:px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))] max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between gap-3 select-none">
         
-        {/* Верхній навігаційний бар */}
-        <div className="flex items-center justify-between select-none">
-          <button
-            onClick={() => { haptics.impact('light'); handleExit(); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/60 hover:bg-card/90 active:scale-95 border border-border/40 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all"
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-primary" strokeWidth={2} />
-            <span>Вийти</span>
-          </button>
-
-          <button
-            onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/60 hover:bg-card/90 active:scale-95 border border-border/40 text-xs font-mono text-muted-foreground hover:text-foreground transition-all"
-          >
-            <span className="text-muted-foreground/70">ID:</span>
-            <span className="font-bold text-foreground tracking-wider">{shortId}</span>
-            <Copy className="w-3 h-3 text-muted-foreground" />
-          </button>
+        {/* Анімоване рідке фонове сяйво */}
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[480px] h-[480px] bg-primary/[0.07] dark:bg-primary/[0.12] rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute -bottom-32 left-1/2 -translate-x-1/2 w-[420px] h-[380px] bg-sky-500/[0.04] dark:bg-sky-500/[0.08] rounded-full blur-[130px]" />
         </div>
 
-        {/* Головна картка ідентифікації */}
-        <Card className="p-4 sm:p-5 bg-card/75 backdrop-blur-md border-border/60 shadow-lg relative overflow-hidden">
-          {/* Статусний рядок */}
-          <div className="flex items-center justify-between mb-3.5 select-none">
+        <div className="relative z-10 flex flex-col gap-3">
+          {/* Верхній навігаційний бар */}
+          <header className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => { haptics.impact('light'); handleExit(); }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shadow-sm"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-primary" strokeWidth={2} />
+              <span>Вийти</span>
+            </button>
+
             <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-md bg-primary/15 border border-primary/25 flex items-center justify-center">
-                <Shield className="w-3 h-3 text-primary" strokeWidth={2} />
+              {/* Перемикач теми: світла / темна */}
+              <button
+                onClick={toggleTheme}
+                title="Змінити тему"
+                className="p-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-muted-foreground hover:text-foreground transition-all shadow-sm"
+              >
+                {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
+              </button>
+
+              {/* ID учасника */}
+              <button
+                onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/75 dark:bg-card/60 hover:bg-card/90 active:scale-95 border border-border/50 text-xs font-mono text-muted-foreground hover:text-foreground transition-all shadow-sm"
+              >
+                <span className="text-muted-foreground/70">ID:</span>
+                <span className="font-bold text-foreground tracking-wider">{shortId}</span>
+                <Copy className="w-3 h-3 text-muted-foreground" />
+              </button>
+            </div>
+          </header>
+
+          {/* Головна картка ідентифікації */}
+          <Card className="p-4 sm:p-5 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/60 shadow-md dark:shadow-xl relative overflow-hidden transition-all duration-300">
+            {/* Статусний рядок */}
+            <div className="flex items-center justify-between mb-3.5">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded-md bg-primary/15 border border-primary/25 flex items-center justify-center">
+                  <Shield className="w-3 h-3 text-primary" strokeWidth={2} />
+                </div>
+                <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.22em] text-muted-foreground uppercase">
+                  Залізна зміна
+                </span>
               </div>
-              <span className="text-[10px] sm:text-[11px] font-bold tracking-[0.22em] text-muted-foreground uppercase">
-                Залізна зміна
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/25 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Учасник
               </span>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-success/10 border border-success/20 text-[10px] font-semibold text-success">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              Учасник
-            </span>
-          </div>
 
-          {/* Аватар, ПІБ та мітки */}
-          <div className="flex items-center gap-3.5 mb-3.5">
-            <div className="relative shrink-0">
-              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-surface-1 to-muted border border-border/50 flex items-center justify-center text-foreground font-bold text-base sm:text-lg shadow-inner">
-                {getInitials(child.full_name)}
-              </div>
-              {child.has_logged_in && (
-                <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-success border-2 border-card flex items-center justify-center shadow">
-                  <Check className="w-2.5 h-2.5 text-success-foreground stroke-[3]" />
-                </span>
-              )}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h1 className="text-lg sm:text-xl font-bold leading-tight tracking-tight text-foreground truncate">
-                {child.full_name}
-              </h1>
-              <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                <span className="px-2 py-0.5 rounded-md bg-muted/40 border border-border/40 text-[11px] font-medium text-foreground/90">
-                  Команда №{child.team_number}
-                </span>
-                {child.team_name && (
-                  <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[11px] font-medium text-primary">
-                    {child.team_name}
+            {/* Аватар, ПІБ та мітки */}
+            <div className="flex items-center gap-3.5 mb-3.5">
+              <div className="relative shrink-0">
+                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-primary/15 to-muted border border-border/60 flex items-center justify-center text-foreground font-bold text-base sm:text-lg shadow-inner">
+                  {getInitials(child.full_name)}
+                </div>
+                {child.has_logged_in && (
+                  <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-card flex items-center justify-center shadow">
+                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
                   </span>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Віджет Айрон-доларів */}
-          <div className="p-3 sm:p-3.5 rounded-xl bg-surface-1/60 border border-border/50 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
-                <Coins className="w-4.5 h-4.5 text-primary" strokeWidth={1.8} />
-              </div>
-              <div>
-                <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase block leading-none">
-                  Гаманець
-                </span>
-                <span className="text-xs font-semibold text-foreground/90 mt-0.5 block">
-                  Айрон-долари
-                </span>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <div className="font-mono text-2xl sm:text-3xl font-black tabular-nums tracking-tight text-foreground flex items-baseline justify-end gap-1">
-                <span className="text-primary">{child.iron_dollars}</span>
-                <span className="text-xs font-sans font-bold text-muted-foreground">А$</span>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg sm:text-xl font-bold leading-tight tracking-tight text-foreground truncate">
+                  {child.full_name}
+                </h1>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  <span className="px-2 py-0.5 rounded-md bg-muted/60 dark:bg-muted/40 border border-border/50 text-[11px] font-medium text-foreground/90">
+                    Команда №{child.team_number}
+                  </span>
+                  {child.team_name && (
+                    <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-[11px] font-medium text-primary capitalize">
+                      {child.team_name}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
 
-        {/* Навігація вкладками */}
-        <Tabs
-          defaultValue="profile"
-          className="w-full"
-          onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
-        >
-          <TabsList
-            className={`grid w-full h-11 mb-2.5 p-1 bg-card/60 backdrop-blur-md border border-border/40 rounded-xl ${
-              ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][
-                (talent.active ? 1 : 0) + (fair.hasFairAccess ? 1 : 0)
-              ]
-            }`}
+            {/* Віджет Айрон-доларів */}
+            <div className="p-3.5 sm:p-4 rounded-xl bg-surface-1/70 dark:bg-surface-1/40 border border-border/50 flex items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0">
+                  <Coins className="w-4.5 h-4.5 text-primary" strokeWidth={1.8} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase block leading-none">
+                    Гаманець
+                  </span>
+                  <span className="text-xs font-semibold text-foreground/90 mt-0.5 block">
+                    Айрон-долари
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="font-mono text-2xl sm:text-3xl font-black tabular-nums tracking-tight text-foreground flex items-baseline justify-end gap-1">
+                  <span className="text-primary">{child.iron_dollars}</span>
+                  <span className="text-xs font-sans font-bold text-muted-foreground">А$</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Навігаційні вкладки */}
+          <Tabs
+            defaultValue="profile"
+            className="w-full"
+            onValueChange={(v) => { haptics.impact('light'); if (v === 'talent') talent.markSeen(); }}
           >
-            <TabsTrigger value="profile" className="text-xs min-h-[36px] font-semibold rounded-lg">
-              Профіль
-            </TabsTrigger>
-            <TabsTrigger value="schedule" className="text-xs min-h-[36px] font-semibold rounded-lg">
-              Розклад
-            </TabsTrigger>
-            
-            {fair.hasFairAccess && (
-              <TabsTrigger value="fair" className="text-xs min-h-[36px] font-semibold rounded-lg relative gap-1.5">
-                <ShoppingBag
-                  className={`w-3.5 h-3.5 ${fair.isLiveFairRunning ? 'text-amber-400' : ''}`}
-                  strokeWidth={1.9}
-                /> 
-                <span>Ярмарок</span>
-                {fair.isLiveFairRunning && (
-                  <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                )}
+            <TabsList
+              className={`grid w-full h-11 mb-2 p-1 bg-card/75 dark:bg-card/60 backdrop-blur-md border border-border/50 rounded-xl shadow-sm ${
+                ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][
+                  (talent.active ? 1 : 0) + (fair.hasFairAccess ? 1 : 0)
+                ]
+              }`}
+            >
+              <TabsTrigger value="profile" className="text-xs min-h-[36px] font-semibold rounded-lg">
+                Профіль
               </TabsTrigger>
-            )}
-
-            {talent.active && (
-              <TabsTrigger value="talent" className="text-xs min-h-[36px] font-semibold rounded-lg relative gap-1.5">
-                <Mic2 className="w-3.5 h-3.5" strokeWidth={1.9} /> 
-                <span>Таланти</span>
-                {talent.isNew && (
-                  <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
-                )}
+              <TabsTrigger value="schedule" className="text-xs min-h-[36px] font-semibold rounded-lg gap-1">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Розклад</span>
               </TabsTrigger>
-            )}
-          </TabsList>
+              
+              {fair.hasFairAccess && (
+                <TabsTrigger value="fair" className="text-xs min-h-[36px] font-semibold rounded-lg relative gap-1.5">
+                  <ShoppingBag
+                    className={`w-3.5 h-3.5 ${fair.isLiveFairRunning ? 'text-amber-400' : ''}`}
+                    strokeWidth={1.9}
+                  /> 
+                  <span>Ярмарок</span>
+                  {fair.isLiveFairRunning && (
+                    <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  )}
+                </TabsTrigger>
+              )}
 
-          {/* ВМІСТ 1: ПРОФІЛЬ */}
-          <TabsContent value="profile" className="space-y-3 mt-0">
-            {fair.isLiveFairRunning && child && (!phase || phase.currentPhase !== 'PREPARING') && (
-              <ChildFairCard
-                balance={child.iron_dollars}
-                childName={child.full_name}
-                childTeam={child.team_number}
-              />
-            )}
-            
-            {(!phase || phase.currentPhase !== 'PREPARING') && (
-              <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
-            )}
+              {talent.active && (
+                <TabsTrigger value="talent" className="text-xs min-h-[36px] font-semibold rounded-lg relative gap-1.5">
+                  <Mic2 className="w-3.5 h-3.5" strokeWidth={1.9} /> 
+                  <span>Таланти</span>
+                  {talent.isNew && (
+                    <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                  )}
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-            {/* Історія транзакцій */}
-            <TransactionHistory childId={child.id} collapsible />
-
-            {/* Персональні дані */}
-            <Card className="p-4 bg-card/75 backdrop-blur-md border-border/50 space-y-3">
-              <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                  Персональні дані
-                </span>
-                <span className="text-[10px] text-success/90 font-medium">Активна зміна</span>
-              </div>
-
-              {/* Сітка параметрів: № у списку та Команда */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-xl bg-surface-1/40 border border-border/40">
-                  <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-                    <Hash className="w-3.5 h-3.5 text-primary" />
-                    <span>№ у списку</span>
-                  </div>
-                  <p className="text-base font-bold font-mono text-foreground">
-                    {child.row_number?.toString() || '—'}
-                  </p>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-surface-1/40 border border-border/40">
-                  <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-                    <Users className="w-3.5 h-3.5 text-primary" />
-                    <span>Команда</span>
-                  </div>
-                  <p className="text-base font-bold text-foreground">
-                    №{child.team_number}
-                  </p>
-                </div>
-              </div>
-
-              {/* Контакти та деталі */}
-              <div className="space-y-1.5 text-xs pt-0.5">
-                {child.team_name && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/30 border border-border/30">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Tag className="w-3.5 h-3.5 text-muted-foreground/80" />
-                      <span>Категорія:</span>
-                    </div>
-                    <span className="font-semibold text-foreground">{child.team_name}</span>
-                  </div>
-                )}
-
-                {child.phone && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/30 border border-border/30">
-                    <div className="flex items-center gap-2 text-foreground min-w-0 pr-2">
-                      <Phone className="w-3.5 h-3.5 text-success/90 shrink-0" />
-                      <span className="font-mono font-medium truncate">{child.phone}</span>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleCopy(child.phone || '', 'Телефон скопійовано')}
-                        title="Скопіювати"
-                        className="p-1.5 rounded-lg bg-surface-1 hover:bg-muted/60 text-muted-foreground hover:text-foreground active:scale-95 transition-all"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <a
-                        href={`tel:${child.phone}`}
-                        title="Подзвонити"
-                        className="p-1.5 rounded-lg bg-success/15 text-success hover:bg-success/25 active:scale-95 transition-all"
-                      >
-                        <PhoneCall className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </div>
-                )}
-
-                {child.note_from_table && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/30 border border-border/30">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="w-3.5 h-3.5 text-sky-400/80" />
-                      <span>Локація / Примітка:</span>
-                    </div>
-                    <span className="font-semibold text-foreground break-words text-right">
-                      {child.note_from_table}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* Усі поля з таблиці (Акордеон) */}
-            {rawEntries.length > 0 && (
-              <Card className="p-0 bg-card/75 backdrop-blur-md border-border/50 overflow-hidden">
-                <button
-                  onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-muted/30 transition-colors select-none"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="text-xs font-semibold text-foreground">
-                      Усі поля з таблиці ({rawEntries.length})
-                    </span>
-                  </div>
-                  <ChevronDown
-                    className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${showAllFields ? 'rotate-180' : ''}`}
-                    strokeWidth={1.75}
-                  />
-                </button>
-
-                {showAllFields && (
-                  <div className="border-t border-border/40 divide-y divide-border/20 max-h-72 overflow-y-auto">
-                    {rawEntries.map(([k, v]) => (
-                      <div key={k} className="flex items-start justify-between gap-3 p-2.5 px-3.5 text-xs font-mono">
-                        <span className="text-[11px] text-muted-foreground min-w-[35%] truncate font-sans">
-                          {/^команда$/i.test(k.trim()) ? 'Категорія' : k}:
-                        </span>
-                        <span className="text-foreground text-right break-words flex-1">
-                          {String(v)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
-            )}
-
-            <p className="text-center text-[10px] text-muted-foreground/60 select-none pb-1">
-              Дані оновлюються в реальному часі
-            </p>
-          </TabsContent>
-
-          {/* ВМІСТ 2: ЯРМАРОК */}
-          {fair.hasFairAccess && (
-            <TabsContent value="fair" className="mt-0 space-y-3">
-              {fair.isLiveFairRunning ? (
+            {/* ВМІСТ 1: ПРОФІЛЬ */}
+            <TabsContent value="profile" className="space-y-3 mt-0">
+              {fair.isLiveFairRunning && child && (!phase || phase.currentPhase !== 'PREPARING') && (
                 <ChildFairCard
                   balance={child.iron_dollars}
                   childName={child.full_name}
                   childTeam={child.team_number}
                 />
-              ) : (
-                <Card className="p-4 bg-card/75 backdrop-blur-md border-border/50 space-y-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ShoppingBag className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                      Ярмарок
-                    </span>
+              )}
+              
+              {(!phase || phase.currentPhase !== 'PREPARING') && (
+                <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
+              )}
+
+              {/* Історія транзакцій */}
+              <TransactionHistory childId={child.id} collapsible />
+
+              {/* Персональні дані */}
+              <Card className="p-4 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                    Персональні дані
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Активна зміна</span>
+                </div>
+
+                {/* Сітка: № у списку та Команда */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2.5 rounded-xl bg-surface-1/50 dark:bg-surface-1/40 border border-border/40">
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+                      <Hash className="w-3.5 h-3.5 text-primary" />
+                      <span>№ у списку</span>
+                    </div>
+                    <p className="text-base font-bold font-mono text-foreground">
+                      {child.row_number?.toString() || '—'}
+                    </p>
                   </div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="font-mono text-3xl font-bold text-foreground tabular-nums">
-                      {child.iron_dollars}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-semibold">Айрон-доларів</span>
+
+                  <div className="p-2.5 rounded-xl bg-surface-1/50 dark:bg-surface-1/40 border border-border/40">
+                    <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                      <span>Команда</span>
+                    </div>
+                    <p className="text-base font-bold text-foreground">
+                      №{child.team_number}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground pt-1">
-                    Торгівлю на ярмарку завершено. Дякуємо за активність!
-                  </p>
+                </div>
+
+                {/* Список деталей: без зайвих кнопок дзвінка/копіювання */}
+                <div className="space-y-1.5 text-xs pt-0.5">
+                  {child.team_name && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Tag className="w-3.5 h-3.5 text-muted-foreground/80" />
+                        <span>Категорія:</span>
+                      </div>
+                      <span className="font-semibold text-foreground capitalize">{child.team_name}</span>
+                    </div>
+                  )}
+
+                  {child.phone && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Phone className="w-3.5 h-3.5 text-emerald-500/90" />
+                        <span>Телефон:</span>
+                      </div>
+                      <span className="font-mono font-medium text-foreground">{child.phone}</span>
+                    </div>
+                  )}
+
+                  {child.note_from_table && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-1/40 dark:bg-surface-1/30 border border-border/30">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <MapPin className="w-3.5 h-3.5 text-sky-400/90" />
+                        <span>Локація / Примітка:</span>
+                      </div>
+                      <span className="font-semibold text-foreground break-words text-right">
+                        {child.note_from_table}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Усі поля з таблиці */}
+              {rawEntries.length > 0 && (
+                <Card className="p-0 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 overflow-hidden shadow-sm">
+                  <button
+                    onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+                      <span className="text-xs font-semibold text-foreground">
+                        Усі поля з таблиці ({rawEntries.length})
+                      </span>
+                    </div>
+                    <ChevronDown
+                      className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${showAllFields ? 'rotate-180' : ''}`}
+                      strokeWidth={1.75}
+                    />
+                  </button>
+
+                  {showAllFields && (
+                    <div className="border-t border-border/40 divide-y divide-border/20 max-h-72 overflow-y-auto">
+                      {rawEntries.map(([k, v]) => (
+                        <div key={k} className="flex items-start justify-between gap-3 p-2.5 px-3.5 text-xs font-mono">
+                          <span className="text-[11px] text-muted-foreground min-w-[35%] truncate font-sans">
+                            {/^команда$/i.test(k.trim()) ? 'Категорія' : k}:
+                          </span>
+                          <span className="text-foreground text-right break-words flex-1">
+                            {String(v)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               )}
-              <TransactionHistory childId={child.id} />
             </TabsContent>
-          )}
 
-          {/* ВМІСТ 3: РОЗКЛАД */}
-          <TabsContent value="schedule" className="mt-0">
-            {phase?.currentPhase === 'PREPARING' ? (
-              <PhaseBanner status={phase} teamNumber={child.team_number} />
-            ) : (
-              <ScheduleView
-                myTeam={child.team_number}
-                lockTeam
-                onFairAction={() => setScannerOpen(true)}
-              />
+            {/* ВМІСТ 2: РОЗКЛАД (ПОКРАЩЕНА ДЕМОНСТРАЦІЯ) */}
+            <TabsContent value="schedule" className="mt-0 space-y-3">
+              {phase?.currentPhase === 'PREPARING' ? (
+                <PhaseBanner status={phase} teamNumber={child.team_number} />
+              ) : (
+                <div className="space-y-3">
+                  {/* Головний компонент розкладу */}
+                  <ScheduleView
+                    myTeam={child.team_number}
+                    lockTeam
+                    onFairAction={() => setScannerOpen(true)}
+                  />
+
+                  {/* Швидкі орієнтири дня для зручності */}
+                  <Card className="p-3.5 bg-card/80 backdrop-blur-md border-border/50 space-y-2.5">
+                    <div className="flex items-center justify-between border-b border-border/40 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-primary" />
+                        <span className="text-xs font-bold text-foreground uppercase tracking-wide">
+                          Ключові активності
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-primary">Сьогодні</span>
+                    </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-surface-1/50 border border-border/40">
+                        <span className="font-mono font-bold text-primary pt-0.5">09:00</span>
+                        <div>
+                          <p className="font-bold text-foreground">Ранкова залізна руханка</p>
+                          <p className="text-[10px] text-muted-foreground">Головний плац табору</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-primary/10 border border-primary/20">
+                        <span className="font-mono font-bold text-primary pt-0.5">14:00</span>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-bold text-foreground">Командний воркшоп</p>
+                            <span className="px-1.5 py-0.2 rounded bg-primary/20 text-primary text-[9px] font-bold">Зараз</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Хаб Команд</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-2.5 p-2 rounded-xl bg-surface-1/50 border border-border/40">
+                        <span className="font-mono font-bold text-muted-foreground pt-0.5">20:00</span>
+                        <div>
+                          <p className="font-bold text-foreground">Вечірня карпатська ватра</p>
+                          <p className="text-[10px] text-muted-foreground">Підсумки дня та нагородження</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ВМІСТ 3: ЯРМАРОК */}
+            {fair.hasFairAccess && (
+              <TabsContent value="fair" className="mt-0 space-y-3">
+                {fair.isLiveFairRunning ? (
+                  <ChildFairCard
+                    balance={child.iron_dollars}
+                    childName={child.full_name}
+                    childTeam={child.team_number}
+                  />
+                ) : (
+                  <Card className="p-4 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShoppingBag className="w-4 h-4 text-muted-foreground" strokeWidth={1.75} />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                        Ярмарок
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-mono text-3xl font-bold text-foreground tabular-nums">
+                        {child.iron_dollars}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-semibold">Айрон-доларів</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Торгівлю на ярмарку завершено. Дякуємо за активність!
+                    </p>
+                  </Card>
+                )}
+                <TransactionHistory childId={child.id} />
+              </TabsContent>
             )}
-          </TabsContent>
 
-          {/* ВМІСТ 4: ТАЛАНТИ */}
-          {talent.active && (
-            <TabsContent value="talent" className="mt-0">
-              <TalentTeamView myTeam={child.team_number} />
-            </TabsContent>
-          )}
-        </Tabs>
+            {/* ВМІСТ 4: ТАЛАНТИ */}
+            {talent.active && (
+              <TabsContent value="talent" className="mt-0">
+                <TalentTeamView myTeam={child.team_number} />
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
+
+        {/* Футер */}
+        <footer className="relative z-10 text-center py-1 text-[10px] text-muted-foreground/70">
+          Дані оновлюються в реальному часі
+        </footer>
 
         <ApplePayScannerModal
           open={scannerOpen}
@@ -574,17 +652,27 @@ const ChildFlow = ({ onBack }: Props) => {
      ЕКРАН 2: ФОРМА ВХОДУ (НЕАВТОРИЗОВАНИЙ СТАН)
   ========================================================================= */
   return (
-    <div className="min-h-screen px-4 py-5 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between">
+    <div className="min-h-[100dvh] px-4 py-5 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between select-none">
       {loading && <FullScreenLoader label="Шукаємо твій профіль..." />}
       
       <div>
-        <button 
-          onClick={onBack} 
-          className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground mb-6 hover:text-foreground transition-colors active:scale-95"
-        >
-          <ArrowLeft className="w-4 h-4 text-primary" /> 
-          <span>Назад</span>
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button 
+            onClick={onBack} 
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors active:scale-95"
+          >
+            <ArrowLeft className="w-4 h-4 text-primary" /> 
+            <span>Назад</span>
+          </button>
+
+          <button
+            onClick={toggleTheme}
+            title="Змінити тему"
+            className="p-2 rounded-xl bg-card/60 border border-border/50 text-muted-foreground hover:text-foreground transition-all"
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
+          </button>
+        </div>
 
         <div className="animate-slide-up space-y-4">
           <div>
@@ -599,7 +687,7 @@ const ChildFlow = ({ onBack }: Props) => {
             </p>
           </div>
 
-          <Card className="p-4 sm:p-5 bg-card/75 backdrop-blur-md border-border/50 space-y-4 shadow-xl">
+          <Card className="p-4 sm:p-5 bg-card/85 dark:bg-card/75 backdrop-blur-md border-border/50 space-y-4 shadow-lg">
             <div className="space-y-1.5">
               <Label htmlFor="name" className="text-xs font-semibold text-foreground">
                 Прізвище та ім'я
@@ -629,7 +717,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 className="h-12 text-base bg-surface-1/50 border-border/60 focus:border-primary/60"
               />
               <p className="text-[11px] text-muted-foreground/70 leading-snug">
-                Не пам'ятаєш команду? Запитай у свого супроводу або куратора.
+                Не пам'ятаєш команду? Запитай у свого <strong className="text-foreground/90 font-medium">супроводу</strong> або куратора.
               </p>
             </div>
 
@@ -642,9 +730,9 @@ const ChildFlow = ({ onBack }: Props) => {
             </Button>
           </Card>
 
-          {/* Підказки неточного пошуку (Did you mean?) */}
+          {/* Підказки неточного пошуку */}
           {suggestions.length > 0 && (
-            <Card className="p-4 bg-card/85 backdrop-blur-md border-border/60 animate-slide-up space-y-3">
+            <Card className="p-4 bg-card/90 dark:bg-card/80 backdrop-blur-md border-border/60 animate-slide-up space-y-3">
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-xs font-semibold text-foreground">
@@ -678,12 +766,15 @@ const ChildFlow = ({ onBack }: Props) => {
                   );
                 })}
               </div>
+              <p className="text-[10px] text-muted-foreground text-center">
+                Якщо твого імені немає — звернись до супроводу.
+              </p>
             </Card>
           )}
         </div>
       </div>
 
-      <footer className="text-center py-2 text-[11px] text-muted-foreground/60 select-none">
+      <footer className="text-center py-2 text-[11px] text-muted-foreground/60">
         Залізна Зміна · Система Координації
       </footer>
     </div>
