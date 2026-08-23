@@ -329,7 +329,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
                 -{finalAmount} А$
               </p>
               <p className="text-xs text-muted-foreground">
-                Супровід підтвердив операцію на Касі №{targetTeam}. Гарних покупок!
+                Супровід підтвердив операцію на Касі №{numericTargetTeam}. Гарних покупок!
               </p>
             </div>
 
