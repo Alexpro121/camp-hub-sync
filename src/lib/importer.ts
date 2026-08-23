@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { normalizeName } from '@/lib/normalize';
+import { ADMIN_TEAM, TEAM_MAX, TEAM_MIN, isValidTeamNumber, normalizeName } from '@/lib/normalize';
 
 export type StdKey =
   | 'is_present' | 'row_number' | 'team_number' | 'full_name'
