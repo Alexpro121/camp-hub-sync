@@ -239,9 +239,9 @@ const SupervisorTour = ({
     if (next === index) return;
     steps[index]?.onLeave?.();
     haptics.selection();
-    setRect(null);
     setIndex(next);
   };
+
 
   const next = () => {
     if (isLast) { steps[index]?.onLeave?.(); finish(); return; }
