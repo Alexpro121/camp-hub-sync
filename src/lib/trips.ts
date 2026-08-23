@@ -8,3 +8,9 @@ export const SINGLE_TRIP = 1;
 export const TRAIN_TITLE = 'Потяг (Розселення по купе)';
 
 export const tripName = (_n: number = SINGLE_TRIP): string => TRAIN_TITLE;
+
+/**
+ * Тимчасовий вимикач усього функціоналу «Потяг / Розселення по купе».
+ * false — розділи, вкладки, картки й тур-крок приховані (код збережено).
+ */
+export const TRAIN_FEATURE_ENABLED = false;
