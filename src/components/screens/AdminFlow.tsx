@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag, Copy, Search, ChevronDown, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,9 @@ import { clearSavedSession, saveSession } from '@/lib/session';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import type { Shift, ShiftType } from '@/types/app';
+import type { Child, Shift, ShiftType } from '@/types/app';
+import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
+
 
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
@@ -553,6 +555,7 @@ const DataTab = () => {
   const [teamsCount, setTeamsCount] = useState(0);
   const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
+  const [pwFilter, setPwFilter] = useState('');
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -570,6 +573,21 @@ const DataTab = () => {
     if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
     setPasswords(data.passwords);
   };
+
+  const copyAll = async () => {
+    if (!passwords?.length) return;
+    const text = passwords.map((p) => `Команда #${p.team}: ${p.password}`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Усі паролі скопійовано');
+    } catch {
+      toast.error('Не вдалося скопіювати');
+    }
+  };
+
+  const filtered = (passwords || []).filter((p) =>
+    !pwFilter.trim() || String(p.team).includes(pwFilter.replace(/[^\d]/g, '')),
+  );
 
   const wipe = async () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -603,16 +621,35 @@ const DataTab = () => {
           {pwLoading ? 'Завантаження…' : 'Показати паролі'}
         </Button>
         {passwords && (
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {passwords.map((p) => (
-              <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
-                <span className="text-sm font-bold">#{p.team}</span>
-                <span className="text-sm font-mono tracking-wider">{p.password}</span>
-              </div>
-            ))}
+          <div className="space-y-2">
+            <Button onClick={copyAll} variant="outline" className="w-full h-11 font-bold uppercase text-xs">
+              <Copy className="w-4 h-4 mr-1.5" /> Копіювати всі паролі
+            </Button>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={pwFilter}
+                onChange={(e) => setPwFilter(e.target.value)}
+                inputMode="numeric"
+                placeholder="Пошук за номером команди"
+                className="h-11 pl-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+              {filtered.map((p) => (
+                <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
+                  <span className="text-sm font-bold">#{p.team}</span>
+                  <span className="text-sm font-mono tracking-wider">{p.password}</span>
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-3">Нічого не знайдено</p>
+              )}
+            </div>
           </div>
         )}
       </Card>
+
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
@@ -651,13 +688,14 @@ interface ShiftStats {
 const StatsTab = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ShiftStats[]>([]);
+  const [children, setChildren] = useState<Child[]>([]);
   const [orphans, setOrphans] = useState<{ total: number; teams: number; iron: number } | null>(null);
+  const [editing, setEditing] = useState<Child | null>(null);
 
   const load = async () => {
-    setLoading(true);
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('id, shift_id, team_number, is_present, has_logged_in, iron_dollars'),
+      supabase.from('children').select('*').order('team_number'),
       supabase.from('transfers').select('child_id'),
     ]);
 
@@ -688,6 +726,7 @@ const StatsTab = () => {
       iron: orphanKids.reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0),
     } : null);
 
+    setChildren((kids || []) as Child[]);
     setRows(stats);
     setLoading(false);
   };
@@ -719,9 +758,14 @@ const StatsTab = () => {
   const totalKids = rows.reduce((s, r) => s + r.total, 0) + (orphans?.total || 0);
   const totalIron = rows.reduce((s, r) => s + r.ironTotal, 0) + (orphans?.iron || 0);
   const totalTransfers = rows.reduce((s, r) => s + r.transfers, 0);
+  const orphanKids = children.filter((c) => !c.shift_id);
 
   return (
     <div className="space-y-3">
+      {editing && (
+        <ChildEditDialog child={editing} open={!!editing} onClose={() => setEditing(null)} />
+      )}
+
       {/* Aggregate cards */}
       <div className="grid grid-cols-3 gap-2">
         <StatBox icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={totalKids} />
@@ -730,11 +774,18 @@ const StatsTab = () => {
       </div>
 
       <h3 className="font-bold uppercase text-sm tracking-wide px-1 pt-2">По змінах</h3>
-      {rows.map((r) => <ShiftStatsCard key={r.shift.id} stats={r} />)}
+      {rows.map((r) => (
+        <ShiftStatsCard
+          key={r.shift.id}
+          stats={r}
+          kids={children.filter((c) => c.shift_id === r.shift.id)}
+          onPickChild={setEditing}
+        />
+      ))}
 
       {orphans && (
-        <Card className="p-4 bg-card/40 border-dashed">
-          <div className="flex items-center gap-2 mb-2">
+        <Card className="p-4 bg-card/40 border-dashed space-y-2">
+          <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-muted-foreground" />
             <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Без зміни
@@ -744,11 +795,35 @@ const StatsTab = () => {
             {orphans.total} дітей у {orphans.teams} командах · {orphans.iron} Айрон $.
             Не прив'язані до жодної зміни.
           </p>
+          <ChildPickList kids={orphanKids} onPick={setEditing} />
         </Card>
       )}
     </div>
   );
 };
+
+/** Compact, tappable child rows — a click opens the full editor. */
+const ChildPickList = ({ kids, onPick }: { kids: Child[]; onPick: (c: Child) => void }) => {
+  if (!kids.length) return null;
+  return (
+    <div className="space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
+      {kids.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onPick(c)}
+          className="w-full flex items-center gap-2 rounded-lg bg-surface-1 border border-border/40 px-3 py-2 text-left hover:border-primary/40 active:scale-[0.99] transition-smooth"
+        >
+          <span className="text-[10px] font-black tabular-nums w-8 shrink-0 text-muted-foreground">#{c.team_number}</span>
+          <span className="text-xs font-medium truncate flex-1">{c.full_name}</span>
+          <span className="text-[11px] tabular-nums text-primary shrink-0">{c.iron_dollars} $</span>
+          <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        </button>
+      ))}
+    </div>
+  );
+};
+
 
 /** "1-6" / "7, 8" compact team range label. */
 const formatTeams = (teams: number[]): string => {
@@ -775,7 +850,8 @@ const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string;
   </Card>
 );
 
-const ShiftStatsCard = ({ stats: r }: { stats: ShiftStats }) => {
+const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStats; kids?: Child[]; onPickChild?: (c: Child) => void }) => {
+  const [showKids, setShowKids] = useState(false);
   const status = shiftStatus(r.shift);
   const statusMeta: Record<typeof status, { label: string; cls: string }> = {
     active:   { label: 'Активна',   cls: 'bg-success/20 text-success border-success/40' },
@@ -839,7 +915,26 @@ const ShiftStatsCard = ({ stats: r }: { stats: ShiftStats }) => {
           </div>
         </div>
       )}
+
+      {kids.length > 0 && onPickChild && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowKids((v) => !v)}
+            className="w-full h-10 rounded-lg bg-surface-1 border border-border/40 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-smooth"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${showKids ? 'rotate-180' : ''}`} />
+            {showKids ? 'Сховати дітей' : `Показати дітей (${kids.length})`}
+          </button>
+          <div className={`grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)] ${showKids ? 'grid-rows-[1fr] mt-2' : 'grid-rows-[0fr]'}`}>
+            <div className="overflow-hidden">
+              <ChildPickList kids={kids} onPick={onPickChild} />
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
+
   );
 };
 

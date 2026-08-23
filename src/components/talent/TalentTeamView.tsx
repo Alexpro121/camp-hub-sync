@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Plus, Trash2, Coffee, Loader2 } from 'lucide-react';
+import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
 import { useHaptics } from '@/hooks/useHaptics';
+import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
 
 interface Props { myTeam?: number | null; }
 
@@ -18,7 +19,9 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
   const [title, setTitle] = useState('');
   const [breaks, setBreaks] = useState('0');
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<TalentEntry | null>(null);
   const haptics = useHaptics();
+
 
   const load = async () => {
     const { data: evs } = await supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
@@ -81,7 +84,9 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
 
   return (
     <div className="space-y-3">
+      <TalentEntryEditDialog entry={editing} open={!!editing} onClose={() => setEditing(null)} onSaved={load} />
       <Card className="p-4 bg-gradient-card space-y-3">
+
         <div className="flex items-center gap-2">
           <Mic2 className="w-5 h-5 text-primary" />
           <p className="font-bold uppercase text-sm tracking-wide flex-1">{event.title}</p>
@@ -115,13 +120,20 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
             <Card key={e.id} className="p-3 bg-surface-1 border-border/40 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate">{e.title}</p>
+                {e.description && <p className="text-[11px] text-muted-foreground truncate">{e.description}</p>}
                 {e.break_needed_after > 0 && (
                   <p className="text-[11px] text-warning flex items-center gap-1"><Coffee className="w-3 h-3" /> перерва {e.break_needed_after}</p>
                 )}
               </div>
               {collecting && (
-                <Button size="icon" variant="ghost" onClick={() => remove(e.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                <>
+                  <Button size="icon" variant="ghost" onClick={() => setEditing(e)} aria-label="Редагувати">
+                    <Pencil className="w-4 h-4 text-primary" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => remove(e.id)} aria-label="Видалити"><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                </>
               )}
+
             </Card>
           ))}
         </div>
