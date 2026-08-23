@@ -133,9 +133,9 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
           className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:from-amber-400 hover:to-amber-500 active:scale-95"
         >
           {isStaff ? (
-            <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду та QR-код</>
+            <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду</>
           ) : (
-            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити QR-Сканер та сплатити</>
+            <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити Air Pay та сплатити</>
           )}
         </button>
       )}
