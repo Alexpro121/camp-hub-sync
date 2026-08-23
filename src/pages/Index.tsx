@@ -41,8 +41,10 @@ const Index = () => {
 
   return (
     <main className="min-h-screen w-full">
+      {intro && <IntroSplash onDone={() => setIntro(false)} />}
       {/* Native Telegram back button — only visible when not on root screen */}
       {screen !== 'role' && <TelegramBackButton onClick={goRole} />}
+
 
       {screen === 'role' && <RoleSelect onSelect={setScreen} />}
       {screen === 'child' && <ChildFlow onBack={goRole} />}
