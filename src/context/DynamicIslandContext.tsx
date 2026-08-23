@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { 
+  createContext, 
+  useCallback, 
+  useContext, 
+  useEffect, 
+  useMemo, 
+  useRef, 
+  useState, 
+  type ReactNode 
+} from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { onIslandMessage } from '@/lib/islandBus';
@@ -69,10 +78,10 @@ interface IslandApi {
 
 const Ctx = createContext<IslandApi | null>(null);
 
-/** Базова тривалість відображення за замовчуванням (6 секунд) */
+/** Базова тривалість показу за замовчуванням (6 секунд) */
 const AUTO_HIDE_MS = 6000;
 
-/** Розумна шкала тривалості: 12с критичні, 8с розширені/події, 6с стандартні */
+/** Розумна шкала тривалості: 12с критичні, 8с розширені/події, 7с офлайн, 6с стандарт */
 function getSmartDuration(state: IslandState, expanded = false): number {
   if (state === 'BROADCAST' || state === 'ERROR_TOAST') return 12000;
   if (expanded || state === 'EVENT_ALERT') return 8000;
@@ -96,6 +105,7 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const remainingTime = useRef<number>(AUTO_HIDE_MS);
   const startTime = useRef<number>(0);
+  const isPaused = useRef<boolean>(false);
   
   const haptics = useHaptics();
   const { online, pending } = useNetworkStatus();
@@ -107,9 +117,11 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     } 
   }, []);
 
-  /** Універсальний таймер автоприховування острова */
+  /** Універсальний таймер автоматичного приховування острова */
   const startAutoDismissTimer = useCallback((nextState: IslandState, expandedNow = false, overrideMs?: number) => {
     clearTimer();
+    isPaused.current = false;
+    
     if (nextState === 'HIDDEN') return;
 
     const duration = overrideMs ?? getSmartDuration(nextState, expandedNow);
@@ -132,22 +144,25 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
 
   const hide = useCallback(() => { 
     clearTimer(); 
+    isPaused.current = false;
     setExpanded(false); 
     setState('HIDDEN'); 
   }, [clearTimer]);
 
-  /** Пауза лічильника при взаємодії (читанні) */
+  /** Пауза таймера при взаємодії користувача (читанні/наведенні) */
   const pauseAutoHide = useCallback(() => { 
-    if (!timer.current) return;
+    if (!timer.current || isPaused.current) return;
     clearTimer();
+    isPaused.current = true;
     const elapsed = Date.now() - startTime.current;
     remainingTime.current = Math.max(1500, remainingTime.current - elapsed);
   }, [clearTimer]);
 
-  /** Продовження лічильника після взаємодії */
+  /** Продовження відліку після взаємодії */
   const resumeAutoHide = useCallback(() => {
+    if (!isPaused.current || state === 'HIDDEN') return;
     clearTimer();
-    if (state === 'HIDDEN') return;
+    isPaused.current = false;
     
     startTime.current = Date.now();
     timer.current = setTimeout(() => { 
@@ -162,12 +177,13 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     haptics.impact('light');
     setExpanded((prev) => {
       const next = !prev;
-      startAutoDismissTimer(state, next);
+      // Безпечно перезапускаємо таймер для нового стану
+      setTimeout(() => startAutoDismissTimer(state, next), 0);
       return next;
     });
   }, [haptics, startAutoDismissTimer, state]);
 
-  // Спеціалізовані виклики
+  // Спеціалізовані методи API
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
   
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {
@@ -230,12 +246,13 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     };
   }, [showBroadcast]);
 
-  // 3. Міст для старих повідомлень (islandBus legacy)
+  // 3. Міст для подій (ВИПРАВЛЕНО: тільки danger викликає помилку showError)
   useEffect(() => {
     const off = onIslandMessage((m) => {
-      if (m.tone === 'danger' || m.tone === 'warning') {
+      if (m.tone === 'danger') {
         showError(m.text, m.meta);
       } else {
+        // Усі позитивні та інформаційні події (ярмарок, нарахування тощо) показуються без помилкового червоного знака оклику
         showSuccess(m.text, m.meta);
       }
     });
@@ -245,6 +262,13 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
       clearTimer(); 
     };
   }, [showError, showSuccess, clearTimer]);
+
+  // Очищення таймерів при демонтажі
+  useEffect(() => {
+    return () => {
+      clearTimer();
+    };
+  }, [clearTimer]);
 
   const value = useMemo<IslandApi>(() => ({
     state, 
