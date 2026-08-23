@@ -177,15 +177,17 @@ const TeamsView = ({ myTeam }: Props) => {
 
               {openTeam === tn && (
                 <div className="mt-2 space-y-1.5 pl-2 stagger animate-accordion-down overflow-hidden">
-                  {teamKids.map((c) => (
+                  {teamKids.map((c, ci) => (
                     <Card
                       key={c.id}
+                      data-tour={isMine && ci === 0 ? 'step-4-child-card' : undefined}
                       className={`p-3.5 min-h-[60px] flex items-center gap-3 ${isMine ? 'cursor-pointer hover:border-primary/40' : 'opacity-75'} transition-smooth bg-surface-1 border-border/40`}
                       onClick={() => isMine && setEditChild(c)}
                     >
                       {isMine ? (
                         <button
                           type="button"
+                          data-tour={ci === 0 ? 'step-3-presence-toggle' : undefined}
                           onClick={(e) => { e.stopPropagation(); togglePresent(c); }}
                           className="p-1 -m-1 touch-manipulation select-none"
                           aria-label={c.is_present ? 'Позначити відсутнім' : 'Позначити присутнім'}
