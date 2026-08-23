@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { 
+  createContext, 
+  useCallback, 
+  useContext, 
+  useEffect, 
+  useMemo, 
+  useRef, 
+  useState, 
+  type ReactNode 
+} from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { pickActiveShift } from '@/lib/shift';
 import type { Shift } from '@/types/app';
@@ -14,47 +23,91 @@ interface ActiveShiftValue {
 
 const STORAGE_KEY = 'admin.activeShiftId';
 
-const ActiveShiftContext = createContext<ActiveShiftValue>({
-  shifts: [], shiftId: null, shift: null, loading: false,
-  setShiftId: () => {}, reload: async () => {},
-});
+const ActiveShiftContext = createContext<ActiveShiftValue | null>(null);
 
 /**
- * Parallel/overlapping shifts: every admin surface reads its `shift_id` from
- * here, so switching a shift re-scopes schedules, children, train, fair and
- * talents instantly — with zero page reloads.
+ * Провайдер активної зміни: будь-яка адміністративна чи координаційна поверхня
+ * зчитує `shift_id` звідси, тому перемикання зміни миттєво оновлює
+ * розклад, списки дітей, купе, ярмарок та таланти без перезавантаження сторінки.
  */
 export const ActiveShiftProvider = ({ children }: { children: ReactNode }) => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftId, setShiftIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Отримання та оновлення списку змін
   const reload = useCallback(async () => {
-    const { data } = await supabase
-      .from('shifts').select('*').is('deleted_at', null).order('start_date', { ascending: false });
-    const list = (data || []) as Shift[];
-    setShifts(list);
-    setShiftIdState((cur) => {
-      if (cur && list.some((s) => s.id === cur)) return cur;
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored && list.some((s) => s.id === stored)) return stored;
-      return pickActiveShift(list)?.id ?? null;
-    });
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('shifts')
+        .select('*')
+        .is('deleted_at', null)
+        .order('start_date', { ascending: false });
+
+      if (error) throw error;
+
+      const list = (data || []) as Shift[];
+      setShifts(list);
+
+      setShiftIdState((currentId) => {
+        // 1. Якщо поточна зміна все ще існує в базі
+        if (currentId && list.some((s) => s.id === currentId)) {
+          return currentId;
+        }
+
+        // 2. Якщо збережена зміна є в localStorage
+        let storedId: string | null = null;
+        try {
+          storedId = localStorage.getItem(STORAGE_KEY);
+        } catch {
+          // Fallback для приватного режиму
+        }
+
+        if (storedId && list.some((s) => s.id === storedId)) {
+          return storedId;
+        }
+
+        // 3. Автоматичний вибір найбільш актуальної зміни
+        return pickActiveShift(list)?.id ?? (list[0]?.id || null);
+      });
+    } catch (err) {
+      console.error('[ActiveShiftContext] Помилка завантаження змін:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  // Realtime слухач з дебаунсом проти спаму
   useEffect(() => {
     reload();
-    const ch = supabase
+
+    const handleRealtimeChange = () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+        reload();
+      }, 400);
+    };
+
+    const channel = supabase
       .channel('active-shift-context')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => reload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, handleRealtimeChange)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      supabase.removeChannel(channel);
+    };
   }, [reload]);
 
+  // Ручна зміна активної зміни
   const setShiftId = useCallback((id: string) => {
     setShiftIdState(id);
-    localStorage.setItem(STORAGE_KEY, id);
+    try {
+      localStorage.setItem(STORAGE_KEY, id);
+    } catch {
+      // Safe fallback
+    }
   }, []);
 
   const value = useMemo<ActiveShiftValue>(() => ({
@@ -66,7 +119,17 @@ export const ActiveShiftProvider = ({ children }: { children: ReactNode }) => {
     reload,
   }), [shifts, shiftId, loading, setShiftId, reload]);
 
-  return <ActiveShiftContext.Provider value={value}>{children}</ActiveShiftContext.Provider>;
+  return (
+    <ActiveShiftContext.Provider value={value}>
+      {children}
+    </ActiveShiftContext.Provider>
+  );
 };
 
-export const useActiveShift = () => useContext(ActiveShiftContext);
+export const useActiveShift = (): ActiveShiftValue => {
+  const ctx = useContext(ActiveShiftContext);
+  if (!ctx) {
+    throw new Error('useActiveShift must be used inside <ActiveShiftProvider>');
+  }
+  return ctx;
+};
