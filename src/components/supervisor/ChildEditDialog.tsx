@@ -12,7 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { queuedIronDollarChange } from '@/lib/offline';
+import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
 
 interface Props {
   child: Child;
