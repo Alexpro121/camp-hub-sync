@@ -34,7 +34,7 @@ export interface IslandPayload {
   phase?: 'pre' | 'start';
   category?: string | null;
   location?: string | null;
-  /** Optional semantic hint for icon selection. */
+  /** Семантична підказка для вибору іконки */
   type?: 'TRAIN' | 'COUPES_SWAP' | 'COINS' | 'GENERIC';
   isSchedule?: boolean;
 }
@@ -69,13 +69,14 @@ interface IslandApi {
 
 const Ctx = createContext<IslandApi | null>(null);
 
-/** Every notification collapses on its own after 6–12 seconds. */
+/** Базова тривалість відображення за замовчуванням (6 секунд) */
 const AUTO_HIDE_MS = 6000;
 
-/** Smart duration scale: 12s critical, 8s expanded/offline, 6s default. */
+/** Розумна шкала тривалості: 12с критичні, 8с розширені/події, 6с стандартні */
 function getSmartDuration(state: IslandState, expanded = false): number {
   if (state === 'BROADCAST' || state === 'ERROR_TOAST') return 12000;
-  if (expanded || state === 'OFFLINE' || state === 'EVENT_ALERT') return 8000;
+  if (expanded || state === 'EVENT_ALERT') return 8000;
+  if (state === 'OFFLINE') return 7000;
   return AUTO_HIDE_MS;
 }
 
@@ -91,77 +92,114 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const [state, setState] = useState<IslandState>('HIDDEN');
   const [payload, setPayload] = useState<IslandPayload>({});
   const [expanded, setExpanded] = useState(false);
+  
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoHideMs = useRef<number | null>(null);
+  const remainingTime = useRef<number>(AUTO_HIDE_MS);
+  const startTime = useRef<number>(0);
+  
   const haptics = useHaptics();
   const { online, pending } = useNetworkStatus();
 
-  const clearTimer = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
+  const clearTimer = useCallback(() => { 
+    if (timer.current) { 
+      clearTimeout(timer.current); 
+      timer.current = null; 
+    } 
+  }, []);
 
-  /** Unified, unconditional auto-dismiss timer. */
-  const startAutoDismissTimer = useCallback((next: IslandState, expandedNow = false, override?: number) => {
+  /** Універсальний таймер автоприховування острова */
+  const startAutoDismissTimer = useCallback((nextState: IslandState, expandedNow = false, overrideMs?: number) => {
     clearTimer();
-    if (next === 'HIDDEN') { autoHideMs.current = null; return; }
-    const duration = override ?? getSmartDuration(next, expandedNow);
-    autoHideMs.current = duration;
+    if (nextState === 'HIDDEN') return;
+
+    const duration = overrideMs ?? getSmartDuration(nextState, expandedNow);
+    remainingTime.current = duration;
+    startTime.current = Date.now();
+
     timer.current = setTimeout(() => {
       setState('HIDDEN');
       setExpanded(false);
       timer.current = null;
     }, duration);
-  }, []);
+  }, [clearTimer]);
 
-  const set = useCallback((next: IslandState, p: IslandPayload = {}, autoHide?: number) => {
+  const set = useCallback((nextState: IslandState, nextPayload: IslandPayload = {}, autoHideMs?: number) => {
     setExpanded(false);
-    setState(next);
-    setPayload(p);
-    // Every state auto-dismisses — never leave a stuck pill.
-    startAutoDismissTimer(next, false, autoHide);
+    setState(nextState);
+    setPayload(nextPayload);
+    startAutoDismissTimer(nextState, false, autoHideMs);
   }, [startAutoDismissTimer]);
 
-  const hide = useCallback(() => { clearTimer(); setExpanded(false); setState('HIDDEN'); }, []);
+  const hide = useCallback(() => { 
+    clearTimer(); 
+    setExpanded(false); 
+    setState('HIDDEN'); 
+  }, [clearTimer]);
 
-  /** Interaction pauses the countdown so the text can be read calmly. */
-  const pauseAutoHide = useCallback(() => { clearTimer(); }, []);
+  /** Пауза лічильника при взаємодії (читанні) */
+  const pauseAutoHide = useCallback(() => { 
+    if (!timer.current) return;
+    clearTimer();
+    const elapsed = Date.now() - startTime.current;
+    remainingTime.current = Math.max(1500, remainingTime.current - elapsed);
+  }, [clearTimer]);
+
+  /** Продовження лічильника після взаємодії */
   const resumeAutoHide = useCallback(() => {
     clearTimer();
-    if (autoHideMs.current) {
-      timer.current = setTimeout(() => { setState('HIDDEN'); setExpanded(false); }, autoHideMs.current);
-    }
-  }, []);
+    if (state === 'HIDDEN') return;
+    
+    startTime.current = Date.now();
+    timer.current = setTimeout(() => { 
+      setState('HIDDEN'); 
+      setExpanded(false); 
+      timer.current = null;
+    }, remainingTime.current);
+  }, [clearTimer, state]);
+
+  /** Плавне розгортання та згортання острова */
   const toggleExpanded = useCallback(() => {
     haptics.impact('light');
-    setExpanded((v) => {
-      const next = !v;
-      // Expanding restarts an 8s countdown; it always collapses and hides after it.
-      setState((s) => { startAutoDismissTimer(s, next); return s; });
+    setExpanded((prev) => {
+      const next = !prev;
+      startAutoDismissTimer(state, next);
       return next;
     });
-  }, [startAutoDismissTimer, haptics]);
+  }, [haptics, startAutoDismissTimer, state]);
 
+  // Спеціалізовані виклики
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
+  
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {
-    set('EXCEL_IMPORT', { progress: Math.max(0, Math.min(100, Math.round(progress))), fileName });
+    set('EXCEL_IMPORT', { 
+      progress: Math.max(0, Math.min(100, Math.round(progress))), 
+      fileName 
+    });
   }, [set]);
+
   const showOffline = useCallback((queued: number) => set('OFFLINE', { queued }), [set]);
+
   const showSuccess = useCallback((title: string, subtitle?: string) => {
     haptics.notification('success');
     set('SUCCESS_TOAST', { title, subtitle });
   }, [set, haptics]);
+
   const showError = useCallback((title: string, subtitle?: string, errorDetails?: string) => {
     haptics.notification('error');
     set('ERROR_TOAST', { title, subtitle, errorDetails });
   }, [set, haptics]);
+
   const showBroadcast = useCallback((color: BroadcastColor, message: string, author: string) => {
     haptics.impact('heavy');
     set('BROADCAST', { color, message, author });
   }, [set, haptics]);
+
   const showEventAlert = useCallback((alert: EventAlert) => {
     haptics.notification('warning');
     set('EVENT_ALERT', { ...alert });
   }, [set, haptics]);
 
-  // 1. Network detector — offline persists, online shows a short toast
+  // 1. Детектор мережі: офлайн / повернення онлайн
   const wasOffline = useRef(false);
   useEffect(() => {
     if (!online) {
@@ -169,42 +207,84 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
       showOffline(pending);
     } else if (wasOffline.current) {
       wasOffline.current = false;
-      set('SUCCESS_TOAST', { title: 'Онлайн', subtitle: 'Зв’язок відновлено' }, 2000);
+      set('SUCCESS_TOAST', { title: 'Онлайн', subtitle: 'Зв’язок відновлено' }, 3000);
     }
   }, [online, pending, showOffline, set]);
 
-  // 3. Realtime broadcasts from supervisors
+  // 2. Realtime-сповіщення від супроводу (Broadcasts)
   useEffect(() => {
     const ch = supabase
       .channel('island-broadcasts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'broadcasts' }, (p) => {
         const b = p.new as { message?: string; color?: string; sent_by?: string };
-        showBroadcast(TONE_TO_COLOR[b.color ?? 'info'] ?? 'red', b.message ?? '', b.sent_by ?? 'Супровід');
+        showBroadcast(
+          TONE_TO_COLOR[b.color ?? 'info'] ?? 'red', 
+          b.message ?? '', 
+          b.sent_by ?? 'Супровід'
+        );
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => { 
+      supabase.removeChannel(ch); 
+    };
   }, [showBroadcast]);
 
-  // Bridge legacy islandBus messages into the new island
+  // 3. Міст для старих повідомлень (islandBus legacy)
   useEffect(() => {
     const off = onIslandMessage((m) => {
-      if (m.tone === 'danger' || m.tone === 'warning') showError(m.text, m.meta);
-      else showSuccess(m.text, m.meta);
+      if (m.tone === 'danger' || m.tone === 'warning') {
+        showError(m.text, m.meta);
+      } else {
+        showSuccess(m.text, m.meta);
+      }
     });
-    return () => { off(); clearTimer(); };
-  }, [showError, showSuccess]);
+
+    return () => { 
+      off(); 
+      clearTimer(); 
+    };
+  }, [showError, showSuccess, clearTimer]);
 
   const value = useMemo<IslandApi>(() => ({
-    state, payload, expanded, showLoader, showExcelProgress, showOffline, showSuccess, showError,
-    showBroadcast, showEventAlert, toggleExpanded, pauseAutoHide, resumeAutoHide, hide,
-  }), [state, payload, expanded, showLoader, showExcelProgress, showOffline, showSuccess, showError,
-    showBroadcast, showEventAlert, toggleExpanded, pauseAutoHide, resumeAutoHide, hide]);
+    state, 
+    payload, 
+    expanded, 
+    showLoader, 
+    showExcelProgress, 
+    showOffline, 
+    showSuccess, 
+    showError,
+    showBroadcast, 
+    showEventAlert, 
+    toggleExpanded, 
+    pauseAutoHide, 
+    resumeAutoHide, 
+    hide,
+  }), [
+    state, 
+    payload, 
+    expanded, 
+    showLoader, 
+    showExcelProgress, 
+    showOffline, 
+    showSuccess, 
+    showError,
+    showBroadcast, 
+    showEventAlert, 
+    toggleExpanded, 
+    pauseAutoHide, 
+    resumeAutoHide, 
+    hide
+  ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 };
 
 export const useDynamicIsland = (): IslandApi => {
   const ctx = useContext(Ctx);
-  if (!ctx) throw new Error('useDynamicIsland must be used inside <DynamicIslandProvider>');
+  if (!ctx) {
+    throw new Error('useDynamicIsland must be used inside <DynamicIslandProvider>');
+  }
   return ctx;
 };
