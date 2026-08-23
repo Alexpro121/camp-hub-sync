@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Plus, Trash2, Coffee, Loader2 } from 'lucide-react';
+import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
 import { useHaptics } from '@/hooks/useHaptics';
+import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
 
 interface Props { myTeam?: number | null; }
 
@@ -18,7 +19,9 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
   const [title, setTitle] = useState('');
   const [breaks, setBreaks] = useState('0');
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<TalentEntry | null>(null);
   const haptics = useHaptics();
+
 
   const load = async () => {
     const { data: evs } = await supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
