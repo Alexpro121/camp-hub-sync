@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
+import { TEAM_MAX } from '@/lib/normalize';
 import FairHowTo from './FairHowTo';
 
 interface Props {
