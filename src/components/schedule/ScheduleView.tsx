@@ -422,7 +422,7 @@ const ScheduleView = ({
       )}
 
       {/* Пустий стан дня */}
-      {visibleEvents.length === 0 && (
+      {timelineRows.length === 0 && (
         <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">
