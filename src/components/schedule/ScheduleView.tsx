@@ -291,7 +291,8 @@ const ScheduleView = ({
   const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 select-none';
 
   return (
-    <div className="w-full space-y-3 select-none pb-36 overflow-x-hidden">
+    <div className="w-full space-y-3 select-none px-3 sm:px-4 pb-36 overflow-x-hidden">
+
       
       {/* ================= 1. ШАПКА: РОЗКЛАД + БРОНЮВАННЯ ЗАЛІВ ================= */}
       <div className="w-full flex items-center justify-between gap-2 px-0.5">
