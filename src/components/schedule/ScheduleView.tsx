@@ -285,15 +285,29 @@ const ScheduleView = ({
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
 
 
-  if (!schedules.length) {
+  if (!schedules.length && !teamBookings.length) {
     return (
-      <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
-        <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
-        <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
-        <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
-      </Card>
+      <div className="space-y-3.5 select-none">
+        {bookingButton}
+        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
+          <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
+          <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
+          <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
+        </Card>
+        {isStaff && myTeam != null && (
+          <HallBookingModal
+            open={bookingsOpen}
+            onOpenChange={setBookingsOpen}
+            days={days}
+            initialDate={activeDay ?? todayISO()}
+            myTeam={myTeam}
+            shiftId={null}
+          />
+        )}
+      </div>
     );
   }
+
 
   const tabCls = 'shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all duration-300 active:scale-95 select-none';
 
