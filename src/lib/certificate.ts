@@ -1,20 +1,19 @@
 /**
- * Список можливих шляхів до PDF-бланка (з урахуванням усіх варіантів кодування)
+ * Список шляхів до PDF-бланка
  */
 const CANDIDATE_PDF_PATHS = [
   '/certificate-template.pdf',
   '/certificate.pdf',
   '/Сертифікат_загальний_Залізна_Зміна.pdf',
   encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'),
-  encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'.normalize('NFD')),
-  encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'.normalize('NFC')),
 ];
 
-/** Дзеркала завантаження кириличного шрифту Montserrat */
+/** Стабільні CDN-джерела TrueType-шрифту з повною підтримкою кирилиці (І, Ї, Є, Ґ, апостроф) */
 const FONT_URLS = [
-  'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@main/fonts/ttf/Montserrat-Bold.ttf',
-  'https://fonts.gstatic.com/s/montserrat/v26/JTUSjIg1_i6t8kCHKm459Wlhyw.ttf',
-  'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/Roboto-Bold.ttf'
+  'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Bold.ttf',
+  'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf',
+  'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/Roboto-Bold.ttf',
+  'https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Bold.ttf',
 ];
 
 // Словник цензури
@@ -22,9 +21,18 @@ const PROHIBITED_WORDS = [
   'хуй', 'пізд', 'єбат', 'ебат', 'бляд', 'сука', 'мусор', 'гандон', 'чмо', 'лох', 'залуп', 'дроч', 'хер', 'підар', 'пидор', 'нах'
 ];
 
-/** Динамічне завантаження PDF-Lib та Fontkit з резервними CDN */
+/** Перевірка магічних байтів шрифту (TrueType / OpenType header) */
+function isValidFontBuffer(buffer: ArrayBuffer): boolean {
+  if (!buffer || buffer.byteLength < 10000) return false;
+  const view = new DataView(buffer);
+  const magic = view.getUint32(0);
+  // 0x00010000 (TrueType), 0x4F54544F (OTTO), 0x74727565 (true)
+  return magic === 0x00010000 || magic === 0x4F54544F || magic === 0x74727565;
+}
+
+/** Динамічне завантаження PDF-Lib та Fontkit */
 async function loadPdfEngine() {
-  if (typeof window === 'undefined') throw new Error('PDF generation requires browser environment');
+  if (typeof window === 'undefined') throw new Error('Потрібне середовище браузера');
 
   const win = window as any;
   if (win.PDFLib && win.fontkit) {
@@ -46,26 +54,25 @@ async function loadPdfEngine() {
       script.src = src;
       script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      script.onerror = () => reject(new Error(`Не вдалося завантажити скрипт ${src}`));
       document.head.appendChild(script);
     });
   };
 
   try {
     await Promise.all([
-      loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
-    ]);
-  } catch {
-    // Fallback CDN
-    await Promise.all([
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'),
       loadScript('https://unpkg.com/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
+    ]);
+  } catch {
+    await Promise.all([
+      loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'),
+      loadScript('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
     ]);
   }
 
   if (!win.PDFLib || !win.fontkit) {
-    throw new Error('Не вдалося ініціалізувати бібліотеку PDF-Lib');
+    throw new Error('Не вдалося ініціалізувати PDF-рушій');
   }
 
   return {
@@ -75,7 +82,7 @@ async function loadPdfEngine() {
   };
 }
 
-/** Автоматичний пошук та завантаження файлу бланка */
+/** Завантаження PDF-бланка з перевіркою */
 async function fetchPdfTemplateBytes(): Promise<ArrayBuffer> {
   for (const path of CANDIDATE_PDF_PATHS) {
     try {
@@ -87,25 +94,28 @@ async function fetchPdfTemplateBytes(): Promise<ArrayBuffer> {
         }
       }
     } catch {
-      // Пробуємо наступний шлях
+      // пробуємо наступний шлях
     }
   }
-  throw new Error('Файл бланка не знайдено. Перейменуйте файл у public/ на certificate-template.pdf');
+  throw new Error('Файл бланка не знайдено в папці public/');
 }
 
-/** Завантаження кириличного шрифту з дзеркал */
+/** Завантаження шрифту з валідацією заголовків */
 async function fetchCyrillicFontBytes(): Promise<ArrayBuffer> {
   for (const url of FONT_URLS) {
     try {
       const res = await fetch(url);
       if (res.ok) {
-        return await res.arrayBuffer();
+        const bytes = await res.arrayBuffer();
+        if (isValidFontBuffer(bytes)) {
+          return bytes;
+        }
       }
     } catch {
-      // Пробуємо наступне дзеркало
+      // пробуємо наступне дзеркало
     }
   }
-  throw new Error('Не вдалося завантажити український шрифт');
+  throw new Error('Не вдалося завантажити шрифт із підтримкою кирилиці');
 }
 
 /** Нормалізація українського тексту */
@@ -201,30 +211,26 @@ export function validateCertificateName(
 }
 
 /**
- * Генерація персоналізованого PDF з автопідбором розміру шрифту
+ * Генерація персоналізованого векторного PDF
  */
 export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: Blob; pdfUrl: string }> {
-  // 1. Ініціалізуємо рушій
   const { PDFDocument, rgb, fontkit } = await loadPdfEngine();
 
-  // 2. Отримуємо байти бланка та шрифту
   const [pdfBytes, fontBytes] = await Promise.all([
     fetchPdfTemplateBytes(),
     fetchCyrillicFontBytes(),
   ]);
 
-  // 3. Завантажуємо PDF документ
   const pdfDoc = await PDFDocument.load(pdfBytes);
   pdfDoc.registerFontkit(fontkit);
 
-  // 4. Вбудовуємо український шрифт
   const customFont = await pdfDoc.embedFont(fontBytes);
 
   const pages = pdfDoc.getPages();
   const firstPage = pages[0];
   const { width, height } = firstPage.getSize();
 
-  // 5. Розрахунок позиції та автопідбір розміру імені
+  // Автопідбір розміру тексту
   const formattedName = name.trim().toUpperCase();
   const maxAllowedWidth = width * 0.68;
   
@@ -242,10 +248,10 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
   const finalWidth = customFont.widthOfTextAtSize(formattedName, fontSize);
   const centerX = (width - finalWidth) / 2;
   
-  // Координати Y плашки під ім'я
+  // Координати Y плашки
   const centerY = height * 0.488;
 
-  // 6. Наносимо текст
+  // Малюємо ім'я у фірмовому кольорі (#0E172E)
   firstPage.drawText(formattedName, {
     x: centerX,
     y: centerY,
@@ -254,7 +260,6 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
     color: rgb(14 / 255, 23 / 255, 46 / 255),
   });
 
-  // 7. Зберігаємо фінальний PDF
   const modifiedPdfBytes = await pdfDoc.save();
   const pdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
   const pdfUrl = URL.createObjectURL(pdfBlob);
