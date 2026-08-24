@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
-import { CalendarDays, Users, Clock, Sparkles, Radio, Building2 } from 'lucide-react';
+import { CalendarDays, Users, Building2, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -17,11 +17,11 @@ import {
   type NormalizedScheduleItem,
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
-import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
+import { localISO } from '@/hooks/useAutoTodayDate';
 import HallBookingModal from '@/components/schedule/HallBookingModal';
 import { hallBadge, hallName, type HallBooking } from '@/types/halls';
 import { hhmm, toMinutes } from '@/lib/halls';
-
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface Props {
   myTeam?: number | null;
@@ -37,8 +37,8 @@ const todayISO = () => localISO();
 
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = [
-  'січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
-  'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'
+  'січ', 'лют', 'бер', 'кві', 'тра', 'чер',
+  'лип', 'сер', 'вер', 'жов', 'лис', 'груд'
 ];
 
 const dayParts = (iso: string) => {
@@ -75,17 +75,15 @@ const ScheduleView = ({
   const [bookingsOpen, setBookingsOpen] = useState(false);
   const [teamBookings, setTeamBookings] = useState<HallBooking[]>([]);
 
+  const haptics = useHaptics();
 
-  // Автоматичне перемикання на поточну добу після опівночі
-  useAutoTodayDate(activeDay, setActiveDay);
-
-  // Оновлення поточного часу кожні 30 секунд для точного таймлайну
+  // Оновлення часу кожні 30 секунд
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  // Завантаження розкладу та Realtime-слухач
+  // Завантаження опублікованого розкладу
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout>;
     
@@ -110,8 +108,7 @@ const ScheduleView = ({
       } else {
         setItems([]);
       }
-      
-      setActiveDay((cur) => (lockTeam ? todayISO() : cur ?? todayISO()));
+
       setLoading(false);
     };
 
@@ -119,7 +116,7 @@ const ScheduleView = ({
 
     const debounced = () => { 
       clearTimeout(debounce); 
-      debounce = setTimeout(load, 600); 
+      debounce = setTimeout(load, 500); 
     };
 
     const ch = supabase
@@ -138,9 +135,9 @@ const ScheduleView = ({
       supabase.removeChannel(ch); 
       supabase.removeChannel(live); 
     };
-  }, [lockTeam]);
+  }, []);
 
-  // Бронювання залів команди, позначені як видимі в розкладі
+  // Завантаження броней залів, позначених як видимі в розкладі
   useEffect(() => {
     if (!activeDay) return;
     let cancelled = false;
@@ -165,30 +162,33 @@ const ScheduleView = ({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hall_bookings' }, loadBookings)
       .subscribe();
 
-    return () => { cancelled = true; supabase.removeChannel(ch); };
+    return () => { 
+      cancelled = true; 
+      supabase.removeChannel(ch); 
+    };
   }, [activeDay, team]);
 
-  useEffect(() => {
-    activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }, [activeDay, loading]);
-
-
-  // Список доступних днів: лише дати опублікованих змін (без чужих місяців).
-  // Сьогодні додається тільки якщо на нього є розклад або дат узагалі немає.
+  // ✅ ЧИСТИЙ СПИСОК ДАТ ЗМІНИ (БЕЗ ЗМІШУВАННЯ З ЛЮТИМ)
   const days = useMemo(() => {
     if (lockTeam) return [todayISO()];
     const dates = [...new Set(schedules.map((s) => s.date))].sort();
     return dates.length ? dates : [todayISO()];
   }, [schedules, lockTeam]);
 
-  // Якщо обрана дата не входить у зміну — переходимо на сьогодні або перший день зміни
+  // Автоматичний вибір актуального дня: сьогодні (якщо входить у зміну) або перший день зміни
   useEffect(() => {
-    if (!days.length || !activeDay || days.includes(activeDay)) return;
-    const today = todayISO();
-    setActiveDay(days.includes(today) ? today : (days.find((d) => d >= today) ?? days[0]));
-  }, [days, activeDay]);
+    if (!days.length) return;
+    setActiveDay((cur) => {
+      if (cur && days.includes(cur)) return cur;
+      const today = todayISO();
+      if (days.includes(today)) return today;
+      return days[0];
+    });
+  }, [days]);
 
-
+  useEffect(() => {
+    activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeDay, loading]);
 
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
@@ -215,7 +215,7 @@ const ScheduleView = ({
     );
   }, [items, activeDay, idsForDate, matchesTeam]);
 
-  // Нічні події, що перейшли через північ
+  // Перехідні нічні події
   const carryOver = useMemo<NormalizedScheduleItem[]>(() => {
     if (!activeDay) return [];
     const prevDate = shiftISODate(activeDay, -1);
@@ -236,20 +236,18 @@ const ScheduleView = ({
   const nowRel = activeDay ? minutesSinceDayStart(activeDay, now) : -1;
   const isToday = nowRel >= 0 && nowRel < 1440;
 
-  // Поточна подія просто зараз
   const currentEvent = useMemo(
     () => (isToday ? visibleEvents.find((e) => nowRel >= e.startMin && nowRel < e.endMin) ?? null : null),
     [visibleEvents, nowRel, isToday],
   );
 
-  // Наступна найближча подія
   const nextUp = useMemo(() => {
     if (!isToday) return null;
     const e = visibleEvents.find((x) => x.startMin > nowRel);
     return e ? { event: e, inMin: e.startMin - nowRel } : null;
   }, [visibleEvents, nowRel, isToday]);
 
-  // Репетиції команди у залах як пріоритетні слоти поверх загальної сітки
+  // Об'єднання репетицій та подій дня
   type TimelineRow =
     | { kind: 'event'; startMin: number; endMin: number; event: NormalizedScheduleItem }
     | { kind: 'booking'; startMin: number; endMin: number; booking: HallBooking };
@@ -276,65 +274,56 @@ const ScheduleView = ({
 
   const myBookingsCount = myTeam != null ? teamBookings.filter((b) => b.team_number === myTeam).length : 0;
 
-  const bookingButton = isStaff && myTeam != null
-    ? (
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Розклад</span>
-        <button
-          onClick={() => setBookingsOpen(true)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:bg-primary/[0.14] active:scale-95"
-        >
-          <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
-          Бронювання залів
-          {myBookingsCount > 0 && (
-            <span className="rounded-full bg-[#FA5A15] px-1.5 py-px font-mono text-[10px] font-black tabular-nums text-white">
-              {myBookingsCount}
-            </span>
-          )}
-        </button>
-      </div>
-    )
-    : null;
-
-
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
-
 
   if (!schedules.length && !teamBookings.length) {
     return (
-      <div className="space-y-3.5 select-none">
-        {bookingButton}
-        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
+      <div className="w-full space-y-3.5 select-none pb-32">
+        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2">
           <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
           <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
         </Card>
-        {isStaff && myTeam != null && (
-          <HallBookingModal
-            open={bookingsOpen}
-            onOpenChange={setBookingsOpen}
-            days={days}
-            initialDate={activeDay ?? todayISO()}
-            myTeam={myTeam}
-            shiftId={null}
-          />
-        )}
       </div>
     );
   }
 
-
-  const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-all duration-300 active:scale-95 select-none';
+  const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 select-none';
 
   return (
-    <div className="space-y-3 select-none pb-24">
+    <div className="w-full space-y-3 select-none pb-36 overflow-x-hidden">
+      
+      {/* ================= 1. ШАПКА: РОЗКЛАД + БРОНЮВАННЯ ЗАЛІВ ================= */}
+      <div className="w-full flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground">
+            Розклад
+          </span>
+        </div>
 
-      {bookingButton}
+        {isStaff && myTeam != null && (
+          <button
+            type="button"
+            onClick={() => {
+              haptics.impact('light');
+              setBookingsOpen(true);
+            }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 sm:px-3 py-1.5 text-[11px] font-bold text-primary active:scale-95 transition-all shadow-sm"
+          >
+            <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={2.2} />
+            <span>Бронювання залів</span>
+            {myBookingsCount > 0 && (
+              <span className="rounded-full bg-[#FA5A15] px-1.5 py-px font-mono text-[9px] font-black text-white">
+                {myBookingsCount}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
 
-      {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
-
+      {/* ================= 2. СЕЛЕКТОР ДАТ (АДАПТИВНИЙ РЯДОК) ================= */}
       {days.length > 1 && (
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto scrollbar-thin px-1 pb-1 overscroll-contain">
+        <div className="w-full flex gap-1.5 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain">
           {days.map((d) => {
             const p = dayParts(d);
             const active = d === activeDay;
@@ -342,38 +331,43 @@ const ScheduleView = ({
               <button
                 key={d}
                 ref={active ? activeDayRef : undefined}
-                onClick={() => setActiveDay(d)}
-                className={`shrink-0 select-none rounded-xl border px-2.5 py-1.5 leading-tight transition-all duration-300 active:scale-95 flex flex-col items-center ${
+                onClick={() => {
+                  haptics.impact('light');
+                  setActiveDay(d);
+                }}
+                className={`shrink-0 select-none rounded-2xl border px-3 py-1.5 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[54px] ${
                   active
-                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.3)]'
+                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.35)] scale-[1.02]'
                     : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="text-[8px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
-                <span className="font-mono text-sm font-black tabular-nums">{p.day}</span>
+                <span className="text-[9px] uppercase font-mono font-bold opacity-80">{p.weekday}</span>
+                <span className="font-mono text-sm font-black tabular-nums my-1">{p.day}</span>
                 <span className="text-[8px] font-medium opacity-80">{p.month}</span>
               </button>
             );
           })}
         </div>
-
       )}
 
-      {/* 2. ФІЛЬТР ЗА КОМАНДАМИ */}
+      {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ ================= */}
       {lockTeam ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
+        <div className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2 shadow-sm">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
           <p className="text-xs font-semibold text-foreground">
             Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
           </p>
         </div>
       ) : (
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
+        <div className="w-full flex gap-1.5 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain">
           <button
-            onClick={() => setFilterTeam(null)}
+            onClick={() => {
+              haptics.selection();
+              setFilterTeam(null);
+            }}
             className={`${tabCls} ${
               filterTeam === null 
-                ? 'bg-primary text-primary-foreground font-bold shadow-md shadow-primary/20' 
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm' 
                 : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -382,10 +376,13 @@ const ScheduleView = ({
 
           {myTeam != null && (
             <button
-              onClick={() => setFilterTeam(myTeam)}
+              onClick={() => {
+                haptics.selection();
+                setFilterTeam(myTeam);
+              }}
               className={`${tabCls} ${
                 filterTeam === myTeam 
-                  ? 'bg-primary text-primary-foreground font-bold shadow-md shadow-primary/20' 
+                  ? 'bg-primary text-primary-foreground font-bold shadow-sm' 
                   : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -396,10 +393,13 @@ const ScheduleView = ({
           {TEAMS.filter((t) => t !== myTeam).map((t) => (
             <button
               key={t}
-              onClick={() => setFilterTeam(filterTeam === t ? null : t)}
+              onClick={() => {
+                haptics.selection();
+                setFilterTeam(filterTeam === t ? null : t);
+              }}
               className={`${tabCls} font-mono font-bold tabular-nums ${
                 filterTeam === t 
-                  ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' 
+                  ? 'bg-primary text-primary-foreground shadow-sm' 
                   : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -409,9 +409,9 @@ const ScheduleView = ({
         </div>
       )}
 
-      {/* 3. КАРТКА «ДАЛІ ЗА РОЗКЛАДОМ» */}
+      {/* ================= 4. ВІДЖЕТ «ДАЛІ ЗА РОЗКЛАДОМ» ================= */}
       {nextUp && (
-        <Card className="rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/[0.08] via-card/85 to-card/85 p-4 sm:p-4.5 shadow-md backdrop-blur-xl">
+        <Card className="rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/[0.08] via-card/85 to-card/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-xl">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -422,7 +422,7 @@ const ScheduleView = ({
 
           <div className="mt-1 flex items-end justify-between gap-3">
             <div className="min-w-0 pr-2">
-              <p className="truncate text-base sm:text-lg font-bold tracking-tight text-foreground">
+              <p className="truncate text-sm sm:text-base font-bold tracking-tight text-foreground">
                 {sentenceCase(nextUp.event.title)}
               </p>
               <p className="font-mono text-xs font-semibold tabular-nums text-muted-foreground mt-0.5">
@@ -437,7 +437,7 @@ const ScheduleView = ({
         </Card>
       )}
 
-      {/* Пустий стан дня */}
+      {/* Якщо немає подій на день */}
       {timelineRows.length === 0 && (
         <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
@@ -449,46 +449,46 @@ const ScheduleView = ({
         </Card>
       )}
 
-      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ + РЕПЕТИЦІЇ КОМАНДИ */}
-      <div className="space-y-2">
+      {/* ================= 5. ХРОНОЛОГІЧНИЙ СПИСОК ПОДІЙ + РЕПЕТИЦІЇ ================= */}
+      <div className="w-full space-y-2.5">
         {timelineRows.map((row) => {
           if (row.kind === 'booking') {
             const b = row.booking;
             const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
+            
             return (
               <article
                 key={`b-${b.id}`}
-                className={`relative overflow-hidden rounded-2xl border border-l-4 border-white/10 border-l-[#FA5A15] bg-slate-900/80 p-4 shadow-xl backdrop-blur-xl transition-all duration-300 active:scale-[0.98] ${
-                  active ? 'border-[#FA5A15]/50 shadow-[0_0_20px_rgba(250,90,21,0.18)]' : ''
+                className={`relative overflow-hidden rounded-2xl border border-l-4 border-white/10 border-l-[#FA5A15] bg-card/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-xl transition-all active:scale-[0.99] ${
+                  active ? 'border-[#FA5A15]/50 shadow-[0_0_20px_rgba(250,90,21,0.2)]' : ''
                 } ${isToday && nowRel >= row.endMin ? 'opacity-50' : ''}`}
               >
-                <header className="flex items-center gap-3">
-                  <span className="font-mono text-sm font-bold tabular-nums text-slate-200">
+                <header className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-mono text-xs sm:text-sm font-bold tabular-nums text-foreground">
                     {hhmm(b.start_time)} – {hhmm(b.end_time)}
                   </span>
-                  <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FA5A15]/40 bg-[#FA5A15]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
-                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FA5A15]/40 bg-[#FA5A15]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#FA5A15]">
+                    <Sparkles className="h-2.5 w-2.5" strokeWidth={2.5} />
                     Репетиція
                   </span>
                 </header>
 
-                <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
+                <h3 className="break-words text-sm sm:text-base font-bold tracking-tight text-foreground">
                   {sentenceCase(b.title || 'Репетиція')}
                 </h3>
 
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
-                    <Building2 className="h-3 w-3" strokeWidth={2.5} />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
+                    <Building2 className="h-3 w-3" strokeWidth={2} />
                     {hallName(b.hall_id)}
                   </span>
-                  <span className="font-mono text-[11px] font-semibold text-slate-400">
+                  <span className="font-mono text-[10px] sm:text-[11px] font-semibold text-muted-foreground">
                     Команда №{b.team_number}
                   </span>
                 </div>
               </article>
             );
           }
-
 
           const e = row.event;
           const isNow = currentEvent?.id === e.id;
@@ -507,6 +507,7 @@ const ScheduleView = ({
         })}
       </div>
 
+      {/* Модальне вікно бронювання залів */}
       {isStaff && myTeam != null && activeDay && (
         <HallBookingModal
           open={bookingsOpen}
@@ -519,7 +520,6 @@ const ScheduleView = ({
       )}
 
     </div>
-
   );
 };
 
