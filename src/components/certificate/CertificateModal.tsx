@@ -8,7 +8,8 @@ import {
   Download, 
   Pencil, 
   Loader2, 
-  AlertCircle 
+  AlertCircle, 
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -87,9 +88,8 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg w-full p-4 sm:p-6 rounded-[32px] bg-card/95 backdrop-blur-2xl border-border/60 shadow-2xl select-none max-h-[94dvh] overflow-y-auto overscroll-contain">
+      <DialogContent className="max-w-md sm:max-w-lg w-full p-4 sm:p-6 rounded-[32px] bg-card/95 backdrop-blur-2xl border-border/60 shadow-2xl select-none max-h-[94dvh] overflow-y-auto overscroll-contain">
         
-        {/* Шапка з описом для доступності */}
         <DialogHeader className="pb-2 border-b border-border/40">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
@@ -110,8 +110,8 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
 
         <div className="space-y-3.5 pt-2">
           
-          {/* Прев'ю PDF-документа */}
-          <div className="relative rounded-2xl overflow-hidden border border-border/60 bg-black/40 aspect-[16/11] flex items-center justify-center shadow-lg">
+          {/* Прев'ю сертифіката (адаптивне на телефонах та комп'ютерах) */}
+          <div className="relative rounded-2xl overflow-hidden border border-border/60 bg-slate-950/80 aspect-[16/11.2] flex items-center justify-center shadow-lg">
             {loading && (
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-[#FA5A15]" />
@@ -120,11 +120,22 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
             )}
 
             {!loading && pdfData && (
-              <iframe
-                src={`${pdfData.pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
-                title="Сертифікат Залізна Зміна PDF"
-                className="w-full h-full border-none rounded-2xl pointer-events-auto"
-              />
+              <object
+                data={pdfData.pdfUrl}
+                type="application/pdf"
+                className="w-full h-full rounded-2xl"
+              >
+                {/* Fallback для телефонів, які блокують вбудований PDF-плагін */}
+                <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-card/60 space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-foreground">Векторний PDF-документ готовий</p>
+                    <p className="text-[11px] text-muted-foreground">Натисніть кнопку нижче для збереження</p>
+                  </div>
+                </div>
+              </object>
             )}
 
             {error && (
@@ -135,7 +146,7 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
             )}
           </div>
 
-          {/* Блок редагування імені */}
+          {/* Редагування імені */}
           {!editMode ? (
             <div className="flex items-center justify-between p-3 rounded-2xl bg-surface-1/50 border border-border/50">
               <div className="min-w-0 pr-2">
@@ -201,7 +212,7 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
             </div>
           )}
 
-          {/* Кнопка скачування PDF */}
+          {/* Головна кнопка завантаження */}
           <Button
             onClick={handleDownloadPdf}
             disabled={loading || !pdfData}
