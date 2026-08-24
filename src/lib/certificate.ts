@@ -1,6 +1,3 @@
-import { PDFDocument, rgb } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
-
 /** Шлях до оригінального PDF-бланка в папці public/ */
 export const CERTIFICATE_PDF_PATH = '/Сертифікат_загальний_Залізна_Зміна.pdf';
 export const CERTIFICATE_FALLBACK_PDF = '/certificate-template.pdf';
@@ -12,6 +9,55 @@ const CYRILLIC_FONT_URL = 'https://fonts.gstatic.com/s/montserrat/v26/JTUSjIg1_i
 const PROHIBITED_WORDS = [
   'хуй', 'пізд', 'єбат', 'ебат', 'бляд', 'сука', 'мусор', 'гандон', 'чмо', 'лох', 'залуп', 'дроч', 'хер', 'підар', 'пидор', 'нах'
 ];
+
+/**
+ * Динамічний завантажувач PDF-Lib та Fontkit (без необхідності встановлення в package.json)
+ */
+async function loadPdfEngine() {
+  if (typeof window === 'undefined') throw new Error('PDF generation requires browser environment');
+
+  const win = window as any;
+
+  if (win.PDFLib && win.fontkit) {
+    return {
+      PDFDocument: win.PDFLib.PDFDocument,
+      rgb: win.PDFLib.rgb,
+      fontkit: win.fontkit,
+    };
+  }
+
+  const loadScript = (src: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+  };
+
+  // Завантажуємо скрипти з CDN
+  await Promise.all([
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'),
+    loadScript('https://unpkg.com/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
+  ]);
+
+  if (!win.PDFLib || !win.fontkit) {
+    throw new Error('Не вдалося ініціалізувати PDF-рушій');
+  }
+
+  return {
+    PDFDocument: win.PDFLib.PDFDocument,
+    rgb: win.PDFLib.rgb,
+    fontkit: win.fontkit,
+  };
+}
 
 /** Нормалізація українського тексту */
 export const normalizeUkrainianText = (str: string): string => {
@@ -104,7 +150,7 @@ export function validateCertificateName(
   if (!matchFound) {
     return {
       ok: false,
-      error: `Нове ім'я має містити частину вашого початкового імені (${cleanOrig})`,
+      error: `Нове ім'я має бути схожим на початкове (${cleanOrig})`,
     };
   }
 
@@ -112,10 +158,13 @@ export function validateCertificateName(
 }
 
 /**
- * Завантажує оригінальний PDF-бланк та генерує новий PDF з нанесеним іменем дитини
+ * Завантажує оригінальний PDF-бланк та генерує векторний PDF з нанесеним іменем дитини
  */
 export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: Blob; pdfUrl: string }> {
-  // 1. Отримуємо байти PDF-бланка
+  // 1. Ініціалізуємо PDF-рушій
+  const { PDFDocument, rgb, fontkit } = await loadPdfEngine();
+
+  // 2. Отримуємо байти PDF-бланка
   let pdfBytes: ArrayBuffer;
   try {
     const res = await fetch(CERTIFICATE_PDF_PATH);
@@ -126,21 +175,21 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
     pdfBytes = await fallbackRes.arrayBuffer();
   }
 
-  // 2. Отримуємо шрифт із підтримкою кирилиці
+  // 3. Отримуємо шрифт із підтримкою кирилиці
   const fontBytes = await fetch(CYRILLIC_FONT_URL).then((res) => res.arrayBuffer());
 
-  // 3. Завантажуємо документ через PDF-lib
+  // 4. Завантажуємо документ
   const pdfDoc = await PDFDocument.load(pdfBytes);
   pdfDoc.registerFontkit(fontkit);
 
-  // Вбудовуємо кастомний шрифт
+  // Вбудовуємо шрифт
   const customFont = await pdfDoc.embedFont(fontBytes);
 
   const pages = pdfDoc.getPages();
   const firstPage = pages[0];
   const { width, height } = firstPage.getSize();
 
-  // 4. Розрахунок позиції та автопідбір розміру тексту
+  // 5. Розрахунок позиції та автопідбір розміру тексту
   const formattedName = name.trim().toUpperCase();
   const maxAllowedWidth = width * 0.68;
   
@@ -158,10 +207,10 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
   const finalWidth = customFont.widthOfTextAtSize(formattedName, fontSize);
   const centerX = (width - finalWidth) / 2;
   
-  // Координати Y плашки (у PDF початок координат знизу зліва)
+  // Координати центру білої плашки
   const centerY = height * 0.488;
 
-  // 5. Малюємо ім'я у фірмовому темно-синьому кольорі оригіналу (#0E172E)
+  // 6. Малюємо ім'я у фірмовому темно-синьому кольорі (#0E172E)
   firstPage.drawText(formattedName, {
     x: centerX,
     y: centerY,
@@ -170,7 +219,7 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
     color: rgb(14 / 255, 23 / 255, 46 / 255),
   });
 
-  // 6. Зберігаємо та повертаємо PDF
+  // 7. Зберігаємо та повертаємо PDF
   const modifiedPdfBytes = await pdfDoc.save();
   const pdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
   const pdfUrl = URL.createObjectURL(pdfBlob);
