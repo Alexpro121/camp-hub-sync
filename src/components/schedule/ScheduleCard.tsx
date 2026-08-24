@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react';
-import { QrCode, ShoppingBag, Users } from 'lucide-react';
+import { Radio, ShoppingBag, Users } from 'lucide-react';
+
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
@@ -85,13 +86,14 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   return (
     <article
       className={[
-        'relative overflow-hidden rounded-2xl border border-white/10 border-l-4 bg-slate-900/80 p-4 shadow-xl backdrop-blur-xl',
+        'relative overflow-hidden rounded-2xl border border-white/10 border-l-4 bg-slate-900/80 p-4 pl-3.5 shadow-xl backdrop-blur-xl',
         'transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98]',
         accent,
         isNow ? 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : '',
         past ? 'opacity-50' : '',
       ].join(' ')}
     >
+
       <header className="flex items-start gap-3">
         <span className="font-mono text-sm font-bold tabular-nums text-slate-200">
           {event.timeStart} – {event.timeEnd}
@@ -133,12 +135,13 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
           className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:from-amber-400 hover:to-amber-500 active:scale-95"
         >
           {isStaff ? (
-            <><QrCode className="h-4 w-4" strokeWidth={2} /> Відкрити Касу Стенду</>
+            <><Radio className="h-4 w-4" strokeWidth={2} /> Відкрити касу (Air Pay)</>
           ) : (
             <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити Air Pay та сплатити</>
           )}
         </button>
       )}
+
       {item.description && (
         <p className="mt-0.5 break-words text-xs leading-relaxed text-slate-400">{item.description}</p>
       )}
