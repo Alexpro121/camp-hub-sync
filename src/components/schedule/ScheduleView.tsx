@@ -313,8 +313,11 @@ const ScheduleView = ({
 
   return (
     <div className="space-y-3.5 select-none">
-      
+
+      {bookingButton}
+
       {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
+
       {days.length > 1 && (
         <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
           {days.map((d) => {
