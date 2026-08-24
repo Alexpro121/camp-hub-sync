@@ -216,7 +216,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     setProcessingPushId(req.requestId);
     haptics.impact('medium');
 
-    const txId = `air_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const txId = crypto.randomUUID();
 
     try {
       let targetChildId = req.childId;
@@ -329,7 +329,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     setDirectBusy(true);
     haptics.impact('medium');
 
-    const txId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const txId = crypto.randomUUID();
 
     try {
       const { error } = await supabase.rpc('pay_fair_purchase', {
