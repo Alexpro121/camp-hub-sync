@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
-import { CalendarDays, Users, Clock, Sparkles, Radio } from 'lucide-react';
+import { CalendarDays, Users, Clock, Sparkles, Radio, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -18,6 +18,10 @@ import {
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
 import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
+import HallBookingModal from '@/components/schedule/HallBookingModal';
+import { hallBadge, hallName, type HallBooking } from '@/types/halls';
+import { hhmm, toMinutes } from '@/lib/halls';
+
 
 interface Props {
   myTeam?: number | null;
