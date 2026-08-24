@@ -324,6 +324,59 @@ export type Database = {
         }
         Relationships: []
       }
+      hall_bookings: {
+        Row: {
+          booking_date: string
+          created_at: string
+          created_by: string | null
+          end_time: string
+          hall_id: string
+          id: string
+          is_visible_in_schedule: boolean
+          shift_id: string | null
+          start_time: string
+          team_number: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          booking_date: string
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          hall_id: string
+          id?: string
+          is_visible_in_schedule?: boolean
+          shift_id?: string | null
+          start_time: string
+          team_number: number
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          booking_date?: string
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          hall_id?: string
+          id?: string
+          is_visible_in_schedule?: boolean
+          shift_id?: string | null
+          start_time?: string
+          team_number?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hall_bookings_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       iron_dollar_transactions: {
         Row: {
           amount_change: number

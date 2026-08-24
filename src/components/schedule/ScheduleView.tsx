@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
-import { CalendarDays, Users, Clock, Sparkles, Radio } from 'lucide-react';
+import { CalendarDays, Users, Clock, Sparkles, Radio, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -18,6 +18,10 @@ import {
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
 import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
+import HallBookingModal from '@/components/schedule/HallBookingModal';
+import { hallBadge, hallName, type HallBooking } from '@/types/halls';
+import { hhmm, toMinutes } from '@/lib/halls';
+
 
 interface Props {
   myTeam?: number | null;
@@ -68,6 +72,9 @@ const ScheduleView = ({
   const team = lockTeam ? myTeam ?? null : filterTeam;
   const [now, setNow] = useState(new Date());
   const activeDayRef = useRef<HTMLButtonElement>(null);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
+  const [teamBookings, setTeamBookings] = useState<HallBooking[]>([]);
+
 
   // Автоматичне перемикання на поточну добу після опівночі
   useAutoTodayDate(activeDay, setActiveDay);
@@ -133,9 +140,38 @@ const ScheduleView = ({
     };
   }, [lockTeam]);
 
+  // Бронювання залів команди, позначені як видимі в розкладі
+  useEffect(() => {
+    if (!activeDay) return;
+    let cancelled = false;
+
+    const loadBookings = async () => {
+      let query = supabase
+        .from('hall_bookings')
+        .select('*')
+        .eq('booking_date', activeDay)
+        .eq('is_visible_in_schedule', true);
+
+      if (team != null) query = query.eq('team_number', team);
+
+      const { data } = await query.order('start_time');
+      if (!cancelled) setTeamBookings((data || []) as unknown as HallBooking[]);
+    };
+
+    loadBookings();
+
+    const ch = supabase
+      .channel(`schedule-hall-bookings-${activeDay}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hall_bookings' }, loadBookings)
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [activeDay, team]);
+
   useEffect(() => {
     activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeDay, loading]);
+
 
   // Список доступних днів (дітям показується лише сьогоднішній день)
   const days = useMemo(
@@ -202,24 +238,86 @@ const ScheduleView = ({
     return e ? { event: e, inMin: e.startMin - nowRel } : null;
   }, [visibleEvents, nowRel, isToday]);
 
+  // Репетиції команди у залах як пріоритетні слоти поверх загальної сітки
+  type TimelineRow =
+    | { kind: 'event'; startMin: number; endMin: number; event: NormalizedScheduleItem }
+    | { kind: 'booking'; startMin: number; endMin: number; booking: HallBooking };
+
+  const timelineRows = useMemo<TimelineRow[]>(() => {
+    const rows: TimelineRow[] = visibleEvents.map((e) => ({
+      kind: 'event',
+      startMin: e.startMin,
+      endMin: e.endMin,
+      event: e,
+    }));
+
+    teamBookings.forEach((b) => {
+      rows.push({
+        kind: 'booking',
+        startMin: toMinutes(b.start_time),
+        endMin: toMinutes(b.end_time),
+        booking: b,
+      });
+    });
+
+    return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
+  }, [visibleEvents, teamBookings]);
+
+  const bookingButton = isStaff && myTeam != null
+    ? (
+      <button
+        onClick={() => setBookingsOpen(true)}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-primary/30 bg-primary/[0.07] px-3.5 py-2.5 text-left transition-colors hover:bg-primary/[0.12] active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-primary" strokeWidth={2} />
+          <span className="text-xs font-bold text-foreground">Бронювання залів</span>
+        </span>
+        {teamBookings.some((b) => b.team_number === myTeam) && (
+          <span className="rounded-full bg-[#FA5A15] px-2 py-0.5 font-mono text-[10px] font-black tabular-nums text-white">
+            {teamBookings.filter((b) => b.team_number === myTeam).length}
+          </span>
+        )}
+      </button>
+    )
+    : null;
+
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
 
-  if (!schedules.length) {
+
+  if (!schedules.length && !teamBookings.length) {
     return (
-      <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
-        <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
-        <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
-        <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
-      </Card>
+      <div className="space-y-3.5 select-none">
+        {bookingButton}
+        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2 select-none">
+          <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
+          <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
+          <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
+        </Card>
+        {isStaff && myTeam != null && (
+          <HallBookingModal
+            open={bookingsOpen}
+            onOpenChange={setBookingsOpen}
+            days={days}
+            initialDate={activeDay ?? todayISO()}
+            myTeam={myTeam}
+            shiftId={null}
+          />
+        )}
+      </div>
     );
   }
+
 
   const tabCls = 'shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all duration-300 active:scale-95 select-none';
 
   return (
     <div className="space-y-3.5 select-none">
-      
+
+      {bookingButton}
+
       {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
+
       {days.length > 1 && (
         <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
           {days.map((d) => {
@@ -324,7 +422,7 @@ const ScheduleView = ({
       )}
 
       {/* Пустий стан дня */}
-      {visibleEvents.length === 0 && (
+      {timelineRows.length === 0 && (
         <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">
@@ -335,9 +433,49 @@ const ScheduleView = ({
         </Card>
       )}
 
-      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ */}
+      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ + РЕПЕТИЦІЇ КОМАНДИ */}
       <div className="space-y-2.5">
-        {visibleEvents.map((e) => {
+        {timelineRows.map((row) => {
+          if (row.kind === 'booking') {
+            const b = row.booking;
+            const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
+            return (
+              <Card
+                key={`b-${b.id}`}
+                className={`rounded-3xl border p-4 backdrop-blur-xl transition-all ${
+                  active
+                    ? 'border-[#FA5A15]/50 bg-[#FA5A15]/[0.08] shadow-[0_0_20px_rgba(250,90,21,0.18)]'
+                    : 'border-primary/25 bg-card/80'
+                } ${isToday && nowRel >= row.endMin ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FA5A15]/30 bg-[#FA5A15]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
+                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+                    Репетиція команди
+                  </span>
+                  <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground">
+                    {hhmm(b.start_time)} – {hhmm(b.end_time)}
+                  </span>
+                </div>
+
+                <p className="text-base font-bold tracking-tight text-foreground">
+                  {sentenceCase(b.title || 'Репетиція')}
+                </p>
+
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
+                    <Building2 className="h-3 w-3" strokeWidth={2.5} />
+                    {hallName(b.hall_id)}
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-muted-foreground">
+                    Команда №{b.team_number}
+                  </span>
+                </div>
+              </Card>
+            );
+          }
+
+          const e = row.event;
           const isNow = currentEvent?.id === e.id;
           return (
             <ScheduleCard
@@ -354,7 +492,19 @@ const ScheduleView = ({
         })}
       </div>
 
+      {isStaff && myTeam != null && activeDay && (
+        <HallBookingModal
+          open={bookingsOpen}
+          onOpenChange={setBookingsOpen}
+          days={days}
+          initialDate={activeDay}
+          myTeam={myTeam}
+          shiftId={schedules.find((s) => s.date === activeDay)?.shift_id ?? null}
+        />
+      )}
+
     </div>
+
   );
 };
 
