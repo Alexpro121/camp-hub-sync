@@ -442,46 +442,45 @@ const ScheduleView = ({
       )}
 
       {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ + РЕПЕТИЦІЇ КОМАНДИ */}
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {timelineRows.map((row) => {
           if (row.kind === 'booking') {
             const b = row.booking;
             const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
             return (
-              <Card
+              <article
                 key={`b-${b.id}`}
-                className={`rounded-3xl border p-4 backdrop-blur-xl transition-all ${
-                  active
-                    ? 'border-[#FA5A15]/50 bg-[#FA5A15]/[0.08] shadow-[0_0_20px_rgba(250,90,21,0.18)]'
-                    : 'border-primary/25 bg-card/80'
-                } ${isToday && nowRel >= row.endMin ? 'opacity-60' : ''}`}
+                className={`relative overflow-hidden rounded-2xl border border-l-4 border-white/10 border-l-[#FA5A15] bg-slate-900/80 p-4 shadow-xl backdrop-blur-xl transition-all duration-300 active:scale-[0.98] ${
+                  active ? 'border-[#FA5A15]/50 shadow-[0_0_20px_rgba(250,90,21,0.18)]' : ''
+                } ${isToday && nowRel >= row.endMin ? 'opacity-50' : ''}`}
               >
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FA5A15]/30 bg-[#FA5A15]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
-                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
-                    Репетиція команди
-                  </span>
-                  <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground">
+                <header className="flex items-center gap-3">
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-200">
                     {hhmm(b.start_time)} – {hhmm(b.end_time)}
                   </span>
-                </div>
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FA5A15]/40 bg-[#FA5A15]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
+                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+                    Репетиція
+                  </span>
+                </header>
 
-                <p className="text-base font-bold tracking-tight text-foreground">
+                <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
                   {sentenceCase(b.title || 'Репетиція')}
-                </p>
+                </h3>
 
-                <div className="mt-1.5 flex items-center gap-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
                     <Building2 className="h-3 w-3" strokeWidth={2.5} />
                     {hallName(b.hall_id)}
                   </span>
-                  <span className="font-mono text-[11px] font-semibold text-muted-foreground">
+                  <span className="font-mono text-[11px] font-semibold text-slate-400">
                     Команда №{b.team_number}
                   </span>
                 </div>
-              </Card>
+              </article>
             );
           }
+
 
           const e = row.event;
           const isNow = currentEvent?.id === e.id;
