@@ -46,3 +46,22 @@ export const clearSavedSession = () => {
     cloud()?.removeItem?.(ROLE_KEY);
   } catch { /* storage unavailable */ }
 };
+
+const SNAPSHOT_KEY = 'zz_child_persistent_passport_v1';
+
+export const saveChildArchiveSnapshot = (child: Child, txs?: IronTransaction[]) => {
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ child, txs: txs ?? [] }));
+  } catch { /* storage unavailable */ }
+};
+
+export const getChildArchiveSnapshot = (): { child: Child; txs: IronTransaction[] } | null => {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return { child: parsed.child as Child, txs: (parsed.txs ?? []) as IronTransaction[] };
+  } catch { return null; }
+};
+
