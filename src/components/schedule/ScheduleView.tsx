@@ -72,6 +72,9 @@ const ScheduleView = ({
   const team = lockTeam ? myTeam ?? null : filterTeam;
   const [now, setNow] = useState(new Date());
   const activeDayRef = useRef<HTMLButtonElement>(null);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
+  const [teamBookings, setTeamBookings] = useState<HallBooking[]>([]);
+
 
   // Автоматичне перемикання на поточну добу після опівночі
   useAutoTodayDate(activeDay, setActiveDay);
