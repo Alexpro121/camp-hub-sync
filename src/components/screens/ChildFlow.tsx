@@ -46,7 +46,9 @@ import ChildFairCard from '@/components/fair/ChildFairCard';
 import ApplePayScannerModal from '@/components/fair/ApplePayScannerModal';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { clearSavedSession, getSavedChildId, getSavedRole, saveSession } from '@/lib/session';
+import { clearSavedSession, getSavedChildId, getSavedRole, saveSession, saveChildArchiveSnapshot, getChildArchiveSnapshot } from '@/lib/session';
+import { CertificateModal } from '@/components/certificate/CertificateModal';
+
 
 interface Props { 
   onBack: () => void; 
