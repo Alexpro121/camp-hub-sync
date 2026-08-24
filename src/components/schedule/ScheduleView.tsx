@@ -181,6 +181,14 @@ const ScheduleView = ({
     return dates.length ? dates : [todayISO()];
   }, [schedules, lockTeam]);
 
+  // Якщо обрана дата не входить у зміну — переходимо на сьогодні або перший день зміни
+  useEffect(() => {
+    if (!days.length || !activeDay || days.includes(activeDay)) return;
+    const today = todayISO();
+    setActiveDay(days.includes(today) ? today : (days.find((d) => d >= today) ?? days[0]));
+  }, [days, activeDay]);
+
+
 
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
