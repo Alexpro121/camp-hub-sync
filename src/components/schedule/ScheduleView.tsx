@@ -316,17 +316,17 @@ const ScheduleView = ({
   }
 
 
-  const tabCls = 'shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all duration-300 active:scale-95 select-none';
+  const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-all duration-300 active:scale-95 select-none';
 
   return (
-    <div className="space-y-3.5 select-none">
+    <div className="space-y-3 select-none pb-24">
 
       {bookingButton}
 
       {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
 
       {days.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto scrollbar-thin px-1 pb-1 overscroll-contain">
           {days.map((d) => {
             const p = dayParts(d);
             const active = d === activeDay;
@@ -335,19 +335,20 @@ const ScheduleView = ({
                 key={d}
                 ref={active ? activeDayRef : undefined}
                 onClick={() => setActiveDay(d)}
-                className={`${tabCls} flex flex-col items-center leading-tight border ${
+                className={`shrink-0 select-none rounded-xl border px-2.5 py-1.5 leading-tight transition-all duration-300 active:scale-95 flex flex-col items-center ${
                   active
-                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_16px_rgba(250,90,21,0.35)] scale-[1.02]'
+                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.3)]'
                     : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="text-[9px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
-                <span className="font-mono text-base font-black tabular-nums my-0.5">{p.day}</span>
-                <span className="text-[9px] font-medium opacity-80">{p.month}</span>
+                <span className="text-[8px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
+                <span className="font-mono text-sm font-black tabular-nums">{p.day}</span>
+                <span className="text-[8px] font-medium opacity-80">{p.month}</span>
               </button>
             );
           })}
         </div>
+
       )}
 
       {/* 2. ФІЛЬТР ЗА КОМАНДАМИ */}
