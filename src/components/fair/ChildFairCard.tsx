@@ -26,13 +26,14 @@ interface Props {
   onPaid?: (newBalance: number) => void;
   childName?: string;
   childTeam?: number | null;
+  isLive?: boolean;
 }
 
 type PayStatus = 'idle' | 'sending' | 'pending' | 'success' | 'rejected';
 
 const PRESET_AMOUNTS = [5, 10, 15, 20];
 
-const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props) => {
+const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive = true }: Props) => {
   const [selectedAmount, setSelectedAmount] = useState<number>(20);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [targetTeam, setTargetTeam] = useState<string>(String(childTeam || 1));
@@ -186,8 +187,23 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
           </div>
         </div>
 
+        {/* 0. СТАН: ЯРМАРОК ЗАКРИТО — ЛИШЕ БАЛАНС І ПЛАШКА */}
+        {!isLive && (
+          <div className="py-4 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
+            <div className="w-14 h-14 rounded-full bg-muted/40 border border-border/50 flex items-center justify-center text-muted-foreground">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <div className="space-y-0.5">
+              <h3 className="text-base font-bold text-foreground">Ярмарок закрито</h3>
+              <p className="text-xs text-muted-foreground max-w-[260px]">
+                Оплата Air Pay доступна лише під час активного ярмарку. Зачекайте на початок торгівлі.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 1. СТАН: ФОРМА ВИБОРУ СУМИ ТА ВІДПРАВКИ */}
-        {status === 'idle' && (
+        {isLive && status === 'idle' && (
           <div className="space-y-3.5 animate-fade-in">
             
             {/* Вибір каси команди */}
@@ -283,7 +299,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
         )}
 
         {/* 2. СТАН: ОЧІКУВАННЯ ПІДТВЕРДЖЕННЯ ВІД СУПРОВОДУ */}
-        {(status === 'sending' || status === 'pending') && (
+        {isLive && (status === 'sending' || status === 'pending') && (
           <div className="py-6 flex flex-col items-center justify-center text-center space-y-4 animate-fade-in">
             
             {/* Анімований пульсуючий радар */}
@@ -317,7 +333,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
         )}
 
         {/* 3. СТАН: УСПІШНЕ ПІДТВЕРДЖЕННЯ */}
-        {status === 'success' && (
+        {isLive && status === 'success' && (
           <div className="py-5 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.35)]">
               <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
@@ -343,7 +359,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam }: Props
         )}
 
         {/* 4. СТАН: ВІДХИЛЕНО */}
-        {status === 'rejected' && (
+        {isLive && status === 'rejected' && (
           <div className="py-4 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
             <div className="w-14 h-14 rounded-full bg-destructive/15 border border-destructive/30 flex items-center justify-center text-destructive">
               <XCircle className="w-8 h-8" />
