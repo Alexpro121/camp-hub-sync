@@ -115,12 +115,21 @@ const ChildFlow = ({ onBack }: Props) => {
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session || cancelled) return;
       const { data: row } = await supabase.from('children').select('*').eq('id', savedId).maybeSingle();
-      if (cancelled || !row) return;
+      if (cancelled) return;
+      if (!row) {
+        const snapshot = getChildArchiveSnapshot();
+        if (snapshot) {
+          setChild(snapshot.child);
+          setStep('profile');
+        }
+        return;
+      }
       setChild(row as Child);
       setStep('profile');
     })();
     return () => { cancelled = true; };
   }, []);
+
 
   // Realtime слухач оновлень даних дитини
   useEffect(() => {
