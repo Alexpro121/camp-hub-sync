@@ -140,9 +140,38 @@ const ScheduleView = ({
     };
   }, [lockTeam]);
 
+  // Бронювання залів команди, позначені як видимі в розкладі
+  useEffect(() => {
+    if (!activeDay) return;
+    let cancelled = false;
+
+    const loadBookings = async () => {
+      let query = supabase
+        .from('hall_bookings')
+        .select('*')
+        .eq('booking_date', activeDay)
+        .eq('is_visible_in_schedule', true);
+
+      if (team != null) query = query.eq('team_number', team);
+
+      const { data } = await query.order('start_time');
+      if (!cancelled) setTeamBookings((data || []) as unknown as HallBooking[]);
+    };
+
+    loadBookings();
+
+    const ch = supabase
+      .channel(`schedule-hall-bookings-${activeDay}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hall_bookings' }, loadBookings)
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [activeDay, team]);
+
   useEffect(() => {
     activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeDay, loading]);
+
 
   // Список доступних днів (дітям показується лише сьогоднішній день)
   const days = useMemo(
