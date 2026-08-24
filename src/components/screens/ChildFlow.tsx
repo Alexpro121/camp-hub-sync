@@ -775,7 +775,14 @@ const ChildFlow = ({ onBack }: Props) => {
           childName={child.full_name}
           childTeam={child.team_number}
         />
+
+        <CertificateModal
+          open={certModalOpen}
+          onClose={() => setCertModalOpen(false)}
+          initialName={child.full_name}
+        />
       </div>
+
     );
   }
 
