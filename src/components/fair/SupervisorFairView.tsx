@@ -332,15 +332,22 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     const txId = crypto.randomUUID();
 
     try {
-      const { error } = await supabase.rpc('pay_fair_purchase', {
-        p_tx_id: txId,
+      const { data, error } = await supabase.rpc('pay_fair_push_charge', {
+        p_child_id: targetChild.id,
         p_amount: finalAmount,
-        p_supervisor_id: userId,
+        p_tx_id: txId,
         p_supervisor_team: myTeam,
         p_label: `Каса №${myTeam} (Пряме списання)`,
       });
 
       if (error) throw error;
+
+      const res = data as any;
+      if (res?.status === 'insufficient_funds') {
+        toast.error(`Недостатньо коштів: на балансі ${res.balance} А$`);
+        return;
+      }
+
 
       pushReceipt({
         id: txId,
@@ -359,8 +366,19 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
       setCustomDirectAmount('');
       toast.success(`Успішно списано ${finalAmount} А$ (${targetChild.full_name})`);
     } catch (err: any) {
-      toast.error(err?.message || 'Помилка списання');
+      const raw = String(err?.message || '');
+      const map: Record<string, string> = {
+        fair_closed: 'Ярмарок наразі закрито в розкладі',
+        not_authenticated: 'Сесія завершилась — увійдіть знову',
+        forbidden: 'Немає прав на списання',
+        child_not_found: 'Дитину не знайдено',
+        invalid_amount: 'Некоректна сума',
+        insufficient_funds: 'Недостатньо коштів на балансі дитини',
+      };
+      const key = Object.keys(map).find((k) => raw.includes(k));
+      toast.error(key ? map[key] : raw || 'Помилка списання');
     } finally {
+
       setDirectBusy(false);
     }
   };
