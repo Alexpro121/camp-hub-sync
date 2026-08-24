@@ -371,9 +371,49 @@ const ScheduleView = ({
         </Card>
       )}
 
-      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ */}
+      {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ + РЕПЕТИЦІЇ КОМАНДИ */}
       <div className="space-y-2.5">
-        {visibleEvents.map((e) => {
+        {timelineRows.map((row) => {
+          if (row.kind === 'booking') {
+            const b = row.booking;
+            const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
+            return (
+              <Card
+                key={`b-${b.id}`}
+                className={`rounded-3xl border p-4 backdrop-blur-xl transition-all ${
+                  active
+                    ? 'border-[#FA5A15]/50 bg-[#FA5A15]/[0.08] shadow-[0_0_20px_rgba(250,90,21,0.18)]'
+                    : 'border-primary/25 bg-card/80'
+                } ${isToday && nowRel >= row.endMin ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FA5A15]/30 bg-[#FA5A15]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
+                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+                    Репетиція команди
+                  </span>
+                  <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground">
+                    {hhmm(b.start_time)} – {hhmm(b.end_time)}
+                  </span>
+                </div>
+
+                <p className="text-base font-bold tracking-tight text-foreground">
+                  {sentenceCase(b.title || 'Репетиція')}
+                </p>
+
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
+                    <Building2 className="h-3 w-3" strokeWidth={2.5} />
+                    {hallName(b.hall_id)}
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-muted-foreground">
+                    Команда №{b.team_number}
+                  </span>
+                </div>
+              </Card>
+            );
+          }
+
+          const e = row.event;
           const isNow = currentEvent?.id === e.id;
           return (
             <ScheduleCard
@@ -390,7 +430,19 @@ const ScheduleView = ({
         })}
       </div>
 
+      {isStaff && myTeam != null && activeDay && (
+        <HallBookingModal
+          open={bookingsOpen}
+          onOpenChange={setBookingsOpen}
+          days={days}
+          initialDate={activeDay}
+          myTeam={myTeam}
+          shiftId={schedules.find((s) => s.date === activeDay)?.shift_id ?? null}
+        />
+      )}
+
     </div>
+
   );
 };
 
