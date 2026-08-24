@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,9 +8,7 @@ import {
   Download, 
   Pencil, 
   Loader2, 
-  AlertCircle, 
-  FileText,
-  Sparkles
+  AlertCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -35,16 +33,15 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
 
   const haptics = useHaptics();
 
-  // Генерація персоналізованого PDF
   const createPdf = useCallback(async (targetName: string) => {
     setLoading(true);
     setError(null);
     try {
       const result = await generatePersonalizedPdf(targetName);
       setPdfData(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError('Не вдалося згенерувати PDF-сертифікат. Перевірте наявність файлу бланка.');
+      setError(err?.message || 'Не вдалося згенерувати PDF-сертифікат');
     } finally {
       setLoading(false);
     }
@@ -56,7 +53,6 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
     }
   }, [open, name, createPdf]);
 
-  // Застосування виправленого імені
   const handleApplyName = async () => {
     const validation = validateCertificateName(initialName, tempName);
     if (!validation.ok) {
@@ -74,7 +70,6 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
     toast.success('Ім’я в сертифікаті оновлено');
   };
 
-  // Пряме завантаження готового PDF-файлу
   const handleDownloadPdf = () => {
     if (!pdfData) return;
     haptics.impact('medium');
@@ -94,7 +89,7 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg w-full p-4 sm:p-6 rounded-[32px] bg-card/95 backdrop-blur-2xl border-border/60 shadow-2xl select-none max-h-[94dvh] overflow-y-auto overscroll-contain">
         
-        {/* Шапка */}
+        {/* Шапка з описом для доступності */}
         <DialogHeader className="pb-2 border-b border-border/40">
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
@@ -108,6 +103,9 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
               СЕЗОН 2026
             </span>
           </div>
+          <DialogDescription className="sr-only">
+            Офіційний сертифікат учасника Всеукраїнського проєкту «Залізна Зміна»
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3.5 pt-2">
@@ -203,7 +201,7 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
             </div>
           )}
 
-          {/* Головна кнопка скачування PDF */}
+          {/* Кнопка скачування PDF */}
           <Button
             onClick={handleDownloadPdf}
             disabled={loading || !pdfData}
