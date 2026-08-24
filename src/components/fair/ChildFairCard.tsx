@@ -299,7 +299,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive 
         )}
 
         {/* 2. СТАН: ОЧІКУВАННЯ ПІДТВЕРДЖЕННЯ ВІД СУПРОВОДУ */}
-        {(status === 'sending' || status === 'pending') && (
+        {isLive && (status === 'sending' || status === 'pending') && (
           <div className="py-6 flex flex-col items-center justify-center text-center space-y-4 animate-fade-in">
             
             {/* Анімований пульсуючий радар */}
@@ -333,7 +333,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive 
         )}
 
         {/* 3. СТАН: УСПІШНЕ ПІДТВЕРДЖЕННЯ */}
-        {status === 'success' && (
+        {isLive && status === 'success' && (
           <div className="py-5 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.35)]">
               <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
@@ -359,7 +359,7 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive 
         )}
 
         {/* 4. СТАН: ВІДХИЛЕНО */}
-        {status === 'rejected' && (
+        {isLive && status === 'rejected' && (
           <div className="py-4 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
             <div className="w-14 h-14 rounded-full bg-destructive/15 border border-destructive/30 flex items-center justify-center text-destructive">
               <XCircle className="w-8 h-8" />
