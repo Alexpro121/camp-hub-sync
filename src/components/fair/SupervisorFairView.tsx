@@ -366,8 +366,19 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
       setCustomDirectAmount('');
       toast.success(`Успішно списано ${finalAmount} А$ (${targetChild.full_name})`);
     } catch (err: any) {
-      toast.error(err?.message || 'Помилка списання');
+      const raw = String(err?.message || '');
+      const map: Record<string, string> = {
+        fair_closed: 'Ярмарок наразі закрито в розкладі',
+        not_authenticated: 'Сесія завершилась — увійдіть знову',
+        forbidden: 'Немає прав на списання',
+        child_not_found: 'Дитину не знайдено',
+        invalid_amount: 'Некоректна сума',
+        insufficient_funds: 'Недостатньо коштів на балансі дитини',
+      };
+      const key = Object.keys(map).find((k) => raw.includes(k));
+      toast.error(key ? map[key] : raw || 'Помилка списання');
     } finally {
+
       setDirectBusy(false);
     }
   };
