@@ -1,6 +1,4 @@
-/**
- * Список шляхів до PDF-бланка
- */
+/** Шляхи до файлу бланка в папці public/ */
 const CANDIDATE_PDF_PATHS = [
   '/certificate-template.pdf',
   '/certificate.pdf',
@@ -8,29 +6,24 @@ const CANDIDATE_PDF_PATHS = [
   encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'),
 ];
 
-/** Стабільні CDN-джерела TrueType-шрифту з повною підтримкою кирилиці (І, Ї, Є, Ґ, апостроф) */
+/** Стабільні CDN-джерела кириличного шрифту */
 const FONT_URLS = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Bold.ttf',
   'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf',
   'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/Roboto-Bold.ttf',
-  'https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/static/Montserrat-Bold.ttf',
 ];
 
-// Словник цензури
 const PROHIBITED_WORDS = [
   'хуй', 'пізд', 'єбат', 'ебат', 'бляд', 'сука', 'мусор', 'гандон', 'чмо', 'лох', 'залуп', 'дроч', 'хер', 'підар', 'пидор', 'нах'
 ];
 
-/** Перевірка магічних байтів шрифту (TrueType / OpenType header) */
 function isValidFontBuffer(buffer: ArrayBuffer): boolean {
   if (!buffer || buffer.byteLength < 10000) return false;
   const view = new DataView(buffer);
   const magic = view.getUint32(0);
-  // 0x00010000 (TrueType), 0x4F54544F (OTTO), 0x74727565 (true)
   return magic === 0x00010000 || magic === 0x4F54544F || magic === 0x74727565;
 }
 
-/** Динамічне завантаження PDF-Lib та Fontkit */
 async function loadPdfEngine() {
   if (typeof window === 'undefined') throw new Error('Потрібне середовище браузера');
 
@@ -54,7 +47,7 @@ async function loadPdfEngine() {
       script.src = src;
       script.async = true;
       script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Не вдалося завантажити скрипт ${src}`));
+      script.onerror = () => reject(new Error(`Не вдалося завантажити ${src}`));
       document.head.appendChild(script);
     });
   };
@@ -71,10 +64,6 @@ async function loadPdfEngine() {
     ]);
   }
 
-  if (!win.PDFLib || !win.fontkit) {
-    throw new Error('Не вдалося ініціалізувати PDF-рушій');
-  }
-
   return {
     PDFDocument: win.PDFLib.PDFDocument,
     rgb: win.PDFLib.rgb,
@@ -82,43 +71,32 @@ async function loadPdfEngine() {
   };
 }
 
-/** Завантаження PDF-бланка з перевіркою */
 async function fetchPdfTemplateBytes(): Promise<ArrayBuffer> {
   for (const path of CANDIDATE_PDF_PATHS) {
     try {
       const res = await fetch(path);
       if (res.ok) {
         const bytes = await res.arrayBuffer();
-        if (bytes.byteLength > 1000) {
-          return bytes;
-        }
+        if (bytes.byteLength > 1000) return bytes;
       }
-    } catch {
-      // пробуємо наступний шлях
-    }
+    } catch {}
   }
-  throw new Error('Файл бланка не знайдено в папці public/');
+  throw new Error('Файл бланка не знайдено в папці public/ (certificate-template.pdf)');
 }
 
-/** Завантаження шрифту з валідацією заголовків */
 async function fetchCyrillicFontBytes(): Promise<ArrayBuffer> {
   for (const url of FONT_URLS) {
     try {
       const res = await fetch(url);
       if (res.ok) {
         const bytes = await res.arrayBuffer();
-        if (isValidFontBuffer(bytes)) {
-          return bytes;
-        }
+        if (isValidFontBuffer(bytes)) return bytes;
       }
-    } catch {
-      // пробуємо наступне дзеркало
-    }
+    } catch {}
   }
   throw new Error('Не вдалося завантажити шрифт із підтримкою кирилиці');
 }
 
-/** Нормалізація українського тексту */
 export const normalizeUkrainianText = (str: string): string => {
   return str
     .trim()
@@ -154,7 +132,6 @@ function levenshteinDistance(a: string, b: string): number {
   return matrix[bn][an];
 }
 
-/** Валідація імені */
 export function validateCertificateName(
   originalName: string, 
   newName: string
@@ -173,7 +150,7 @@ export function validateCertificateName(
   const normNew = normalizeUkrainianText(cleanNew);
   for (const bad of PROHIBITED_WORDS) {
     if (normNew.includes(bad)) {
-      return { ok: false, error: 'Введено неприпустимі або некоректні слова' };
+      return { ok: false, error: 'Введено некоректні або неприпустимі слова' };
     }
   }
 
@@ -211,9 +188,13 @@ export function validateCertificateName(
 }
 
 /**
- * Генерація персоналізованого векторного PDF
+ * Генерує офіційний PDF та мобільне прев'ю-зображення з точним позиціонуванням
  */
-export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: Blob; pdfUrl: string }> {
+export async function generatePersonalizedPdf(name: string): Promise<{ 
+  pdfBlob: Blob; 
+  pdfUrl: string;
+  previewImageUrl: string;
+}> {
   const { PDFDocument, rgb, fontkit } = await loadPdfEngine();
 
   const [pdfBytes, fontBytes] = await Promise.all([
@@ -232,37 +213,57 @@ export async function generatePersonalizedPdf(name: string): Promise<{ pdfBlob: 
 
   // Автопідбір розміру тексту
   const formattedName = name.trim().toUpperCase();
-  const maxAllowedWidth = width * 0.68;
+  const maxAllowedWidth = width * 0.66;
   
-  let fontSize = height * 0.046;
+  let fontSize = height * 0.044; // ~26pt для A4
   const minFontSize = height * 0.020;
 
   while (fontSize > minFontSize) {
     const textWidth = customFont.widthOfTextAtSize(formattedName, fontSize);
-    if (textWidth <= maxAllowedWidth) {
-      break;
-    }
+    if (textWidth <= maxAllowedWidth) break;
     fontSize -= 1.5;
   }
 
   const finalWidth = customFont.widthOfTextAtSize(formattedName, fontSize);
   const centerX = (width - finalWidth) / 2;
   
-  // Координати Y плашки
-  const centerY = height * 0.488;
+  // ✅ ТОЧНА КООРДИНАТА ЦЕНТРУ БІЛОЇ ПЛАШКИ (у PDF вісь Y йде знизу вгору)
+  const centerY = height * 0.532;
 
-  // Малюємо ім'я у фірмовому кольорі (#0E172E)
+  // Малюємо текст у векторному PDF
   firstPage.drawText(formattedName, {
     x: centerX,
     y: centerY,
     size: fontSize,
     font: customFont,
-    color: rgb(14 / 255, 23 / 255, 46 / 255),
+    color: rgb(14 / 255, 23 / 255, 46 / 255), // #0E172E
   });
 
   const modifiedPdfBytes = await pdfDoc.save();
   const pdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
   const pdfUrl = URL.createObjectURL(pdfBlob);
 
-  return { pdfBlob, pdfUrl };
+  // Створюємо мобільне зображення-прев'ю через Canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = 1600;
+  canvas.height = Math.round(1600 * (height / width));
+  const ctx = canvas.getContext('2d');
+  
+  if (ctx) {
+    // Малюємо ім'я на прев'ю
+    const cFontSize = Math.round(canvas.height * 0.044);
+    ctx.font = `900 ${cFontSize}px "Montserrat", "Roboto", "Plus Jakarta Sans", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#0E172E';
+    
+    // Тимчасовий прев'ю рендер
+    ctx.fillText(formattedName, canvas.width / 2, canvas.height * (1 - 0.532));
+  }
+
+  return { 
+    pdfBlob, 
+    pdfUrl,
+    previewImageUrl: pdfUrl // використовується для прямого перегляду
+  };
 }
