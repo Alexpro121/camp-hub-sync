@@ -332,15 +332,22 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
     const txId = crypto.randomUUID();
 
     try {
-      const { error } = await supabase.rpc('pay_fair_purchase', {
-        p_tx_id: txId,
+      const { data, error } = await supabase.rpc('pay_fair_push_charge', {
+        p_child_id: targetChild.id,
         p_amount: finalAmount,
-        p_supervisor_id: userId,
+        p_tx_id: txId,
         p_supervisor_team: myTeam,
         p_label: `Каса №${myTeam} (Пряме списання)`,
       });
 
       if (error) throw error;
+
+      const res = data as any;
+      if (res?.status === 'insufficient_funds') {
+        toast.error(`Недостатньо коштів: на балансі ${res.balance} А$`);
+        return;
+      }
+
 
       pushReceipt({
         id: txId,
