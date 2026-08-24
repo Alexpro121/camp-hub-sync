@@ -238,7 +238,52 @@ const ScheduleView = ({
     return e ? { event: e, inMin: e.startMin - nowRel } : null;
   }, [visibleEvents, nowRel, isToday]);
 
+  // Репетиції команди у залах як пріоритетні слоти поверх загальної сітки
+  type TimelineRow =
+    | { kind: 'event'; startMin: number; endMin: number; event: NormalizedScheduleItem }
+    | { kind: 'booking'; startMin: number; endMin: number; booking: HallBooking };
+
+  const timelineRows = useMemo<TimelineRow[]>(() => {
+    const rows: TimelineRow[] = visibleEvents.map((e) => ({
+      kind: 'event',
+      startMin: e.startMin,
+      endMin: e.endMin,
+      event: e,
+    }));
+
+    teamBookings.forEach((b) => {
+      rows.push({
+        kind: 'booking',
+        startMin: toMinutes(b.start_time),
+        endMin: toMinutes(b.end_time),
+        booking: b,
+      });
+    });
+
+    return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
+  }, [visibleEvents, teamBookings]);
+
+  const bookingButton = isStaff && myTeam != null
+    ? (
+      <button
+        onClick={() => setBookingsOpen(true)}
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-primary/30 bg-primary/[0.07] px-3.5 py-2.5 text-left transition-colors hover:bg-primary/[0.12] active:scale-[0.99]"
+      >
+        <span className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-primary" strokeWidth={2} />
+          <span className="text-xs font-bold text-foreground">Бронювання залів</span>
+        </span>
+        {teamBookings.some((b) => b.team_number === myTeam) && (
+          <span className="rounded-full bg-[#FA5A15] px-2 py-0.5 font-mono text-[10px] font-black tabular-nums text-white">
+            {teamBookings.filter((b) => b.team_number === myTeam).length}
+          </span>
+        )}
+      </button>
+    )
+    : null;
+
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
+
 
   if (!schedules.length) {
     return (
