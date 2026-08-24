@@ -13,7 +13,8 @@ import {
   Clock, 
   Calendar as CalendarIcon,
   Sparkles,
-  Layers
+  Info,
+  ChevronRight
 } from 'lucide-react';
 import { InlineLoader } from '@/components/ui/loader';
 import { HALLS_LIST, hallName, type HallBooking, type HallId } from '@/types/halls';
@@ -39,25 +40,52 @@ interface Props {
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = ['січ', 'лют', 'бер', 'кві', 'тра', 'чер', 'лип', 'сер', 'вер', 'жов', 'лис', 'груд'];
 
-const dayLabel = (iso: string) => {
+// Розрахунок підпису дня з відносним бейджем (Сьогодні, Завтра тощо)
+const formatDayBadge = (iso: string, todayIso: string) => {
   const d = new Date(`${iso}T00:00:00`);
+  const t = new Date(`${todayIso}T00:00:00`);
+  const diffDays = Math.round((d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24));
+
+  let relativeLabel = '';
+  if (diffDays === 0) relativeLabel = 'Сьогодні';
+  else if (diffDays === 1) relativeLabel = 'Завтра';
+  else if (diffDays === 2) relativeLabel = '+2 дні';
+  else if (diffDays === 3) relativeLabel = '+3 дні';
+  else relativeLabel = `${diffDays > 0 ? '+' : ''}${diffDays} дн`;
+
   return { 
     day: String(d.getDate()).padStart(2, '0'), 
     weekday: WEEKDAYS[d.getDay()],
-    month: MONTHS[d.getMonth()]
+    month: MONTHS[d.getMonth()],
+    relativeLabel
   };
 };
 
-// Висота 1 години на таймлайні в пікселях
-const HOUR_HEIGHT = 64; 
+// Висота 1 години на таймлайні
+const HOUR_HEIGHT = 68; 
 
 const HOURS = Array.from(
-  { length: (TIMELINE_END - TIMELINE_START) / 60 },
+  { length: Math.ceil((TIMELINE_END - TIMELINE_START) / 60) },
   (_, i) => TIMELINE_START + i * 60,
 );
 
 const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shiftId }: Props) => {
-  const [date, setDate] = useState(initialDate);
+  const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
+  
+  // Доступні для бронювання дати: Сьогодні + 3 дні вперед (разом 4 дні)
+  const availableBookingDays = useMemo(() => {
+    const dates: string[] = [];
+    const base = new Date();
+    for (let i = 0; i <= 3; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    // Якщо у зміні є додаткові передані дні в межах цього діапазону
+    return dates;
+  }, []);
+
+  const [date, setDate] = useState(() => initialDate || todayIso);
   const [hall, setHall] = useState<HallId>('hall_ab');
   const [bookings, setBookings] = useState<HallBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,20 +101,20 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
   const haptics = useHaptics();
   const timelineScrollRef = useRef<HTMLDivElement>(null);
 
-  // Оновлення поточної хвилини для червоної лінії Google Calendar
+  // Оновлення поточної хвилини для живої лінії часу
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
       setNowMinutes(d.getHours() * 60 + d.getMinutes());
-    }, 60000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (open) setDate(initialDate);
-  }, [open, initialDate]);
+    if (open) setDate(initialDate || todayIso);
+  }, [open, initialDate, todayIso]);
 
-  // Завантаження бронювань з бази
+  // Завантаження бронювань для обраної дати
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('hall_bookings')
@@ -95,7 +123,7 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
       .order('start_time');
 
     if (error) {
-      toast.error('Не вдалося завантажити бронювання');
+      toast.error('Не вдалося завантажити розклад залів');
       setLoading(false);
       return;
     }
@@ -124,14 +152,36 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
     [bookings, hall],
   );
 
-  // Лічильник зайнятості по кожній залі
+  // Лічильник зайнятих годин/слотів у кожній залі
   const busyCountByHall = useMemo(() => {
     const map = new Map<string, number>();
     bookings.forEach((b) => map.set(b.hall_id, (map.get(b.hall_id) ?? 0) + 1));
     return map;
   }, [bookings]);
 
-  // Створення нового бронювання
+  // Чи вибрана дата є сьогоднішньою
+  const isToday = date === todayIso;
+
+  // 🎯 Автоматичний скрол до поточної години при відкритті модалки (як у Google Calendar)
+  useEffect(() => {
+    if (!open || loading) return;
+    
+    // Якщо сьогодні — скролимо до поточної години мінус 45 хв для контексту
+    let targetMin = isToday ? nowMinutes - 45 : TIMELINE_START + 180;
+    if (!isToday && hallBookings.length > 0) {
+      targetMin = toMinutes(hallBookings[0].start_time) - 30;
+    }
+    
+    const targetPx = Math.max(0, ((targetMin - TIMELINE_START) / 60) * HOUR_HEIGHT);
+
+    const timer = setTimeout(() => {
+      timelineScrollRef.current?.scrollTo({ top: targetPx, behavior: 'smooth' });
+    }, 180);
+
+    return () => clearTimeout(timer);
+  }, [open, loading, isToday, hall]);
+
+  // Створення броні
   const create = async (payload: {
     hall_id: HallId;
     start_time: string;
@@ -165,10 +215,10 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
     haptics.impact('light');
     const { error } = await supabase.from('hall_bookings').delete().eq('id', id);
     if (error) {
-      toast.error('Не вдалося скасувати бронь');
+      toast.error('Не вдалося скасувати');
       return;
     }
-    toast.success('Бронь скасовано');
+    toast.success('Бронювання скасовано');
     load();
   };
 
@@ -177,7 +227,6 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
     haptics.impact('light');
     const nextVal = !b.is_visible_in_schedule;
     
-    // Оптимістичне оновлення
     setBookings(prev => prev.map(item => item.id === b.id ? { ...item, is_visible_in_schedule: nextVal } : item));
 
     const { error } = await supabase
@@ -199,57 +248,60 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
     setFormOpen(true);
   };
 
-  // Перевірка чи вибрана дата є сьогоднішньою
-  const isToday = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return date === today;
-  }, [date]);
-
-  // Загальна висота таймлайн-сітки
-  const totalTimelineHeight = (TIMELINE_END - TIMELINE_START) * (HOUR_HEIGHT / 60);
+  const totalTimelineHeight = ((TIMELINE_END - TIMELINE_START) / 60) * HOUR_HEIGHT;
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden rounded-[28px] sm:rounded-3xl max-h-[92dvh] bg-card/95 backdrop-blur-2xl border-border/60 shadow-2xl flex flex-col select-none">
+        <DialogContent className="max-w-2xl w-full p-0 gap-0 overflow-hidden rounded-[32px] max-h-[94dvh] bg-card/95 backdrop-blur-2xl border-border/60 shadow-2xl flex flex-col select-none">
           
           {/* ================= 1. ШАПКА ДІАЛОГУ ================= */}
-          <DialogHeader className="p-4 sm:p-5 border-b border-border/40 pb-3 bg-card/80 backdrop-blur-md">
-            <div className="flex items-center justify-between">
+          <DialogHeader className="p-4 sm:p-5 border-b border-border/40 pb-3 bg-card/85 backdrop-blur-md shrink-0">
+            <div className="flex items-center justify-between gap-2">
               <DialogTitle className="flex items-center gap-2.5 text-base sm:text-lg font-bold text-foreground">
                 <div className="w-8 h-8 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary">
                   <Building2 className="h-4 w-4" strokeWidth={2} />
                 </div>
-                <span>Бронювання залів для репетицій</span>
+                <div>
+                  <span className="block leading-tight">Бронювання залів</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Вікно бронювання: до 3 днів наперед</span>
+                </div>
               </DialogTitle>
 
-              <span className="text-[11px] font-mono font-bold text-primary px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+              <span className="text-xs font-mono font-bold text-primary px-3 py-1 rounded-full bg-primary/10 border border-primary/20 shrink-0">
                 Команда №{myTeam}
               </span>
             </div>
           </DialogHeader>
 
-          {/* ================= 2. ЛИПКІ ФІЛЬТРИ: ДНІ ТА ЗАЛИ ================= */}
+          {/* ================= 2. СЕЛЕКТОР ДАТ (3 ДНІ НАПЕРЕД) ТА ЗАЛІВ ================= */}
           <div className="p-3 sm:p-4 space-y-2.5 border-b border-border/40 bg-surface-1/40 backdrop-blur-md shrink-0">
             
-            {/* Вибір дня */}
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
-              {days.map((d) => {
-                const p = dayLabel(d);
+            {/* Вибір дати (Сьогодні + 3 дні) */}
+            <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
+              {availableBookingDays.map((d) => {
+                const p = formatDayBadge(d, todayIso);
                 const active = d === date;
+
                 return (
                   <button
                     key={d}
                     onClick={() => { haptics.impact('light'); setDate(d); }}
-                    className={`shrink-0 rounded-2xl border px-3.5 py-1.5 text-xs font-semibold transition-all active:scale-95 flex items-center gap-2 ${
+                    className={`shrink-0 rounded-2xl border px-3.5 py-2 text-xs font-semibold transition-all active:scale-95 flex items-center gap-2.5 ${
                       active
-                        ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.35)] scale-[1.02]'
-                        : 'border-border/50 bg-card/70 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                        ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_16px_rgba(250,90,21,0.35)] scale-[1.02]'
+                        : 'border-border/50 bg-card/80 hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <span className="text-[10px] uppercase font-mono font-bold opacity-80">{p.weekday}</span>
-                    <span className="font-mono text-sm font-black tabular-nums">{p.day}</span>
-                    <span className="text-[10px] font-medium opacity-80">{p.month}</span>
+                    <div className="flex flex-col items-start leading-none">
+                      <span className="text-[9px] uppercase font-mono font-bold opacity-80">{p.weekday}</span>
+                      <span className="font-mono text-base font-black tabular-nums my-0.5">{p.day}</span>
+                    </div>
+
+                    <div className="text-left border-l border-white/20 pl-2">
+                      <span className="text-[10px] font-bold block">{p.relativeLabel}</span>
+                      <span className="text-[9px] opacity-75">{p.month}</span>
+                    </div>
                   </button>
                 );
               })}
@@ -260,6 +312,7 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
               {HALLS_LIST.map((h) => {
                 const active = h.id === hall;
                 const busy = busyCountByHall.get(h.id) ?? 0;
+
                 return (
                   <button
                     key={h.id}
@@ -285,21 +338,24 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
 
           </div>
 
-          {/* ================= 3. ТАЙМЛАЙН У СТИЛІ GOOGLE CALENDAR ================= */}
-          <div ref={timelineScrollRef} className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 relative custom-scrollbar">
+          {/* ================= 3. ТАЙМЛАЙН GOOGLE CALENDAR ================= */}
+          <div 
+            ref={timelineScrollRef} 
+            className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-5 relative custom-scrollbar bg-background/50"
+          >
             {loading ? (
-              <div className="py-12 flex justify-center">
-                <InlineLoader label="Завантаження таймлайну зали..." />
+              <div className="py-16 flex justify-center">
+                <InlineLoader label="Завантаження розкладу зали..." />
               </div>
             ) : (
               <div className="relative flex">
                 
-                {/* Ліва вісь годин (08:00 - 23:00) */}
-                <div className="w-11 sm:w-14 shrink-0 relative select-none" style={{ height: `${totalTimelineHeight}px` }}>
+                {/* Ліва вісь годин (08:00 - 23:30) */}
+                <div className="w-12 sm:w-14 shrink-0 relative select-none" style={{ height: `${totalTimelineHeight}px` }}>
                   {HOURS.map((h) => (
                     <div
                       key={h}
-                      className="absolute left-0 text-[10px] sm:text-[11px] font-mono font-bold text-muted-foreground/80 tabular-nums -translate-y-2"
+                      className="absolute left-0 text-[10px] sm:text-[11px] font-mono font-bold text-muted-foreground/75 tabular-nums -translate-y-2"
                       style={{ top: `${((h - TIMELINE_START) / 60) * HOUR_HEIGHT}px` }}
                     >
                       {fromMinutes(h)}
@@ -307,87 +363,85 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
                   ))}
                 </div>
 
-                {/* Права сітка розкладу з горизонтальними лініями */}
+                {/* Права сітка розкладу */}
                 <div 
-                  className="relative flex-1 rounded-2xl border border-border/40 bg-surface-1/20 overflow-hidden ml-1"
+                  className="relative flex-1 rounded-2xl border border-border/40 bg-surface-1/25 overflow-hidden ml-1 shadow-inner"
                   style={{ height: `${totalTimelineHeight}px` }}
                   onClick={(e) => {
-                    // Клік по вільній області сітки вираховує час початку
                     const rect = e.currentTarget.getBoundingClientRect();
                     const clickY = e.clientY - rect.top;
                     const clickedMinute = TIMELINE_START + Math.floor(clickY / (HOUR_HEIGHT / 60));
-                    // Округлюємо до 30 хв
                     const roundedMin = Math.floor(clickedMinute / 30) * 30;
                     openForm(roundedMin);
                   }}
                 >
-                  {/* Горизонтальні розділювачі годин */}
+                  {/* Розділювачі годин */}
                   {HOURS.map((h) => (
                     <div
                       key={h}
                       className="absolute inset-x-0 border-t border-border/25 pointer-events-none"
                       style={{ top: `${((h - TIMELINE_START) / 60) * HOUR_HEIGHT}px` }}
                     >
-                      {/* Лінія півгодини (пунктир) */}
-                      <div className="w-full border-t border-dashed border-border/10 mt-[32px]" />
+                      {/* Лінія півгодини */}
+                      <div className="w-full border-t border-dashed border-border/10 mt-[34px]" />
                     </div>
                   ))}
 
-                  {/* Червона лінія поточного часу (Google Calendar Live Indicator) */}
+                  {/* Червоний маркер поточного часу (Google Calendar Live Line) */}
                   {isToday && nowMinutes >= TIMELINE_START && nowMinutes <= TIMELINE_END && (
                     <div
                       className="absolute inset-x-0 z-20 pointer-events-none flex items-center"
                       style={{ top: `${((nowMinutes - TIMELINE_START) / 60) * HOUR_HEIGHT}px` }}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e] -ml-1" />
-                      <div className="flex-1 border-t-2 border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_10px_#f43f5e] -ml-1 animate-ping" />
+                      <div className="flex-1 border-t-2 border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
                     </div>
                   )}
 
-                  {/* Блоки заброньованих виступів / репетицій */}
+                  {/* Блоки заброньованих репетицій */}
                   {hallBookings.map((b) => {
                     const startMin = toMinutes(b.start_time);
                     const endMin = toMinutes(b.end_time);
                     const durationMin = Math.max(15, endMin - startMin);
                     
                     const topPx = ((startMin - TIMELINE_START) / 60) * HOUR_HEIGHT;
-                    const heightPx = Math.max(38, (durationMin / 60) * HOUR_HEIGHT - 2);
+                    const heightPx = Math.max(40, (durationMin / 60) * HOUR_HEIGHT - 2);
                     const isMine = b.team_number === myTeam;
 
                     return (
                       <div
                         key={b.id}
-                        onClick={(e) => e.stopPropagation()} // Запобігаємо кліку по сітці
-                        className={`absolute inset-x-1.5 z-10 rounded-xl p-2 sm:p-2.5 border backdrop-blur-md shadow-md transition-all flex flex-col justify-between overflow-hidden ${
+                        onClick={(e) => e.stopPropagation()}
+                        className={`absolute inset-x-1.5 z-10 rounded-2xl p-2.5 sm:p-3 border backdrop-blur-md shadow-md transition-all flex flex-col justify-between overflow-hidden ${
                           isMine
-                            ? 'bg-gradient-to-r from-[#FA5A15]/20 via-[#FA5A15]/15 to-card/90 border-[#FA5A15]/50 text-foreground'
-                            : 'bg-muted/70 border-border/60 text-foreground'
+                            ? 'bg-gradient-to-r from-[#FA5A15]/25 via-[#FA5A15]/15 to-card/95 border-[#FA5A15]/60 text-foreground'
+                            : 'bg-card/85 border-border/60 text-foreground'
                         }`}
                         style={{
                           top: `${topPx}px`,
                           height: `${heightPx}px`,
                         }}
                       >
-                        {/* Верхній рядок: Команда та час */}
+                        {/* Верхня стрічка блоку */}
                         <div className="flex items-center justify-between gap-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-md ${
-                              isMine ? 'bg-[#FA5A15] text-white' : 'bg-muted text-foreground'
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-xs ${
+                              isMine ? 'bg-[#FA5A15] text-white' : 'bg-surface-1 border border-border/50 text-foreground'
                             }`}>
-                              К#{b.team_number}
+                              Команда #{b.team_number}
                             </span>
-                            <p className="text-xs font-bold truncate">
+                            <p className="text-xs sm:text-sm font-bold truncate">
                               {b.title || 'Репетиція'}
                             </p>
                           </div>
 
-                          <span className="font-mono text-[10px] font-bold tabular-nums shrink-0 opacity-80">
+                          <span className="font-mono text-[11px] font-bold tabular-nums shrink-0 opacity-85">
                             {hhmm(b.start_time)}–{hhmm(b.end_time)}
                           </span>
                         </div>
 
                         {/* Нижні кнопки керування (лише для своєї команди) */}
-                        {isMine && heightPx >= 50 && (
+                        {isMine && heightPx >= 52 && (
                           <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#FA5A15]/20 mt-1">
                             <button
                               type="button"
@@ -396,12 +450,12 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
                             >
                               {b.is_visible_in_schedule ? (
                                 <>
-                                  <Eye className="w-3 h-3 text-[#FA5A15]" />
-                                  <span className="text-[#FA5A15]">У розкладі</span>
+                                  <Eye className="w-3.5 h-3.5 text-[#FA5A15]" />
+                                  <span className="text-[#FA5A15] font-semibold">У розкладі</span>
                                 </>
                               ) : (
                                 <>
-                                  <EyeOff className="w-3 h-3" />
+                                  <EyeOff className="w-3.5 h-3.5" />
                                   <span>Приховано</span>
                                 </>
                               )}
@@ -426,15 +480,16 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
             )}
           </div>
 
-          {/* ================= 4. НИЖНЯ ПАНЕЛЬ ДІЙ ================= */}
+          {/* ================= 4. ФУТЕР ДІАЛОГУ ================= */}
           <div className="p-3 sm:p-4 border-t border-border/40 bg-card/85 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
-            <div className="text-xs text-muted-foreground hidden sm:block">
-              Підказка: натисніть на вільний проміжок сітки для швидкого вибору
+            <div className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-primary" />
+              <span>Натисніть на вільну клітинку сітки або кнопку праворуч</span>
             </div>
 
             <Button
               onClick={() => openForm()}
-              className="w-full sm:w-auto ml-auto h-11 px-5 rounded-2xl font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2"
+              className="w-full sm:w-auto ml-auto h-12 px-6 rounded-2xl font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2"
             >
               <Plus className="h-4 w-4 stroke-[2.5]" />
               <span>Забронювати час</span>
@@ -444,7 +499,7 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
         </DialogContent>
       </Dialog>
 
-      {/* Діалог створення нового запису */}
+      {/* Діалог форми створення запису */}
       <NewBookingDialog
         open={formOpen}
         onOpenChange={setFormOpen}
