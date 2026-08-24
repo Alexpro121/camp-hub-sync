@@ -173,11 +173,14 @@ const ScheduleView = ({
   }, [activeDay, loading]);
 
 
-  // Список доступних днів (дітям показується лише сьогоднішній день)
-  const days = useMemo(
-    () => (lockTeam ? [todayISO()] : [...new Set([...schedules.map((s) => s.date), todayISO()])].sort()),
-    [schedules, lockTeam],
-  );
+  // Список доступних днів: лише дати опублікованих змін (без чужих місяців).
+  // Сьогодні додається тільки якщо на нього є розклад або дат узагалі немає.
+  const days = useMemo(() => {
+    if (lockTeam) return [todayISO()];
+    const dates = [...new Set(schedules.map((s) => s.date))].sort();
+    return dates.length ? dates : [todayISO()];
+  }, [schedules, lockTeam]);
+
 
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
@@ -263,24 +266,28 @@ const ScheduleView = ({
     return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
   }, [visibleEvents, teamBookings]);
 
+  const myBookingsCount = myTeam != null ? teamBookings.filter((b) => b.team_number === myTeam).length : 0;
+
   const bookingButton = isStaff && myTeam != null
     ? (
-      <button
-        onClick={() => setBookingsOpen(true)}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-primary/30 bg-primary/[0.07] px-3.5 py-2.5 text-left transition-colors hover:bg-primary/[0.12] active:scale-[0.99]"
-      >
-        <span className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-primary" strokeWidth={2} />
-          <span className="text-xs font-bold text-foreground">Бронювання залів</span>
-        </span>
-        {teamBookings.some((b) => b.team_number === myTeam) && (
-          <span className="rounded-full bg-[#FA5A15] px-2 py-0.5 font-mono text-[10px] font-black tabular-nums text-white">
-            {teamBookings.filter((b) => b.team_number === myTeam).length}
-          </span>
-        )}
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Розклад</span>
+        <button
+          onClick={() => setBookingsOpen(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:bg-primary/[0.14] active:scale-95"
+        >
+          <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
+          Бронювання залів
+          {myBookingsCount > 0 && (
+            <span className="rounded-full bg-[#FA5A15] px-1.5 py-px font-mono text-[10px] font-black tabular-nums text-white">
+              {myBookingsCount}
+            </span>
+          )}
+        </button>
+      </div>
     )
     : null;
+
 
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
 
