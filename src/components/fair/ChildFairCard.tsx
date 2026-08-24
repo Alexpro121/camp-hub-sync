@@ -187,8 +187,23 @@ const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive 
           </div>
         </div>
 
+        {/* 0. СТАН: ЯРМАРОК ЗАКРИТО — ЛИШЕ БАЛАНС І ПЛАШКА */}
+        {!isLive && (
+          <div className="py-4 flex flex-col items-center justify-center text-center space-y-3 animate-fade-in">
+            <div className="w-14 h-14 rounded-full bg-muted/40 border border-border/50 flex items-center justify-center text-muted-foreground">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <div className="space-y-0.5">
+              <h3 className="text-base font-bold text-foreground">Ярмарок закрито</h3>
+              <p className="text-xs text-muted-foreground max-w-[260px]">
+                Оплата Air Pay доступна лише під час активного ярмарку. Зачекайте на початок торгівлі.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 1. СТАН: ФОРМА ВИБОРУ СУМИ ТА ВІДПРАВКИ */}
-        {status === 'idle' && (
+        {isLive && status === 'idle' && (
           <div className="space-y-3.5 animate-fade-in">
             
             {/* Вибір каси команди */}
