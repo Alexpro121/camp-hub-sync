@@ -71,6 +71,8 @@ const ChildFlow = ({ onBack }: Props) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+
   
   // Керування темою оформлення для кабінету дитини
   const [isDark, setIsDark] = useState<boolean>(() => {
