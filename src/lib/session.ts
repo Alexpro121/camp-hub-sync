@@ -1,4 +1,7 @@
+import type { Child, IronTransaction } from '@/types/app';
+
 // Persistent role/session metadata so the app can auto-open the right cabinet.
+
 export type SavedRole = 'child' | 'supervisor' | 'admin';
 
 const ROLE_KEY = 'camphub_saved_role';
