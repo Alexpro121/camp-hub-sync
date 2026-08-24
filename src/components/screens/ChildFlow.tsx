@@ -19,8 +19,10 @@ import {
   Mic2,
   Calendar,
   Sun,
-  Moon
+  Moon,
+  Award
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,7 +46,9 @@ import ChildFairCard from '@/components/fair/ChildFairCard';
 import ApplePayScannerModal from '@/components/fair/ApplePayScannerModal';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { clearSavedSession, getSavedChildId, getSavedRole, saveSession } from '@/lib/session';
+import { clearSavedSession, getSavedChildId, getSavedRole, saveSession, saveChildArchiveSnapshot, getChildArchiveSnapshot } from '@/lib/session';
+import { CertificateModal } from '@/components/certificate/CertificateModal';
+
 
 interface Props { 
   onBack: () => void; 
@@ -67,6 +71,8 @@ const ChildFlow = ({ onBack }: Props) => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+
   
   // Керування темою оформлення для кабінету дитини
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -109,12 +115,21 @@ const ChildFlow = ({ onBack }: Props) => {
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session || cancelled) return;
       const { data: row } = await supabase.from('children').select('*').eq('id', savedId).maybeSingle();
-      if (cancelled || !row) return;
+      if (cancelled) return;
+      if (!row) {
+        const snapshot = getChildArchiveSnapshot();
+        if (snapshot) {
+          setChild(snapshot.child);
+          setStep('profile');
+        }
+        return;
+      }
       setChild(row as Child);
       setStep('profile');
     })();
     return () => { cancelled = true; };
   }, []);
+
 
   // Realtime слухач оновлень даних дитини
   useEffect(() => {
@@ -492,9 +507,23 @@ const ChildFlow = ({ onBack }: Props) => {
                 </div>
               </div>
             </div>
+
+            {/* Кнопка сертифіката */}
+            <button
+              onClick={() => { haptics.impact('light'); setCertModalOpen(true); }}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-all active:scale-[0.98] ${
+                isDark 
+                  ? 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10' 
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Award className="w-4 h-4 text-[#FA5A15]" />
+              <span>Мій сертифікат</span>
+            </button>
           </div>
 
           {/* Навігаційні вкладки */}
+
           <Tabs
             value={activeTab}
             className="w-full"
@@ -746,7 +775,14 @@ const ChildFlow = ({ onBack }: Props) => {
           childName={child.full_name}
           childTeam={child.team_number}
         />
+
+        <CertificateModal
+          open={certModalOpen}
+          onClose={() => setCertModalOpen(false)}
+          initialName={child.full_name}
+        />
       </div>
+
     );
   }
 
