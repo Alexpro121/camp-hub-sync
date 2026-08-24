@@ -173,11 +173,22 @@ const ScheduleView = ({
   }, [activeDay, loading]);
 
 
-  // Список доступних днів (дітям показується лише сьогоднішній день)
-  const days = useMemo(
-    () => (lockTeam ? [todayISO()] : [...new Set([...schedules.map((s) => s.date), todayISO()])].sort()),
-    [schedules, lockTeam],
-  );
+  // Список доступних днів: лише дати опублікованих змін (без чужих місяців).
+  // Сьогодні додається тільки якщо на нього є розклад або дат узагалі немає.
+  const days = useMemo(() => {
+    if (lockTeam) return [todayISO()];
+    const dates = [...new Set(schedules.map((s) => s.date))].sort();
+    return dates.length ? dates : [todayISO()];
+  }, [schedules, lockTeam]);
+
+  // Якщо обрана дата не входить у зміну — переходимо на сьогодні або перший день зміни
+  useEffect(() => {
+    if (!days.length || !activeDay || days.includes(activeDay)) return;
+    const today = todayISO();
+    setActiveDay(days.includes(today) ? today : (days.find((d) => d >= today) ?? days[0]));
+  }, [days, activeDay]);
+
+
 
   const idsForDate = useMemo(
     () => (d: string | null) => (d ? schedules.filter((s) => s.date === d).map((s) => s.id) : []),
@@ -263,24 +274,28 @@ const ScheduleView = ({
     return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
   }, [visibleEvents, teamBookings]);
 
+  const myBookingsCount = myTeam != null ? teamBookings.filter((b) => b.team_number === myTeam).length : 0;
+
   const bookingButton = isStaff && myTeam != null
     ? (
-      <button
-        onClick={() => setBookingsOpen(true)}
-        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-primary/30 bg-primary/[0.07] px-3.5 py-2.5 text-left transition-colors hover:bg-primary/[0.12] active:scale-[0.99]"
-      >
-        <span className="flex items-center gap-2">
-          <Building2 className="h-4 w-4 text-primary" strokeWidth={2} />
-          <span className="text-xs font-bold text-foreground">Бронювання залів</span>
-        </span>
-        {teamBookings.some((b) => b.team_number === myTeam) && (
-          <span className="rounded-full bg-[#FA5A15] px-2 py-0.5 font-mono text-[10px] font-black tabular-nums text-white">
-            {teamBookings.filter((b) => b.team_number === myTeam).length}
-          </span>
-        )}
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Розклад</span>
+        <button
+          onClick={() => setBookingsOpen(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:bg-primary/[0.14] active:scale-95"
+        >
+          <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
+          Бронювання залів
+          {myBookingsCount > 0 && (
+            <span className="rounded-full bg-[#FA5A15] px-1.5 py-px font-mono text-[10px] font-black tabular-nums text-white">
+              {myBookingsCount}
+            </span>
+          )}
+        </button>
+      </div>
     )
     : null;
+
 
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
 
@@ -309,17 +324,17 @@ const ScheduleView = ({
   }
 
 
-  const tabCls = 'shrink-0 rounded-2xl px-4 py-2 text-xs font-semibold transition-all duration-300 active:scale-95 select-none';
+  const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-all duration-300 active:scale-95 select-none';
 
   return (
-    <div className="space-y-3.5 select-none">
+    <div className="space-y-3 select-none pb-24">
 
       {bookingButton}
 
       {/* 1. ВИБІР ДНЯ (ДЛЯ СУПРОВОДУ) */}
 
       {days.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 overscroll-contain">
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto scrollbar-thin px-1 pb-1 overscroll-contain">
           {days.map((d) => {
             const p = dayParts(d);
             const active = d === activeDay;
@@ -328,19 +343,20 @@ const ScheduleView = ({
                 key={d}
                 ref={active ? activeDayRef : undefined}
                 onClick={() => setActiveDay(d)}
-                className={`${tabCls} flex flex-col items-center leading-tight border ${
+                className={`shrink-0 select-none rounded-xl border px-2.5 py-1.5 leading-tight transition-all duration-300 active:scale-95 flex flex-col items-center ${
                   active
-                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_16px_rgba(250,90,21,0.35)] scale-[1.02]'
+                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.3)]'
                     : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="text-[9px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
-                <span className="font-mono text-base font-black tabular-nums my-0.5">{p.day}</span>
-                <span className="text-[9px] font-medium opacity-80">{p.month}</span>
+                <span className="text-[8px] uppercase tracking-wider font-bold opacity-80">{p.weekday}</span>
+                <span className="font-mono text-sm font-black tabular-nums">{p.day}</span>
+                <span className="text-[8px] font-medium opacity-80">{p.month}</span>
               </button>
             );
           })}
         </div>
+
       )}
 
       {/* 2. ФІЛЬТР ЗА КОМАНДАМИ */}
@@ -434,46 +450,45 @@ const ScheduleView = ({
       )}
 
       {/* 4. ХРОНОЛОГІЧНИЙ СПИСОК КАРТОК РОЗКЛАДУ + РЕПЕТИЦІЇ КОМАНДИ */}
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {timelineRows.map((row) => {
           if (row.kind === 'booking') {
             const b = row.booking;
             const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
             return (
-              <Card
+              <article
                 key={`b-${b.id}`}
-                className={`rounded-3xl border p-4 backdrop-blur-xl transition-all ${
-                  active
-                    ? 'border-[#FA5A15]/50 bg-[#FA5A15]/[0.08] shadow-[0_0_20px_rgba(250,90,21,0.18)]'
-                    : 'border-primary/25 bg-card/80'
-                } ${isToday && nowRel >= row.endMin ? 'opacity-60' : ''}`}
+                className={`relative overflow-hidden rounded-2xl border border-l-4 border-white/10 border-l-[#FA5A15] bg-slate-900/80 p-4 shadow-xl backdrop-blur-xl transition-all duration-300 active:scale-[0.98] ${
+                  active ? 'border-[#FA5A15]/50 shadow-[0_0_20px_rgba(250,90,21,0.18)]' : ''
+                } ${isToday && nowRel >= row.endMin ? 'opacity-50' : ''}`}
               >
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FA5A15]/30 bg-[#FA5A15]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
-                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
-                    Репетиція команди
-                  </span>
-                  <span className="font-mono text-xs font-bold tabular-nums text-muted-foreground">
+                <header className="flex items-center gap-3">
+                  <span className="font-mono text-sm font-bold tabular-nums text-slate-200">
                     {hhmm(b.start_time)} – {hhmm(b.end_time)}
                   </span>
-                </div>
+                  <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FA5A15]/40 bg-[#FA5A15]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#FA5A15]">
+                    <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+                    Репетиція
+                  </span>
+                </header>
 
-                <p className="text-base font-bold tracking-tight text-foreground">
+                <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
                   {sentenceCase(b.title || 'Репетиція')}
-                </p>
+                </h3>
 
-                <div className="mt-1.5 flex items-center gap-2">
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
                     <Building2 className="h-3 w-3" strokeWidth={2.5} />
                     {hallName(b.hall_id)}
                   </span>
-                  <span className="font-mono text-[11px] font-semibold text-muted-foreground">
+                  <span className="font-mono text-[11px] font-semibold text-slate-400">
                     Команда №{b.team_number}
                   </span>
                 </div>
-              </Card>
+              </article>
             );
           }
+
 
           const e = row.event;
           const isNow = currentEvent?.id === e.id;
