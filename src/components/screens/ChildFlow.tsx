@@ -713,36 +713,13 @@ const ChildFlow = ({ onBack }: Props) => {
             {/* ВМІСТ 3: ЯРМАРОК */}
             {fair.hasFairAccess && (
               <TabsContent value="fair" className="mt-0 space-y-3">
-                {fair.isLiveFairRunning ? (
-                  <ChildFairCard
-                    childId={child.id}
-                    balance={child.iron_dollars}
-                    childName={child.full_name}
-                    childTeam={child.team_number}
-                  />
-                ) : (
-                  <div className={`p-4 rounded-2xl border space-y-2 shadow-sm ${
-                    isDark 
-                      ? 'bg-[#0F1523]/85 border-white/10' 
-                      : 'bg-white/95 border-slate-200/80'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <ShoppingBag className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
-                      <span className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        Ярмарок
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className={`font-mono text-3xl font-bold tabular-nums ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {child.iron_dollars}
-                      </span>
-                      <span className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Айрон-доларів</span>
-                    </div>
-                    <p className={`text-xs pt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Торгівлю на ярмарку завершено. Дякуємо за активність!
-                    </p>
-                  </div>
-                )}
+                <ChildFairCard
+                  childId={child.id}
+                  balance={child.iron_dollars}
+                  childName={child.full_name}
+                  childTeam={child.team_number}
+                  isLive={fair.isLiveFairRunning}
+                />
                 <TransactionHistory childId={child.id} />
               </TabsContent>
             )}

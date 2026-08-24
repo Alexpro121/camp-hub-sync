@@ -26,6 +26,7 @@ interface Props {
   onPaid?: (newBalance: number) => void;
   childName?: string;
   childTeam?: number | null;
+  isLive?: boolean;
 }
 
 type PayStatus = 'idle' | 'sending' | 'pending' | 'success' | 'rejected';
