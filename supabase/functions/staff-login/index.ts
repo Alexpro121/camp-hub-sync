@@ -120,17 +120,9 @@ Deno.serve(async (req) => {
         return json({ error: 'invalid_team_or_password' }, 400);
       }
 
-      const { shiftId, passwords: currentMap } = await getShiftPasswords(svc);
-      if (!shiftId) {
-        return json({ error: 'no_active_shift_found' }, 404);
-      }
-
-      currentMap[String(targetTeam)] = targetPass;
-
       const { error: updateErr } = await svc
-        .from('shifts')
-        .update({ team_passwords: currentMap })
-        .eq('id', shiftId);
+        .from('team_passwords')
+        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' });
 
       if (updateErr) {
         console.error('Update error:', updateErr);
