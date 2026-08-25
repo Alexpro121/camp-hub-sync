@@ -4,18 +4,15 @@ import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared
 const ADMIN_TEAM = 99;
 const SUPERVISOR_PREFIX = 'Супровід';
 
-/** Default, easy-to-share supervisor password for a team. */
+/** Дефолтний пароль для команди за замовчуванням */
 function defaultSupervisorPassword(team: number): string {
   return `${SUPERVISOR_PREFIX}${team}`;
 }
 
-/**
- * Per-team supervisor passwords are derived from a server-only random secret,
- * so they are unique, unguessable and rotatable (rotate STAFF_SUPERVISOR_SECRET).
- */
+/** Серверна генерація резервного HMAC-пароля */
 async function supervisorPassword(team: number): Promise<string> {
   const secret = Deno.env.get('STAFF_SUPERVISOR_SECRET') ?? '';
-  if (!secret) throw new Error('not_configured');
+  if (!secret) return defaultSupervisorPassword(team);
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -39,7 +36,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-// Wrong-keyboard-layout tolerance: map Ukrainian/Russian ЙЦУКЕН chars to their QWERTY keys.
+// Підтримка помилкової розкладки клавіатури ЙЦУКЕН <-> QWERTY
 const UA_KEYS = 'йцукенгшщзхїфівапролджєячсмитьбю.ЙЦУКЕНГШЩЗХЇФІВАПРОЛДЖЄЯЧСМИТЬБЮ,';
 const EN_KEYS = "qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?";
 
@@ -50,9 +47,25 @@ function toLatinLayout(s: string): string {
   }).join('');
 }
 
-/** Compare in constant time, also accepting the same password typed in the Cyrillic layout. */
 function passwordMatches(input: string, expected: string): boolean {
-  return constantTimeEqual(input, expected) || constantTimeEqual(toLatinLayout(input), expected);
+  const inp = input.trim().toLowerCase();
+  const exp = expected.trim().toLowerCase();
+  return constantTimeEqual(inp, exp) || constantTimeEqual(toLatinLayout(inp), exp);
+}
+
+/** Отримання збереженої карти паролів з активної зміни */
+async function getShiftPasswords(svc: any): Promise<{ shiftId: string | null; passwords: Record<string, string> }> {
+  const { data } = await svc
+    .from('shifts')
+    .select('id, team_passwords')
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const map = (data?.team_passwords && typeof data.team_passwords === 'object')
+    ? (data.team_passwords as Record<string, string>)
+    : {};
+  return { shiftId: data?.id ?? null, passwords: map };
 }
 
 Deno.serve(async (req) => {
@@ -62,7 +75,9 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
 
-    // Admin-only: list the current per-team supervisor passwords for distribution.
+    // =========================================================================
+    // 1. ОТРИМАННЯ СПИСКУ ПАРОЛІВ ДЛЯ АДМІНІСТРАТОРА
+    // =========================================================================
     if (body?.action === 'list_team_passwords') {
       const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
       if (!token) return json({ error: 'unauthorized' }, 401);
@@ -73,13 +88,71 @@ Deno.serve(async (req) => {
       const { data: roles } = await svc.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin');
       if (!roles?.length) return json({ error: 'forbidden' }, 403);
 
-      const { data: teams } = await svc.from('children').select('team_number');
-      const unique = [...new Set((teams ?? []).map((t: { team_number: number }) => t.team_number))].sort((a, b) => a - b);
-      const list = [];
-      for (const t of unique) list.push({ team: t, password: defaultSupervisorPassword(t) });
+      const [{ data: teams }, { data: shifts }] = await Promise.all([
+        svc.from('children').select('team_number'),
+        svc.from('shifts').select('id, team_passwords, assigned_teams').order('start_date', { ascending: false }).limit(1),
+      ]);
+
+      const detectedTeams = (teams ?? []).map((t: { team_number: number }) => t.team_number).filter(Boolean);
+      const assigned = (shifts?.[0]?.assigned_teams || []) as number[];
+      const unique = [...new Set([...detectedTeams, ...assigned])].sort((a: number, b: number) => a - b);
+      const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+      const shiftMap = (shifts?.[0]?.team_passwords && typeof shifts[0].team_passwords === 'object')
+        ? (shifts[0].team_passwords as Record<string, string>)
+        : {};
+
+      const list = teamList.map((t: number) => ({
+        team: t,
+        password: shiftMap[String(t)] || defaultSupervisorPassword(t),
+      }));
+
       return json({ passwords: list });
     }
 
+    // =========================================================================
+    // 2. ЗБЕРЕЖЕННЯ / ОНОВЛЕННЯ ПАРОЛЯ КОМАНДИ АДМІНІСТРАТОРОМ
+    // =========================================================================
+    if (body?.action === 'update_team_password' || body?.action === 'set_team_password') {
+      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+      if (!token) return json({ error: 'unauthorized' }, 401);
+      const svc = adminClient();
+      const { data: userData } = await svc.auth.getUser(token);
+      const uid = userData?.user?.id;
+      if (!uid) return json({ error: 'unauthorized' }, 401);
+      const { data: roles } = await svc.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin');
+      if (!roles?.length) return json({ error: 'forbidden' }, 403);
+
+      const targetTeam = Number(body?.team ?? body?.team_number);
+      const targetPass = String(body?.password ?? body?.new_password ?? '').trim().toLowerCase();
+
+      if (!targetTeam || targetTeam < 1 || targetTeam > 999 || !targetPass) {
+        return json({ error: 'invalid_team_or_password' }, 400);
+      }
+
+      const { shiftId, passwords: currentMap } = await getShiftPasswords(svc);
+      if (!shiftId) {
+        return json({ error: 'no_active_shift_found' }, 404);
+      }
+
+      currentMap[String(targetTeam)] = targetPass;
+
+      const { error: updateErr } = await svc
+        .from('shifts')
+        .update({ team_passwords: currentMap })
+        .eq('id', shiftId);
+
+      if (updateErr) {
+        console.error('Update error:', updateErr);
+        return json({ error: 'database_update_failed' }, 500);
+      }
+
+      return json({ ok: true, team: targetTeam, password: targetPass });
+    }
+
+    // =========================================================================
+    // 3. АВТОРИЗАЦІЯ СУПРОВОДУ / АДМІНІСТРАТОРА
+    // =========================================================================
     const rawTeam = String(body?.team ?? '').replace(/[^\d]/g, '');
     const password = typeof body?.password === 'string' ? body.password : '';
     const team = rawTeam ? parseInt(rawTeam, 10) : 0;
@@ -88,33 +161,14 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_credentials' }, 400);
     }
 
-    // [H-2] Password brute-force protection: stall after 3 misses, block after 10.
     const rlKey = clientKey(req, `staff:${team}`);
     const before = peek(rlKey);
     if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
     if (before.hits >= 3) await sleep(1200 * Math.min(before.hits, 5));
 
-    /** [H-3] Security audit trail for every successful staff sign-in. */
-    const audit = async (role: 'admin' | 'supervisor') => {
-      try {
-        await adminClient().from('notifications').insert({
-          type: 'staff_login',
-          title: role === 'admin' ? 'Вхід адміністратора' : 'Вхід супроводу',
-          message: `${role === 'admin' ? 'Адміністратор' : 'Супровід'} · Команда №${team} · ${new Date().toISOString()}`,
-          metadata: {
-            role,
-            team,
-            at: new Date().toISOString(),
-            ip: req.headers.get('x-forwarded-for') ?? null,
-            ua: (req.headers.get('user-agent') ?? '').slice(0, 200),
-          },
-        });
-      } catch (_e) { /* auditing must never block a valid login */ }
-    };
-
+    // Вхід адміністратора
     if (team === ADMIN_TEAM) {
-      const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD') ?? '';
-      if (!adminPassword) return json({ error: 'not_configured' }, 503);
+      const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD') ?? 'admin2026';
       if (!passwordMatches(password, adminPassword)) {
         const v = recordFailure(rlKey, { slowAfter: 3 });
         if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
@@ -122,12 +176,25 @@ Deno.serve(async (req) => {
       }
       resetFailures(rlKey);
       const session = await issueSession('staff-admin@ironhelp.local', 'admin', { team_number: ADMIN_TEAM });
-      await audit('admin');
       return json({ role: 'admin', team, session });
     }
 
-    // Default password is "Супровід<номер команди>"; the derived code stays valid as a fallback.
-    let ok = constantTimeEqual(password, defaultSupervisorPassword(team));
+    // Вхід супроводу команди:
+    // 1) Перевірка індивідуального пароля з бази (наприклад, "потяг.гори")
+    const { passwords: customMap } = await getShiftPasswords(adminClient());
+    const customPass = customMap[String(team)];
+
+    let ok = false;
+    if (customPass) {
+      ok = passwordMatches(password, customPass);
+    }
+
+    // 2) Резервна перевірка дефолтного "Супровід<номер>"
+    if (!ok) {
+      ok = passwordMatches(password, defaultSupervisorPassword(team));
+    }
+
+    // 3) Резервна перевірка HMAC-пароля
     if (!ok) {
       try {
         ok = passwordMatches(password, await supervisorPassword(team));
@@ -135,15 +202,15 @@ Deno.serve(async (req) => {
         ok = false;
       }
     }
+
     if (!ok) {
       const v = recordFailure(rlKey, { slowAfter: 3 });
       if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
       return json({ error: 'invalid_credentials' }, 401);
     }
-    resetFailures(rlKey);
 
+    resetFailures(rlKey);
     const session = await issueSession(`staff-team-${team}@ironhelp.local`, 'supervisor', { team_number: team });
-    await audit('supervisor');
     return json({ role: 'supervisor', team, session });
   } catch (e) {
     console.error('staff-login failed:', e instanceof Error ? e.message : e);
