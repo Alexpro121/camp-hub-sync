@@ -712,7 +712,7 @@ const DataTab = () => {
     toast.success(`Пароль для команди №${p.team} скопійовано`);
   };
 
-  // ✅ БЕЗПЕЧНЕ ЗБЕРЕЖЕННЯ ПАРОЛЯ З АВТО-FALLBACK У БД (БЕЗ 500/400 ПОМИЛОК)
+  // ✅ Збереження пароля через Edge Function (upsert у таблицю team_passwords)
   const savePassword = async (teamNum: number, newPass: string) => {
     const trimmed = newPass.trim().toLowerCase();
     if (!trimmed) {
@@ -722,45 +722,15 @@ const DataTab = () => {
 
     setSavingPw(true);
     try {
-      let savedOnServer = false;
-
-      // 1. Спроба через Edge Function
-      try {
-        const { data, error } = await supabase.functions.invoke('staff-login', {
-          body: { 
-            action: 'update_team_password', 
-            team: teamNum, 
-            team_number: teamNum, 
-            password: trimmed 
-          },
-        });
-        if (!error && (data?.ok || data?.success || data?.passwords)) {
-          savedOnServer = true;
-        }
-      } catch {
-        // Якщо Edge Function ще не має оновленого методу — спокійно переходимо до прямого збереження в БД
-      }
-
-      // 2. Прямий fallback у таблицю shifts (поле team_passwords)
-      if (!savedOnServer) {
-        const { data: shifts } = await supabase
-          .from('shifts')
-          .select('id, team_passwords')
-          .order('start_date', { ascending: false })
-          .limit(1);
-
-        if (shifts && shifts.length > 0) {
-          const activeShift = shifts[0];
-          const currentMap = (activeShift.team_passwords && typeof activeShift.team_passwords === 'object')
-            ? { ...(activeShift.team_passwords as Record<string, string>) }
-            : {};
-          currentMap[String(teamNum)] = trimmed;
-
-          await supabase
-            .from('shifts')
-            .update({ team_passwords: currentMap })
-            .eq('id', activeShift.id);
-        }
+      const { data, error } = await supabase.functions.invoke('staff-login', {
+        body: {
+          action: 'update_team_password',
+          team: teamNum,
+          password: trimmed,
+        },
+      });
+      if (error || !data?.ok) {
+        throw new Error(data?.error || error?.message || 'save_failed');
       }
 
       // 3. Миттєве оновлення локального списку паролів
