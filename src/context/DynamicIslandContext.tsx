@@ -78,14 +78,16 @@ interface IslandApi {
 
 const Ctx = createContext<IslandApi | null>(null);
 
-/** Базова тривалість показу за замовчуванням (6 секунд) */
-const AUTO_HIDE_MS = 6000;
+/** Базова швидка тривалість показу за замовчуванням (3.2 секунди) */
+const AUTO_HIDE_MS = 3200;
 
-/** Розумна шкала тривалості: 12с критичні, 8с розширені/події, 7с офлайн, 6с стандарт */
+/** Розумна шкала тривалості (динамічний баланс зручності та інформативності) */
 function getSmartDuration(state: IslandState, expanded = false): number {
-  if (state === 'BROADCAST' || state === 'ERROR_TOAST') return 12000;
-  if (expanded || state === 'EVENT_ALERT') return 8000;
-  if (state === 'OFFLINE') return 7000;
+  if (state === 'BROADCAST') return 6000;
+  if (state === 'ERROR_TOAST') return 4500;
+  if (expanded) return 7000;
+  if (state === 'EVENT_ALERT') return 4500;
+  if (state === 'OFFLINE') return 4000;
   return AUTO_HIDE_MS;
 }
 
@@ -117,12 +119,12 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     } 
   }, []);
 
-  /** Універсальний таймер автоматичного приховування острова */
+  /** Універсальний таймер автоматичного приховування острівця */
   const startAutoDismissTimer = useCallback((nextState: IslandState, expandedNow = false, overrideMs?: number) => {
     clearTimer();
     isPaused.current = false;
     
-    if (nextState === 'HIDDEN') return;
+    if (nextState === 'HIDDEN' || nextState === 'LOADING_ONLY' || nextState === 'EXCEL_IMPORT') return;
 
     const duration = overrideMs ?? getSmartDuration(nextState, expandedNow);
     remainingTime.current = duration;
@@ -149,13 +151,13 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     setState('HIDDEN'); 
   }, [clearTimer]);
 
-  /** Пауза таймера при взаємодії користувача (читанні/наведенні) */
+  /** Пауза таймера при взаємодії (дотик/наведення) */
   const pauseAutoHide = useCallback(() => { 
     if (!timer.current || isPaused.current) return;
     clearTimer();
     isPaused.current = true;
     const elapsed = Date.now() - startTime.current;
-    remainingTime.current = Math.max(1500, remainingTime.current - elapsed);
+    remainingTime.current = Math.max(1200, remainingTime.current - elapsed);
   }, [clearTimer]);
 
   /** Продовження відліку після взаємодії */
@@ -172,18 +174,17 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     }, remainingTime.current);
   }, [clearTimer, state]);
 
-  /** Плавне розгортання та згортання острова */
+  /** Плавне перемикання між згорнутим і розгорнутим станами */
   const toggleExpanded = useCallback(() => {
     haptics.impact('light');
     setExpanded((prev) => {
       const next = !prev;
-      // Безпечно перезапускаємо таймер для нового стану
-      setTimeout(() => startAutoDismissTimer(state, next), 0);
+      startAutoDismissTimer(state, next);
       return next;
     });
   }, [haptics, startAutoDismissTimer, state]);
 
-  // Спеціалізовані методи API
+  // Спеціалізовані методи виклику станів
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
   
   const showExcelProgress = useCallback((progress: number, fileName?: string) => {
@@ -215,7 +216,7 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     set('EVENT_ALERT', { ...alert });
   }, [set, haptics]);
 
-  // 1. Детектор мережі: офлайн / повернення онлайн
+  // 1. Детектор мережі: перехід в офлайн / відновлення онлайн
   const wasOffline = useRef(false);
   useEffect(() => {
     if (!online) {
@@ -223,11 +224,11 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
       showOffline(pending);
     } else if (wasOffline.current) {
       wasOffline.current = false;
-      set('SUCCESS_TOAST', { title: 'Онлайн', subtitle: 'Зв’язок відновлено' }, 3000);
+      set('SUCCESS_TOAST', { title: 'Онлайн', subtitle: 'Зв’язок відновлено' }, 2500);
     }
   }, [online, pending, showOffline, set]);
 
-  // 2. Realtime-сповіщення від супроводу (Broadcasts)
+  // 2. Realtime-сповіщення від супроводу чи штабу (Broadcasts)
   useEffect(() => {
     const ch = supabase
       .channel('island-broadcasts')
@@ -246,13 +247,12 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     };
   }, [showBroadcast]);
 
-  // 3. Міст для подій (ВИПРАВЛЕНО: тільки danger викликає помилку showError)
+  // 3. Шина внутрішніх системних подій
   useEffect(() => {
     const off = onIslandMessage((m) => {
       if (m.tone === 'danger') {
         showError(m.text, m.meta);
       } else {
-        // Усі позитивні та інформаційні події (ярмарок, нарахування тощо) показуються без помилкового червоного знака оклику
         showSuccess(m.text, m.meta);
       }
     });
@@ -263,7 +263,7 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     };
   }, [showError, showSuccess, clearTimer]);
 
-  // Очищення таймерів при демонтажі
+  // Очищення таймерів при демонтажі компонента
   useEffect(() => {
     return () => {
       clearTimer();
