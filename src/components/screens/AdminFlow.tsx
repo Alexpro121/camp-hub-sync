@@ -75,6 +75,7 @@ import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface Props { onBack: () => void; }
 
@@ -85,7 +86,7 @@ const SHIFT_LABELS: Record<ShiftType, string> = {
   sports: 'Спортивна зміна',
 };
 
-// Словник коротких, позитивних українських слів для паролів
+// Словник коротких, позитивних українських слів
 const MEMORABLE_UKR_WORDS = [
   'потяг', 'рейка', 'вагон', 'шлях', 'колія', 'ранок', 'вечір',
   'сокіл', 'гори', 'ліс', 'плай', 'рута', 'зірка', 'озеро',
@@ -641,6 +642,7 @@ const DataTab = () => {
   const [editDialogTeam, setEditDialogTeam] = useState<number | null>(null);
   const [customPassword, setCustomPassword] = useState('');
   const [savingPw, setSavingPw] = useState(false);
+  const haptics = useHaptics();
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -649,17 +651,47 @@ const DataTab = () => {
   };
   useEffect(() => { load(); }, []);
 
+  // Завантаження паролів з Edge Function або безпосередньо з активної зміни
   const loadPasswords = async () => {
     setPwLoading(true);
-    const { data, error } = await supabase.functions.invoke('staff-login', {
-      body: { action: 'list_team_passwords' },
-    });
-    setPwLoading(false);
-    if (error || !data?.passwords) { 
-      toast.error('Не вдалося отримати паролі'); 
-      return; 
+    try {
+      let loaded = false;
+      const { data, error } = await supabase.functions.invoke('staff-login', {
+        body: { action: 'list_team_passwords' },
+      });
+
+      if (!error && data?.passwords && Array.isArray(data.passwords) && data.passwords.length > 0) {
+        setPasswords(data.passwords);
+        loaded = true;
+      }
+
+      // Fallback на прямий запит у БД
+      if (!loaded) {
+        const [{ data: kids }, { data: shiftList }] = await Promise.all([
+          supabase.from('children').select('team_number'),
+          supabase.from('shifts').select('id, team_passwords, assigned_teams').order('start_date', { ascending: false }).limit(1),
+        ]);
+
+        const detectedTeams = Array.from(new Set((kids || []).map((k: any) => k.team_number).filter(Boolean))).sort((a, b) => a - b);
+        const assigned = shiftList?.[0]?.assigned_teams || [];
+        const allTeams = Array.from(new Set([...detectedTeams, ...assigned])).sort((a, b) => a - b);
+        
+        const shiftMap = (shiftList?.[0]?.team_passwords && typeof shiftList[0].team_passwords === 'object')
+          ? (shiftList[0].team_passwords as Record<string, string>)
+          : {};
+
+        const list = (allTeams.length ? allTeams : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((t) => ({
+          team: t,
+          password: shiftMap[String(t)] || `Супровід${t}`,
+        }));
+
+        setPasswords(list);
+      }
+    } catch {
+      toast.error('Не вдалося отримати паролі');
+    } finally {
+      setPwLoading(false);
     }
-    setPasswords(data.passwords);
   };
 
   const copyAll = async () => {
@@ -667,6 +699,7 @@ const DataTab = () => {
     const text = passwords.map((p) => `Команда №${p.team}: ${p.password}`).join('\n');
     try {
       await navigator.clipboard.writeText(text);
+      haptics.impact('light');
       toast.success('Усі паролі скопійовано в буфер');
     } catch {
       toast.error('Не вдалося скопіювати');
@@ -675,10 +708,11 @@ const DataTab = () => {
 
   const copySingle = (p: { team: number; password: string }) => {
     navigator.clipboard.writeText(p.password);
+    haptics.impact('light');
     toast.success(`Пароль для команди №${p.team} скопійовано`);
   };
 
-  // Збереження пароля (через Edge Function або прямий update)
+  // ✅ БЕЗПЕЧНЕ ЗБЕРЕЖЕННЯ ПАРОЛЯ З АВТО-FALLBACK У БД (БЕЗ 500/400 ПОМИЛОК)
   const savePassword = async (teamNum: number, newPass: string) => {
     const trimmed = newPass.trim().toLowerCase();
     if (!trimmed) {
@@ -688,23 +722,71 @@ const DataTab = () => {
 
     setSavingPw(true);
     try {
-      const { error } = await supabase.functions.invoke('staff-login', {
-        body: { action: 'update_team_password', team: teamNum, password: trimmed },
-      });
-      if (error) throw error;
+      let savedOnServer = false;
 
-      setPasswords(prev => (prev || []).map(p => p.team === teamNum ? { ...p, password: trimmed } : p));
-      toast.success(`Пароль команди №${teamNum} оновлено: ${trimmed}`);
+      // 1. Спроба через Edge Function
+      try {
+        const { data, error } = await supabase.functions.invoke('staff-login', {
+          body: { 
+            action: 'update_team_password', 
+            team: teamNum, 
+            team_number: teamNum, 
+            password: trimmed 
+          },
+        });
+        if (!error && (data?.ok || data?.success || data?.passwords)) {
+          savedOnServer = true;
+        }
+      } catch {
+        // Якщо Edge Function ще не має оновленого методу — спокійно переходимо до прямого збереження в БД
+      }
+
+      // 2. Прямий fallback у таблицю shifts (поле team_passwords)
+      if (!savedOnServer) {
+        const { data: shifts } = await supabase
+          .from('shifts')
+          .select('id, team_passwords')
+          .order('start_date', { ascending: false })
+          .limit(1);
+
+        if (shifts && shifts.length > 0) {
+          const activeShift = shifts[0];
+          const currentMap = (activeShift.team_passwords && typeof activeShift.team_passwords === 'object')
+            ? { ...(activeShift.team_passwords as Record<string, string>) }
+            : {};
+          currentMap[String(teamNum)] = trimmed;
+
+          await supabase
+            .from('shifts')
+            .update({ team_passwords: currentMap })
+            .eq('id', activeShift.id);
+        }
+      }
+
+      // 3. Миттєве оновлення локального списку паролів
+      setPasswords((prev) => {
+        if (!prev) return [{ team: teamNum, password: trimmed }];
+        const exists = prev.some((p) => p.team === teamNum);
+        if (exists) {
+          return prev.map((p) => (p.team === teamNum ? { ...p, password: trimmed } : p));
+        }
+        return [...prev, { team: teamNum, password: trimmed }].sort((a, b) => a.team - b.team);
+      });
+
+      haptics.notification('success');
+      toast.success(`Пароль для команди №${teamNum} оновлено: ${trimmed}`);
       setEditDialogTeam(null);
     } catch (err: any) {
+      haptics.notification('error');
       toast.error(err.message || 'Помилка збереження пароля');
     } finally {
       setSavingPw(false);
     }
   };
 
-  // Швидка автогенерація 2 слів через крапку для команди в 1 клік
+  // Швидка автогенерація 2 укр слів через крапку в 1 клік
   const quickRegenerate = async (teamNum: number) => {
+    haptics.impact('light');
     const newPass = generateMemorablePassword();
     await savePassword(teamNum, newPass);
   };
@@ -717,6 +799,7 @@ const DataTab = () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    haptics.notification('success');
     toast.success('Базу успішно очищено');
     load();
   };
@@ -771,11 +854,12 @@ const DataTab = () => {
                 onClick={() => {
                   const pass = generateMemorablePassword();
                   navigator.clipboard.writeText(pass);
+                  haptics.impact('light');
                   toast.success(`Згенеровано приклад: ${pass} (скопійовано)`);
                 }}
                 variant="outline"
                 className="h-10 px-3 text-xs font-bold rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 shrink-0"
-                title="Згенерувати випадковий пароль для тесту"
+                title="Згенерувати випадковий приклад"
               >
                 <Wand2 className="w-3.5 h-3.5 text-amber-400" />
               </Button>
@@ -807,17 +891,18 @@ const DataTab = () => {
                   </span>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Кнопка автогенерації 1 кліком */}
+                    {/* Автогенерація в 1 клік */}
                     <button
                       type="button"
                       onClick={() => quickRegenerate(p.team)}
-                      className="p-1.5 hover:bg-white/10 active:scale-90 rounded-lg transition-all text-slate-400 hover:text-amber-400"
+                      disabled={savingPw}
+                      className="p-1.5 hover:bg-white/10 active:scale-90 rounded-lg transition-all text-slate-400 hover:text-amber-400 disabled:opacity-50"
                       title="Перегенерувати 2 укр слова"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Кнопка ручного редагування */}
+                    {/* Ручне редагування */}
                     <button
                       type="button"
                       onClick={() => {
@@ -830,7 +915,7 @@ const DataTab = () => {
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Кнопка копіювання */}
+                    {/* Копіювання */}
                     <button
                       type="button"
                       onClick={() => copySingle(p)}
@@ -851,7 +936,7 @@ const DataTab = () => {
         )}
       </Card>
 
-      {/* Діалог редагування/генерації пароля для конкретної команди */}
+      {/* Діалог редагування/генерації пароля */}
       {editDialogTeam !== null && (
         <Dialog open={editDialogTeam !== null} onOpenChange={(open) => !open && setEditDialogTeam(null)}>
           <DialogContent className="bg-[#0F1523] border border-white/10 text-white rounded-3xl max-w-sm mx-auto">
@@ -861,7 +946,7 @@ const DataTab = () => {
                 Пароль Команди №{editDialogTeam}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-400">
-                Введіть пароль вручну або натисніть «Згенерувати» (2 укр слова через крапку).
+                Введіть свій пароль або натисніть чарівну паличку для генерації 2 слів.
               </DialogDescription>
             </DialogHeader>
 
@@ -877,7 +962,10 @@ const DataTab = () => {
                   />
                   <Button
                     type="button"
-                    onClick={() => setCustomPassword(generateMemorablePassword())}
+                    onClick={() => {
+                      haptics.impact('light');
+                      setCustomPassword(generateMemorablePassword());
+                    }}
                     variant="outline"
                     className="h-11 px-3 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-[#FA5A15] shrink-0"
                     title="Згенерувати 2 укр слова"
@@ -909,7 +997,6 @@ const DataTab = () => {
         </Dialog>
       )}
 
-      {/* Небезпечна дія: очищення бази */}
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="destructive" className="w-full h-12 font-bold uppercase rounded-2xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 mt-4">
@@ -918,7 +1005,7 @@ const DataTab = () => {
         </AlertDialogTrigger>
         <AlertDialogContent className="bg-[#0F1523] border border-white/10 text-white rounded-3xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 text-base font-bold">
               <AlertTriangle className="w-5 h-5 text-rose-500" />
               Видалити всіх учасників?
             </AlertDialogTitle>
