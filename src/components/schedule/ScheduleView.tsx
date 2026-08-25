@@ -512,8 +512,8 @@ const ScheduleView = ({
         })}
       </div>
 
-      {/* Модальне вікно бронювання залів */}
-      {isStaff && myTeam != null && activeDay && (
+      {/* Модальне вікно бронювання залів (тимчасово вимкнено) */}
+      {HALL_FEATURE_ENABLED && isStaff && myTeam != null && activeDay && (
         <HallBookingModal
           open={bookingsOpen}
           onOpenChange={setBookingsOpen}
