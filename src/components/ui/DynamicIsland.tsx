@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   FileSpreadsheet, Coins, AlertCircle, Megaphone, Siren, Sparkles, Utensils, X,
   Clock, ChevronDown, WifiOff, Train, ArrowLeftRight, Bell, Activity, ShoppingBag, Navigation,
@@ -12,38 +12,39 @@ import {
   type IslandState,
 } from '@/context/DynamicIslandContext';
 import { getEventCategoryIcon } from '@/lib/eventIcons';
+import { useHaptics } from '@/hooks/useHaptics';
 
-// Базовий преміальний стиль контейнера Dynamic Island
-const BASE =
-  'island-container bg-[#06080F]/95 text-slate-100 overflow-hidden backdrop-blur-3xl border border-white/10 flex items-center justify-center relative select-none shadow-[0_20px_50px_-10px_rgba(0,0,0,0.85),_0_0_20px_-5px_rgba(255,255,255,0.05),_inset_0_1px_1px_rgba(255,255,255,0.15)]';
+// Преміальний Obsidian Glass стиль острівця у стилі Apple
+const BASE_CONTAINER =
+  'island-capsule bg-[#000000]/95 text-slate-100 overflow-hidden backdrop-blur-3xl ring-1 ring-white/15 flex items-center justify-center relative select-none shadow-[0_24px_54px_-8px_rgba(0,0,0,0.92),_0_0_20px_-3px_rgba(255,255,255,0.06),_inset_0_1px_1px_rgba(255,255,255,0.2)]';
 
 const BROADCAST_THEME: Record<BroadcastColor, { border: string; bg: string; badge: string; glow: string; text: string }> = {
   red: {
-    border: 'border-rose-500/40',
-    bg: 'bg-gradient-to-b from-[#1C0A0E]/95 to-[#0F0507]/95',
-    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
-    glow: 'shadow-[0_16px_40px_-8px_rgba(244,63,94,0.35)]',
+    border: 'ring-rose-500/40',
+    bg: 'bg-gradient-to-b from-[#1C0A0E]/98 to-[#0B0406]/98',
+    badge: 'bg-rose-500/25 text-rose-200 border-rose-500/40',
+    glow: 'shadow-[0_16px_40px_-6px_rgba(244,63,94,0.35)]',
     text: 'text-rose-100',
   },
   green: {
-    border: 'border-emerald-500/40',
-    bg: 'bg-gradient-to-b from-[#081C12]/95 to-[#040F0A]/95',
-    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    glow: 'shadow-[0_16px_40px_-8px_rgba(16,185,129,0.35)]',
+    border: 'ring-emerald-500/40',
+    bg: 'bg-gradient-to-b from-[#081C12]/98 to-[#040D08]/98',
+    badge: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/40',
+    glow: 'shadow-[0_16px_40px_-6px_rgba(16,185,129,0.35)]',
     text: 'text-emerald-100',
   },
   purple: {
-    border: 'border-purple-500/40',
-    bg: 'bg-gradient-to-b from-[#170A24]/95 to-[#0A0512]/95',
-    badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    glow: 'shadow-[0_16px_40px_-8px_rgba(168,85,247,0.35)]',
+    border: 'ring-purple-500/40',
+    bg: 'bg-gradient-to-b from-[#170A24]/98 to-[#08030F]/98',
+    badge: 'bg-purple-500/25 text-purple-200 border-purple-500/40',
+    glow: 'shadow-[0_16px_40px_-6px_rgba(168,85,247,0.35)]',
     text: 'text-purple-100',
   },
   orange: {
-    border: 'border-[#FA5A15]/45',
-    bg: 'bg-gradient-to-b from-[#1F0D06]/95 to-[#0D0603]/95',
-    badge: 'bg-[#FA5A15]/20 text-orange-300 border-[#FA5A15]/35',
-    glow: 'shadow-[0_16px_40px_-8px_rgba(250,90,21,0.35)]',
+    border: 'ring-[#FA5A15]/45',
+    bg: 'bg-gradient-to-b from-[#1F0D06]/98 to-[#0A0402]/98',
+    badge: 'bg-[#FA5A15]/25 text-orange-200 border-[#FA5A15]/40',
+    glow: 'shadow-[0_16px_40px_-6px_rgba(250,90,21,0.35)]',
     text: 'text-orange-100',
   },
 };
@@ -77,7 +78,7 @@ function renderIslandIcon(state: IslandState, payload: IslandPayload) {
   if (state === 'EVENT_ALERT' || payload.isSchedule) {
     if (/обід|сніданок|вечеря|чай|смаколики|їдальня|харчування/.test(text)) return <Utensils className={`${cls} text-amber-400`} />;
     if (/йога|зарядка|спорт|футбол|турнір|активн/.test(text)) return <Activity className={`${cls} text-emerald-400`} />;
-    if (/ярмарок|ярмарка|покупк/.test(text)) return <ShoppingBag className={`${cls} text-[#FA5A15]`} />;
+    if (/ярмарок|ярмарка|покупк|айрон|а\$/.test(text)) return <ShoppingBag className={`${cls} text-[#FA5A15]`} />;
     if (/таланти|концерт|свічка|дискотека|ватра/.test(text)) return <Sparkles className={`${cls} text-purple-400`} />;
     if (/виїзд|буковель|потяг|трансфер|автобус/.test(text)) return <Navigation className={`${cls} text-sky-400`} />;
     const Fallback = getEventCategoryIcon(payload.eventTitle ?? '', payload.category);
@@ -95,45 +96,68 @@ function renderIslandIcon(state: IslandState, payload: IslandPayload) {
 const DynamicIsland = () => {
   const { state, payload, expanded, hide, toggleExpanded, pauseAutoHide, resumeAutoHide } = useDynamicIsland();
   const [contentIn, setContentIn] = useState(false);
+  const haptics = useHaptics();
 
-  // Плавний стаггер: спочатку розкривається форма острова, через 120мс з'являється текст
+  // Жест свайпу вгору (Swipe Up to Dismiss)
+  const touchStartY = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    if (state !== 'HIDDEN') pauseAutoHide();
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current !== null) {
+      const touchEndY = e.changedTouches[0].clientY;
+      const diffY = touchStartY.current - touchEndY;
+      // Якщо свайпнули вгору на 24px і більше — закриваємо острівець
+      if (diffY > 24) {
+        haptics.impact('light');
+        hide();
+      }
+    }
+    touchStartY.current = null;
+    if (state !== 'HIDDEN' && !expanded) resumeAutoHide();
+  };
+
+  // Плавний стаггер: спочатку розкривається форма острова, через 80мс плавно влітає контент
   useEffect(() => {
     setContentIn(false);
     if (state === 'HIDDEN') return;
-    const t = setTimeout(() => setContentIn(true), 120);
+    const t = setTimeout(() => setContentIn(true), 80);
     return () => clearTimeout(t);
   }, [state, payload, expanded]);
 
-  // Захист від зависання на екрані
+  // Захист від зависання на екрані (знижено до комфортних 7.5с)
   useEffect(() => {
     if (state === 'HIDDEN') return;
-    const maxTimeout = setTimeout(() => hide(), 12500);
+    const maxTimeout = setTimeout(() => hide(), 7500);
     return () => clearTimeout(maxTimeout);
   }, [state, payload, expanded, hide]);
 
-  // Геометрія та неонові тіні для різних станів острова
+  // Точні розміри та радіуси острівця для різних станів
   const shape = (() => {
     switch (state) {
       case 'LOADING_ONLY':
-        return 'w-[124px] h-[30px] rounded-full border-sky-500/40 shadow-[0_8px_25px_rgba(14,165,233,0.3)]';
+        return 'w-[124px] h-[32px] rounded-full ring-sky-500/40 shadow-[0_8px_25px_rgba(14,165,233,0.25)]';
       case 'EXCEL_IMPORT':
-        return 'w-[336px] max-w-[92vw] h-[78px] rounded-[26px] border-teal-500/40 shadow-[0_12px_32px_rgba(20,184,166,0.25)]';
+        return 'w-[336px] max-w-[92vw] h-[74px] rounded-[24px] ring-teal-500/40 shadow-[0_12px_32px_rgba(20,184,166,0.2)]';
       case 'OFFLINE':
-        return 'w-[268px] max-w-[92vw] h-[40px] rounded-full border-amber-500/40 bg-amber-950/90 text-amber-200 shadow-[0_10px_28px_rgba(245,158,11,0.25)]';
+        return 'w-[270px] max-w-[92vw] h-[38px] rounded-full ring-amber-500/40 bg-amber-950/90 text-amber-200 shadow-[0_10px_28px_rgba(245,158,11,0.2)]';
       case 'SUCCESS_TOAST':
-        return 'w-[328px] max-w-[92vw] h-[70px] rounded-[24px] border-emerald-500/40 shadow-[0_12px_32px_rgba(16,185,129,0.3)]';
+        return 'w-[330px] max-w-[92vw] min-h-[64px] rounded-[24px] ring-emerald-500/40 shadow-[0_14px_34px_rgba(16,185,129,0.25)]';
       case 'ERROR_TOAST':
-        return 'w-[328px] max-w-[92vw] h-[70px] rounded-[24px] border-rose-500/40 shadow-[0_12px_32px_rgba(244,63,94,0.3)]';
+        return 'w-[330px] max-w-[92vw] min-h-[64px] rounded-[24px] ring-rose-500/40 shadow-[0_14px_34px_rgba(244,63,94,0.25)]';
       case 'BROADCAST': {
         const theme = BROADCAST_THEME[payload.color ?? 'red'];
-        return `w-[356px] max-w-[92vw] min-h-[98px] rounded-[28px] ${theme.border} ${theme.bg} ${theme.glow}`;
+        return `w-[356px] max-w-[92vw] min-h-[92px] rounded-[26px] ${theme.border} ${theme.bg} ${theme.glow}`;
       }
       case 'EVENT_ALERT':
         return expanded
-          ? 'w-[364px] max-w-[94vw] min-h-[118px] rounded-[28px] border-amber-500/35 shadow-[0_16px_45px_rgba(245,158,11,0.3)]'
-          : 'w-[296px] max-w-[92vw] h-[42px] rounded-full border-amber-500/30 shadow-[0_10px_28px_rgba(245,158,11,0.22)]';
+          ? 'w-[364px] max-w-[94vw] min-h-[114px] rounded-[28px] ring-amber-500/35 shadow-[0_16px_45px_rgba(245,158,11,0.25)]'
+          : 'w-[296px] max-w-[92vw] h-[40px] rounded-full ring-amber-500/30 shadow-[0_10px_28px_rgba(245,158,11,0.2)]';
       default:
-        return 'w-3 h-3 rounded-full border-transparent opacity-0 scale-0 shadow-none';
+        return 'w-[100px] h-[30px] rounded-full opacity-0 scale-75 -translate-y-3 pointer-events-none';
     }
   })();
 
@@ -146,23 +170,33 @@ const DynamicIsland = () => {
   const islandIcon = renderIslandIcon(state, payload);
 
   return (
-    <div className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none safe-top top-2 sm:top-3">
+    <div 
+      className="fixed left-0 right-0 z-[9999] flex justify-center pointer-events-none select-none transition-all duration-300"
+      style={{ top: 'max(env(safe-area-inset-top, 0px), 8px)' }}
+    >
       <div
         onMouseEnter={() => state !== 'HIDDEN' && pauseAutoHide()}
         onMouseLeave={() => state !== 'HIDDEN' && !expanded && resumeAutoHide()}
-        onTouchStart={() => state !== 'HIDDEN' && pauseAutoHide()}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         onClick={() => {
           if (state === 'HIDDEN' || state === 'EXCEL_IMPORT' || state === 'LOADING_ONLY') return;
+          haptics.impact('light');
           if (state === 'EVENT_ALERT') toggleExpanded();
           else hide();
         }}
-        className={`${BASE} ${shape} transition-all duration-350 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          state === 'HIDDEN' ? '' : 'opacity-100 scale-100 pointer-events-auto cursor-pointer active:scale-[0.985]'
+        className={`${BASE_CONTAINER} ${shape} transform-gpu will-change-transform ${
+          state === 'HIDDEN' 
+            ? 'opacity-0 scale-75 -translate-y-3 pointer-events-none' 
+            : 'opacity-100 scale-100 translate-y-0 pointer-events-auto cursor-pointer active:scale-[0.98]'
         }`}
+        style={{
+          transition: 'all 0.38s cubic-bezier(0.32, 0.72, 0, 1)',
+        }}
       >
         <div
-          className={`w-full h-full flex items-center justify-center px-3.5 transition-all duration-200 ease-out ${
-            contentIn ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+          className={`w-full h-full flex items-center justify-center px-3.5 transition-all duration-180 ease-out transform-gpu ${
+            contentIn ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
           }`}
         >
           {/* 1. СТАН: ЛОАДЕР */}
@@ -174,12 +208,12 @@ const DynamicIsland = () => {
             </div>
           )}
 
-          {/* 2. СТАН: ІМПОРТ EXCEL ТАБЛИЦІ */}
+          {/* 2. СТАН: ІМПОРТ EXCEL */}
           {state === 'EXCEL_IMPORT' && (
             <div className="w-full flex flex-col justify-between h-full py-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 bg-teal-500/20 border border-teal-500/30 rounded-lg flex items-center justify-center shrink-0">
+                  <div className="w-7 h-7 bg-teal-500/20 ring-1 ring-teal-500/30 rounded-lg flex items-center justify-center shrink-0">
                     <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
                   </div>
                   <div className="min-w-0">
@@ -189,7 +223,7 @@ const DynamicIsland = () => {
                 </div>
                 <span className="font-mono text-xs font-bold text-teal-400 tabular-nums">{p}%</span>
               </div>
-              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden ring-1 ring-white/5">
                 <div 
                   className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(20,184,166,0.6)]" 
                   style={{ width: `${p}%` }} 
@@ -205,23 +239,23 @@ const DynamicIsland = () => {
                 <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                 <span className="truncate">{payload.queued ? `Офлайн — ${payload.queued} дій у черзі` : 'Офлайн режим'}</span>
               </div>
-              <span className="text-[9px] bg-amber-500/25 text-amber-200 px-2 py-0.5 rounded-full border border-amber-500/35 font-mono font-bold shrink-0">
+              <span className="text-[9px] bg-amber-500/25 text-amber-200 px-2 py-0.5 rounded-full ring-1 ring-amber-500/35 font-mono font-bold shrink-0">
                 OFFLINE
               </span>
             </div>
           )}
 
-          {/* 4. СТАН: УСПІШНЕ СПОВІЩЕННЯ (SUCCESS TOAST) */}
+          {/* 4. СТАН: УСПІХ (SUCCESS TOAST) */}
           {state === 'SUCCESS_TOAST' && (
-            <div className="w-full flex items-center justify-between gap-2.5">
+            <div className="w-full flex items-center justify-between gap-2.5 py-1">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 ring-1 ring-emerald-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
                   {islandIcon}
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-emerald-300 leading-tight truncate">{payload.title}</div>
                   {payload.subtitle && (
-                    <div className="text-[10px] text-slate-300/80 font-medium leading-tight truncate mt-0.5">
+                    <div className="text-[10px] text-slate-300/85 font-medium leading-tight truncate mt-0.5">
                       {payload.subtitle}
                     </div>
                   )}
@@ -229,7 +263,8 @@ const DynamicIsland = () => {
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); hide(); }} 
-                className="p-1.5 hover:bg-white/10 active:scale-95 rounded-full transition-colors text-slate-400 hover:text-white shrink-0"
+                aria-label="Закрити"
+                className="p-1.5 hover:bg-white/10 active:scale-90 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -238,15 +273,15 @@ const DynamicIsland = () => {
 
           {/* 5. СТАН: ПОМИЛКА (ERROR TOAST) */}
           {state === 'ERROR_TOAST' && (
-            <div className="w-full flex items-center justify-between gap-2.5">
+            <div className="w-full flex items-center justify-between gap-2.5 py-1">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(244,63,94,0.3)]">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/20 ring-1 ring-rose-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(244,63,94,0.3)]">
                   {islandIcon}
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-rose-300 leading-tight truncate">{payload.title}</div>
                   {payload.subtitle && (
-                    <div className="text-[10px] text-slate-300/80 font-medium leading-tight truncate mt-0.5">
+                    <div className="text-[10px] text-slate-300/85 font-medium leading-tight truncate mt-0.5">
                       {payload.subtitle}
                     </div>
                   )}
@@ -258,14 +293,15 @@ const DynamicIsland = () => {
                     e.stopPropagation(); 
                     toast.error('Деталі помилки', { description: payload.errorDetails }); 
                   }}
-                  className="text-[10px] bg-rose-500/25 hover:bg-rose-500/35 active:scale-95 text-rose-200 border border-rose-500/40 px-2.5 py-1 rounded-lg transition-all font-semibold shrink-0"
+                  className="text-[10px] bg-rose-500/25 hover:bg-rose-500/35 active:scale-95 text-rose-200 ring-1 ring-rose-500/40 px-2.5 py-1 rounded-lg transition-all font-semibold shrink-0"
                 >
                   Деталі
                 </button>
               ) : (
                 <button 
                   onClick={(e) => { e.stopPropagation(); hide(); }} 
-                  className="p-1.5 hover:bg-white/10 active:scale-95 rounded-full transition-colors text-slate-400 hover:text-white shrink-0"
+                  aria-label="Закрити"
+                  className="p-1.5 hover:bg-white/10 active:scale-90 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -275,7 +311,7 @@ const DynamicIsland = () => {
 
           {/* 6. СТАН: ОГОЛОШЕННЯ (BROADCAST) */}
           {state === 'BROADCAST' && (
-            <div className="w-full flex flex-col justify-between h-full py-2.5">
+            <div className="w-full flex flex-col justify-between h-full py-2.5 gap-1.5">
               <div className="w-full flex items-center justify-between pb-1.5 border-b border-white/10">
                 <div className="flex items-center gap-2">
                   <BroadcastIcon color={color} />
@@ -287,23 +323,24 @@ const DynamicIsland = () => {
                   <span className="text-[10px] text-white/70 font-medium truncate max-w-[120px]">{payload.author}</span>
                   <button 
                     onClick={(e) => { e.stopPropagation(); hide(); }} 
-                    className="p-1 hover:bg-white/10 active:scale-95 rounded-full transition-colors text-white/70 hover:text-white"
+                    aria-label="Закрити"
+                    className="p-1 hover:bg-white/10 active:scale-90 rounded-full transition-all text-white/70 hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-              <div className={`text-xs font-semibold pt-1.5 leading-relaxed break-words ${broadcastTheme.text}`}>
+              <div className={`text-xs font-semibold leading-relaxed break-words ${broadcastTheme.text}`}>
                 {payload.message}
               </div>
             </div>
           )}
 
-          {/* 7. СТАН: НАГАДУВАННЯ ПРО ПОДІЮ (ЗГОРНУТИЙ) */}
+          {/* 7. СТАН: НАГАДУВАННЯ РОЗКЛАДУ (КОМПАКТНИЙ) */}
           {state === 'EVENT_ALERT' && !expanded && (
             <div className="w-full flex items-center justify-between gap-2.5 text-xs font-semibold">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/20 ring-1 ring-amber-500/30 flex items-center justify-center shrink-0">
                   {islandIcon}
                 </div>
                 <span className="text-white truncate">
@@ -322,12 +359,12 @@ const DynamicIsland = () => {
             </div>
           )}
 
-          {/* 8. СТАН: ПОДІЯ З ДЕТАЛЯМИ (РОЗГОРНУТИЙ) */}
+          {/* 8. СТАН: НАГАДУВАННЯ РОЗКЛАДУ (РОЗГОРНУТИЙ) */}
           {state === 'EVENT_ALERT' && expanded && (
             <div className="w-full h-full flex flex-col justify-between py-3 gap-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 ring-1 ring-amber-500/35 flex items-center justify-center shrink-0 mt-0.5">
                     {islandIcon}
                   </div>
                   <div className="min-w-0">
@@ -352,14 +389,15 @@ const DynamicIsland = () => {
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); hide(); }}
-                  className="p-1 hover:bg-white/10 active:scale-95 rounded-full transition-colors text-white/60 hover:text-white shrink-0"
+                  aria-label="Закрити"
+                  className="p-1 hover:bg-white/10 active:scale-90 rounded-full transition-all text-white/60 hover:text-white shrink-0"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
 
               {payload.myTime ? (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col gap-1">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 ring-1 ring-amber-500/25 flex flex-col gap-1">
                   <div className="flex items-baseline gap-2 font-mono text-xl sm:text-2xl font-black tabular-nums text-amber-300">
                     <Clock className="h-4 w-4 self-center text-amber-400" />
                     <span>Твій вихід: {payload.myTime}</span>
@@ -372,7 +410,7 @@ const DynamicIsland = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 font-mono text-lg font-bold tabular-nums text-white p-2 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2 font-mono text-lg font-bold tabular-nums text-white p-2 rounded-xl bg-white/5 ring-1 ring-white/10">
                   <Clock className="w-4 h-4 text-amber-400" />
                   <span>{payload.range}</span>
                 </div>
