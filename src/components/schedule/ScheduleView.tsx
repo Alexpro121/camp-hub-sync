@@ -306,7 +306,7 @@ const ScheduleView = ({
           </span>
         </div>
 
-        {isStaff && myTeam != null && (
+        {HALL_FEATURE_ENABLED && isStaff && myTeam != null && (
           <button
             type="button"
             onClick={() => {
