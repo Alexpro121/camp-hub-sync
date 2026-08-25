@@ -23,7 +23,6 @@ import { type HallBooking } from '@/types/halls';
 import { toMinutes } from '@/lib/halls';
 import { useHaptics } from '@/hooks/useHaptics';
 
-// Тимчасовий прапорець: модуль залів приховано
 const HALL_FEATURE_ENABLED = false;
 
 interface Props {
@@ -74,13 +73,17 @@ const ScheduleView = ({
   const [filterTeam, setFilterTeam] = useState<number | null>(myTeam ?? null);
   const team = lockTeam ? myTeam ?? null : filterTeam;
   const [now, setNow] = useState(new Date());
+
+  // Безпечні посилання для ізольованого горизонтального скролу
+  const dateContainerRef = useRef<HTMLDivElement>(null);
   const activeDayRef = useRef<HTMLButtonElement>(null);
+
   const [bookingsOpen, setBookingsOpen] = useState(false);
   const [teamBookings, setTeamBookings] = useState<HallBooking[]>([]);
 
   const haptics = useHaptics();
 
-  // Оновлення часу кожні 30 секунд для розрахунку таймінгу подій
+  // Оновлення часу кожні 30 секунд
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
@@ -140,7 +143,7 @@ const ScheduleView = ({
     };
   }, []);
 
-  // Завантаження броней залів (якщо увімкнено)
+  // Завантаження броней залів (якщо ввімкнено)
   useEffect(() => {
     if (!activeDay || !HALL_FEATURE_ENABLED) return;
     let cancelled = false;
@@ -171,14 +174,14 @@ const ScheduleView = ({
     };
   }, [activeDay, team]);
 
-  // Чистий список дат зміни
+  // Список доступних дат
   const days = useMemo(() => {
     if (lockTeam) return [todayISO()];
     const dates = [...new Set(schedules.map((s) => s.date))].sort();
     return dates.length ? dates : [todayISO()];
   }, [schedules, lockTeam]);
 
-  // Автоматичний вибір актуального дня
+  // Автоматичний вибір дня
   useEffect(() => {
     if (!days.length) return;
     setActiveDay((cur) => {
@@ -189,8 +192,17 @@ const ScheduleView = ({
     });
   }, [days]);
 
+  // ✅ БЕЗПЕЧНЕ ЦЕНТРУВАННЯ ДАТИ (НЕ СМІЩУЄ ВЕСЬ ЕКРАН!)
   useEffect(() => {
-    activeDayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (!activeDayRef.current || !dateContainerRef.current) return;
+    const container = dateContainerRef.current;
+    const element = activeDayRef.current;
+
+    const targetLeft = element.offsetLeft - (container.clientWidth / 2) + (element.clientWidth / 2);
+    container.scrollTo({
+      left: Math.max(0, targetLeft),
+      behavior: 'smooth'
+    });
   }, [activeDay, loading]);
 
   const idsForDate = useMemo(
@@ -292,12 +304,12 @@ const ScheduleView = ({
     );
   }
 
-  const tabCls = 'shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-95 select-none min-h-[36px] flex items-center justify-center';
+  const tabCls = 'shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-95 select-none min-h-[38px] flex items-center justify-center';
 
   return (
     <div className="w-full space-y-3.5 select-none pb-36 overflow-x-hidden">
       
-      {/* ================= 1. ШАПКА: РОЗКЛАД + КНОПКА ЗАЛІВ ================= */}
+      {/* ================= 1. ШАПКА ================= */}
       <div className="w-full flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground">
@@ -325,10 +337,13 @@ const ScheduleView = ({
         )}
       </div>
 
-      {/* ================= 2. СЕЛЕКТОР ДАТ (БЕЗ ЗРІЗАННЯ КРАЇВ) ================= */}
+      {/* ================= 2. СЕЛЕКТОР ДАТ (ІЗОЛЬОВАНИЙ СКРОЛ) ================= */}
       {days.length > 1 && (
-        <div className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
-          <div className="flex items-center gap-2 px-1">
+        <div 
+          ref={dateContainerRef}
+          className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1"
+        >
+          <div className="flex items-center gap-2 px-1 w-max">
             {days.map((d) => {
               const p = dayParts(d);
               const active = d === activeDay;
@@ -340,7 +355,7 @@ const ScheduleView = ({
                     haptics.impact('light');
                     setActiveDay(d);
                   }}
-                  className={`shrink-0 select-none rounded-2xl border px-3 py-2 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[56px] ${
+                  className={`shrink-0 select-none rounded-2xl border px-3.5 py-2 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[58px] ${
                     active
                       ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.4)] scale-[1.02]'
                       : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
@@ -356,7 +371,7 @@ const ScheduleView = ({
         </div>
       )}
 
-      {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ (БЕЗ ЗРІЗАННЯ ЗЛІВА) ================= */}
+      {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ ================= */}
       {lockTeam ? (
         <div className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
@@ -366,7 +381,7 @@ const ScheduleView = ({
         </div>
       ) : (
         <div className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
-          <div className="flex items-center gap-1.5 px-1">
+          <div className="flex items-center gap-1.5 px-1 w-max">
             <button
               onClick={() => {
                 haptics.selection();
