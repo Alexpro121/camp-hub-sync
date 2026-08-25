@@ -9,24 +9,6 @@ function defaultSupervisorPassword(team: number): string {
   return `${SUPERVISOR_PREFIX}${team}`;
 }
 
-/** Серверна генерація резервного HMAC-пароля */
-async function supervisorPassword(team: number): Promise<string> {
-  const secret = Deno.env.get('STAFF_SUPERVISOR_SECRET') ?? '';
-  if (!secret) return defaultSupervisorPassword(team);
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`supervisor:${team}`));
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from(new Uint8Array(sig).slice(0, 10))
-    .map((b) => alphabet[b % alphabet.length])
-    .join('');
-}
-
 function constantTimeEqual(a: string, b: string): boolean {
   const ea = new TextEncoder().encode(a);
   const eb = new TextEncoder().encode(b);
@@ -164,26 +146,22 @@ Deno.serve(async (req) => {
     // =========================================================================
     // ВХІД СУПРОВОДУ (СТРОГА ПЕРЕВІРКА БЕЗ ДЕФОЛТНОГО ОБХОДУ)
     // =========================================================================
-    const customMap = await getTeamPasswords(adminClient());
-    const customPass = customMap[String(team)];
+    const svc = adminClient();
+    const { data: passRow, error: passError } = await svc
+      .from('team_passwords')
+      .select('password')
+      .eq('team', team)
+      .maybeSingle();
 
-    let ok = false;
-
-    if (customPass) {
-      // 🔒 ЯКЩО ПАРОЛЬ БУВ СТВОРЕНИЙ — ПРИЙМАЄТЬСЯ ВИКЛЮЧНО ВІН!
-      // Дефолтний "Супровід<номер>" більше НЕ підходить!
-      ok = passwordMatches(password, customPass);
-    } else {
-      // ⚠️ Тільки якщо пароль ще ніколи не змінювався — працює дефолтний
-      ok = passwordMatches(password, defaultSupervisorPassword(team));
-      if (!ok) {
-        try {
-          ok = passwordMatches(password, await supervisorPassword(team));
-        } catch (_e) {
-          ok = false;
-        }
-      }
+    if (passError) {
+      console.error('Password lookup error:', passError);
+      return json({ error: 'login_failed' }, 500);
     }
+
+    // Якщо пароль команди збережено, жоден дефолтний або резервний пароль не приймається.
+    const ok = passRow?.password
+      ? passwordMatches(password, passRow.password)
+      : passwordMatches(password, defaultSupervisorPassword(team));
 
     if (!ok) {
       const v = recordFailure(rlKey, { slowAfter: 3 });
