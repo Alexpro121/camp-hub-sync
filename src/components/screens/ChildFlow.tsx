@@ -581,6 +581,7 @@ const ChildFlow = ({ onBack }: Props) => {
                   balance={child.iron_dollars}
                   childName={child.full_name}
                   childTeam={child.team_number}
+                  isLive={fair.isLiveFairRunning}
                 />
               )}
               
