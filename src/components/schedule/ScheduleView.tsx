@@ -262,14 +262,16 @@ const ScheduleView = ({
       event: e,
     }));
 
-    teamBookings.forEach((b) => {
-      rows.push({
-        kind: 'booking',
-        startMin: toMinutes(b.start_time),
-        endMin: toMinutes(b.end_time),
-        booking: b,
+    if (HALL_FEATURE_ENABLED) {
+      teamBookings.forEach((b) => {
+        rows.push({
+          kind: 'booking',
+          startMin: toMinutes(b.start_time),
+          endMin: toMinutes(b.end_time),
+          booking: b,
+        });
       });
-    });
+    }
 
     return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
   }, [visibleEvents, teamBookings]);
