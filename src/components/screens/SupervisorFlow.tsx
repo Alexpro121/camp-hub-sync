@@ -66,7 +66,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [editChild, setEditChild] = useState<any | null>(null);
   const [firstTeamChild, setFirstTeamChild] = useState<any | null>(null);
 
-  // Керування темою оформлення для кабінету супроводу
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('supervisor_theme_mode');
@@ -78,7 +77,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const fair = useAggressiveFairUnlock(authedTeam !== null);
   const isMobile = useIsMobile();
 
-  // Синхронізація теми з документом
   useEffect(() => {
     localStorage.setItem('supervisor_theme_mode', isDark ? 'dark' : 'light');
     if (isDark) {
@@ -95,7 +93,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     setIsDark((prev) => !prev);
   }, [haptics]);
 
-  // Список вкладок для нижнього плаваючого Dock
   const tabItems: DockItem[] = [
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
@@ -114,12 +111,10 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'notifications', label: 'Сповіщення', icon: Bell, badge: unreadCount },
   ];
 
-  // Автоматично відкриваємо свою команду за замовчуванням
   useEffect(() => {
     if (authedTeam !== null) setOpenTeam(authedTeam);
   }, [authedTeam]);
 
-  // Автоматичний запуск навчального туру для нового супроводу
   useEffect(() => {
     if (authedTeam === null) return;
     const GLOBAL_SEEN_KEY = 'helpsuprov:tour-seen-global';
@@ -146,7 +141,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     setActiveTab(v);
   };
 
-  // Відновлення сесії супроводу
   useEffect(() => {
     const restore = async () => {
       const saved = localStorage.getItem('helpsuprov:supervisor-team')
@@ -164,7 +158,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     restore();
   }, []);
 
-  // Відстеження та миттєве скидання нечитаних сповіщень
   useEffect(() => {
     if (authedTeam === null) return;
 
@@ -186,7 +179,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => recompute())
       .subscribe();
 
-    // Слухаємо системні події оновлення стрічки
     const onStorage = () => recompute();
     window.addEventListener('storage', onStorage);
     window.addEventListener('helpsuprov:notif-sync', onStorage);
@@ -200,7 +192,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     };
   }, [authedTeam]);
 
-  // Авторизація супроводу
   const handleLogin = async () => {
     const teamNum = parseTeamNumber(team);
     if (!teamNum || !password) {
@@ -266,9 +257,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     toast.success('Список успішно експортовано у файл Excel');
   };
 
-  /* =========================================================================
-     АНІМАЦІЯ ПЕРЕХОДУ В АДМІНІСТРАТИВНИЙ ШТАБ
-  ========================================================================= */
   if (showAdminAnim) {
     return (
       <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-6 select-none transition-colors duration-300 ${
@@ -292,321 +280,355 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     );
   }
 
-  /* =========================================================================
-     ЕКРАН АВТОРИЗАЦІЇ СУПРОВОДУ
-  ========================================================================= */
-  if (authedTeam === null) {
-    return (
-      <div className={`min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none transition-colors duration-300 ${
-        isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
-      }`}>
-        {loading && <FullScreenLoader label="Перевірка доступу супроводу..." />}
-        
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <button 
-              onClick={onBack} 
-              className={`inline-flex items-center gap-1.5 min-h-[40px] px-2 text-xs sm:text-sm font-semibold transition-colors active:scale-95 ${
-                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
-              <span>Назад</span>
-            </button>
-
-            {/* Перемикач теми на екрані входу */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Змінити тему оформлення"
-              className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
-                isDark 
-                  ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
-            </button>
-          </div>
-
-          <div className="animate-slide-up space-y-4">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FA5A15]/10 border border-[#FA5A15]/20 text-[10px] font-bold tracking-widest text-[#FA5A15] uppercase mb-2">
-                ШТАБ СУПРОВОДУ
-              </div>
-              <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Я супровід
-              </h1>
-              <p className={`text-xs sm:text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Введіть номер своєї команди та пароль для входу в систему
-              </p>
-            </div>
-
-            <Card className={`p-4 sm:p-6 space-y-4 shadow-xl rounded-3xl backdrop-blur-xl border transition-colors ${
-              isDark 
-                ? 'bg-[#0F1523]/85 border-white/10' 
-                : 'bg-white/95 border-slate-200/90 shadow-md'
-            }`}>
-              <div className="space-y-1.5">
-                <Label htmlFor="team" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Номер команди
-                </Label>
-                <Input
-                  id="team"
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="6"
-                  value={team}
-                  onChange={(e) => setTeam(e.target.value)}
-                  className={`h-12 text-base rounded-xl ${
-                    isDark 
-                      ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
-                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
-                  }`}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="pwd" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Пароль доступу
-                </Label>
-                <Input
-                  id="pwd"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="off"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  className={`h-12 text-base rounded-xl font-mono ${
-                    isDark 
-                      ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
-                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
-                  }`}
-                />
-              </div>
-
-              <Button 
-                onClick={handleLogin} 
-                disabled={loading} 
-                className="w-full h-12 text-base font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-transform shadow-lg rounded-xl"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти в кабінет'}
-              </Button>
-            </Card>
-          </div>
-        </div>
-
-        <footer className={`text-center py-2 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-          Всеукраїнський проєкт «Залізна Зміна» · Штаб координації проєкту
-        </footer>
-      </div>
-    );
-  }
-
-  /* =========================================================================
-     ГОЛОВНИЙ РОБОЧИЙ ЕКРАН СУПРОВОДУ
-  ========================================================================= */
   return (
-    <div className={`min-h-[100dvh] w-full max-w-3xl mx-auto pb-36 safe-bottom overflow-x-hidden select-none transition-colors duration-300 ${
-      isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
-    }`}>
-      
-      {/* Верхня фіксована панель */}
-      <header className={`px-4 py-3 safe-top border-b backdrop-blur-xl sticky top-0 z-30 transition-colors ${
-        isDark 
-          ? 'border-white/10 bg-[#0F1523]/80' 
-          : 'border-slate-200/80 bg-white/90 shadow-sm'
-      }`}>
-        <div className="flex items-center justify-between gap-2">
-          <button 
-            onClick={logout} 
-            data-tour="step-8-logout-button" 
-            className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 border text-xs font-semibold transition-all shadow-sm ${
-              isDark 
-                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white' 
-                : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900'
-            }`}
-          >
-            <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
-            <span>Вийти</span>
-          </button>
+    <div 
+      id="supervisor-flow-root"
+      className={`min-h-[100dvh] w-full max-w-3xl mx-auto pb-36 safe-bottom overflow-x-hidden select-none transition-colors duration-300 ${
+        isDark ? 'theme-dark bg-[#07090E] text-slate-100' : 'theme-light bg-[#F1F5F9] text-slate-900'
+      }`}
+    >
+      {/* ================= ГЛОБАЛЬНИЙ CSS-РУШІЙ СВІТЛОЇ ТЕМИ ДЛЯ СУПРОВОДУ ================= */}
+      <style>{`
+        #supervisor-flow-root.theme-light {
+          color-scheme: light;
+        }
 
-          <div className="flex items-center gap-2">
-            {/* Перемикач теми оформлення */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Змінити тему оформлення"
-              title="Змінити тему оформлення"
-              className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
-                isDark 
-                  ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
-            </button>
+        /* Перефарбування всіх чорних карток, списку команд та учасників у білий колір */
+        #supervisor-flow-root.theme-light .bg-card,
+        #supervisor-flow-root.theme-light [class*="bg-card"],
+        #supervisor-flow-root.theme-light [class*="bg-[#0F1523]"],
+        #supervisor-flow-root.theme-light [class*="bg-[#0f1523]"],
+        #supervisor-flow-root.theme-light [class*="bg-[#0A0E18]"],
+        #supervisor-flow-root.theme-light [class*="bg-[#0a0e18]"] {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          border-color: #e2e8f0 !important;
+          box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.05) !important;
+        }
 
-            {/* Кнопка запуску інструктажу */}
-            <button
-              type="button"
-              onClick={startTour}
-              aria-label="Пройти навчання"
-              title="Пройти навчання"
-              className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border text-xs font-bold active:scale-95 transition-all shadow-sm ${
-                isDark 
-                  ? 'border-[#FA5A15]/30 bg-[#FA5A15]/10 text-[#FA5A15] hover:bg-[#FA5A15]/20' 
-                  : 'border-orange-200 bg-orange-50 text-[#FA5A15] hover:bg-orange-100'
-              }`}
-            >
-              <HelpCircle className="w-4 h-4" />
-              <span className="hidden xs:inline sm:inline">Інструктаж</span>
-            </button>
+        /* Тексти та підписи */
+        #supervisor-flow-root.theme-light [class*="text-white"],
+        #supervisor-flow-root.theme-light [class*="text-slate-100"],
+        #supervisor-flow-root.theme-light [class*="text-slate-200"],
+        #supervisor-flow-root.theme-light [class*="text-slate-300"] {
+          color: #0f172a !important;
+        }
 
-            {/* Номер команди */}
-            <div className="text-right pl-1">
-              <p className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Команда
-              </p>
-              <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">
-                #{authedTeam}
-              </p>
+        #supervisor-flow-root.theme-light [class*="text-muted-foreground"],
+        #supervisor-flow-root.theme-light [class*="text-slate-400"],
+        #supervisor-flow-root.theme-light [class*="text-slate-500"] {
+          color: #64748b !important;
+        }
+
+        /* Поля вводу, селекти та випадаючі списки (сортування) */
+        #supervisor-flow-root.theme-light input,
+        #supervisor-flow-root.theme-light select,
+        #supervisor-flow-root.theme-light [class*="bg-white/5"],
+        #supervisor-flow-root.theme-light [class*="bg-surface-1"] {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          border-color: #cbd5e1 !important;
+        }
+
+        /* Розділювачі та рамки */
+        #supervisor-flow-root.theme-light [class*="border-white/5"],
+        #supervisor-flow-root.theme-light [class*="border-white/10"],
+        #supervisor-flow-root.theme-light [class*="border-border"] {
+          border-color: #e2e8f0 !important;
+        }
+
+        /* Фірмовий помаранчевий акцент */
+        #supervisor-flow-root.theme-light [class*="text-[#FA5A15]"] {
+          color: #FA5A15 !important;
+        }
+      `}</style>
+
+      {/* ЕКРАН АВТОРИЗАЦІЇ */}
+      {authedTeam === null ? (
+        <div className="min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none">
+          {loading && <FullScreenLoader label="Перевірка доступу супроводу..." />}
+          
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <button 
+                onClick={onBack} 
+                className={`inline-flex items-center gap-1.5 min-h-[40px] px-2 text-xs sm:text-sm font-semibold transition-colors active:scale-95 ${
+                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
+                <span>Назад</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label="Змінити тему оформлення"
+                className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                  isDark 
+                    ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
+              </button>
             </div>
-          </div>
-        </div>
-      </header>
 
-      {/* Вкладки робочого простору */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3 pt-2">
-        {!isMobile && (
-          <div className={`sticky top-[65px] z-20 px-1 py-2 backdrop-blur-md transition-colors ${
-            isDark ? 'bg-[#07090E]/90' : 'bg-[#F4F6F9]/90'
-          }`}>
-            <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />
-          </div>
-        )}
-        {isMobile && <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />}
+            <div className="animate-slide-up space-y-4">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FA5A15]/10 border border-[#FA5A15]/20 text-[10px] font-bold tracking-widest text-[#FA5A15] uppercase mb-2">
+                  ШТАБ СУПРОВОДУ
+                </div>
+                <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Я супровід
+                </h1>
+                <p className={`text-xs sm:text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Введіть номер своєї команди та пароль для входу в систему
+                </p>
+              </div>
 
-        {/* 1. КОМАНДИ ТА УЧАСНИКИ */}
-        <TabsContent value="teams" className="mt-2 animate-fade-in">
-          <TeamsView
-            myTeam={authedTeam}
-            openTeam={openTeam}
-            onOpenTeamChange={setOpenTeam}
-            editChild={editChild}
-            onEditChildChange={(c) => { if (tourOpen && !c) return; setEditChild(c); }}
-            onFirstTeamChild={setFirstTeamChild}
-          />
-        </TabsContent>
-
-        {/* 2. РОЗКЛАД */}
-        <TabsContent value="schedule" className="mt-2 animate-fade-in">
-          <div data-tour="step-schedule-timeline">
-            <ScheduleView
-              myTeam={authedTeam}
-              isStaff
-              onFairAction={() => setActiveTab('fair')}
-            />
-          </div>
-        </TabsContent>
-
-        {/* 3. ТАЛАНТИ */}
-        {talent.active && (
-          <TabsContent value="talent" className="mt-2 animate-fade-in">
-            <TalentTeamView myTeam={authedTeam} />
-          </TabsContent>
-        )}
-
-        {/* 4. КАСА ЯРМАРКУ (AIR PAY) */}
-        <TabsContent value="fair" className="mt-2 animate-fade-in">
-          <div data-tour="step-fair-terminal">
-            <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
-          </div>
-        </TabsContent>
-
-        {/* 5. ПОТЯГ ТА КУПЕ */}
-        {TRAIN_FEATURE_ENABLED && (
-          <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
-            <div data-tour="step-7-coupes-root" className="space-y-3">
-              <TrainPublishStatus />
-              <p className={`text-[10px] uppercase tracking-[0.2em] px-1 font-bold ${
-                isDark ? 'text-slate-400' : 'text-slate-500'
+              <Card className={`p-4 sm:p-6 space-y-4 shadow-xl rounded-3xl backdrop-blur-xl border transition-colors ${
+                isDark 
+                  ? 'bg-[#0F1523]/85 border-white/10' 
+                  : 'bg-white/95 border-slate-200/90 shadow-md'
               }`}>
-                {TRAIN_TITLE}
-              </p>
-              <CoupeSwapSettings myTeam={authedTeam} />
-              <CoupeManager myTeam={authedTeam} />
+                <div className="space-y-1.5">
+                  <Label htmlFor="team" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    Номер команди
+                  </Label>
+                  <Input
+                    id="team"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="6"
+                    value={team}
+                    onChange={(e) => setTeam(e.target.value)}
+                    className={`h-12 text-base rounded-xl ${
+                      isDark 
+                        ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
+                    }`}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="pwd" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    Пароль доступу
+                  </Label>
+                  <Input
+                    id="pwd"
+                    type="password"
+                    placeholder="••••••••"
+                    autoComplete="off"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    className={`h-12 text-base rounded-xl font-mono ${
+                      isDark 
+                        ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
+                        : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
+                    }`}
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleLogin} 
+                  disabled={loading} 
+                  className="w-full h-12 text-base font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-transform shadow-lg rounded-xl"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти в кабінет'}
+                </Button>
+              </Card>
             </div>
-          </TabsContent>
-        )}
+          </div>
 
-        {/* 6. ТРАНСФЕРИ */}
-        <TabsContent value="transfers" className="mt-2 animate-fade-in">
-          <TransfersView myTeam={authedTeam} />
-        </TabsContent>
-
-        {/* 7. СПОВІЩЕННЯ */}
-        <TabsContent value="notifications" className="mt-2 animate-fade-in">
-          <NotificationsView myTeam={authedTeam} onRestartTour={startTour} />
-        </TabsContent>
-      </Tabs>
-
-      {/* Плаваючі кнопки швидкої дії (Банк А$ та Excel-експорт) */}
-      <div 
-        className="fixed right-4 flex flex-col gap-2.5 z-40"
-        style={{
-          bottom: isMobile 
-            ? 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' 
-            : '1.75rem'
-        }}
-      >
-        <Button
-          onClick={() => {
-            haptics.impact('light');
-            setBankOpen(true);
-          }}
-          data-tour="step-5-bank-button"
-          className="h-12 w-12 rounded-2xl shadow-2xl p-0 bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-90 transition-all border border-orange-400/30"
-          title="Банк Айрон-доларів"
-        >
-          <Wallet className="w-5 h-5" />
-        </Button>
-
-        <Button
-          onClick={handleExport}
-          className={`h-11 w-11 rounded-2xl shadow-xl p-0 border active:scale-90 transition-all ${
+          <footer className={`text-center py-2 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+            Всеукраїнський проєкт «Залізна Зміна» · Штаб координації проєкту
+          </footer>
+        </div>
+      ) : (
+        /* ГОЛОВНИЙ РОБОЧИЙ ЕКРАН */
+        <>
+          <header className={`px-4 py-3 safe-top border-b backdrop-blur-xl sticky top-0 z-30 transition-colors ${
             isDark 
-              ? 'bg-[#0F1523]/90 hover:bg-[#151D2F] border-white/10 text-slate-300 hover:text-white' 
-              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 shadow-md'
-          }`}
-          title="Експорт списків в Excel"
-        >
-          <Download className="w-4 h-4 text-emerald-500" />
-        </Button>
-      </div>
+              ? 'border-white/10 bg-[#0F1523]/80' 
+              : 'border-slate-200/80 bg-white/90 shadow-sm'
+          }`}>
+            <div className="flex items-center justify-between gap-2">
+              <button 
+                onClick={logout} 
+                data-tour="step-8-logout-button" 
+                className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 border text-xs font-semibold transition-all shadow-sm ${
+                  isDark 
+                    ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white' 
+                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900'
+                }`}
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
+                <span>Вийти</span>
+              </button>
 
-      {/* Інтерактивний тур навчання */}
-      <SupervisorTour
-        open={tourOpen}
-        teamNumber={authedTeam}
-        myTeam={authedTeam}
-        activeTab={activeTab}
-        firstTeamChild={firstTeamChild}
-        onTabChange={setActiveTab}
-        setOpenTeam={setOpenTeam}
-        setEditChild={setEditChild}
-        setBankOpen={setBankOpen}
-        onClose={() => setTourOpen(false)}
-      />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Змінити тему оформлення"
+                  className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                    isDark 
+                      ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
+                </button>
 
-      {/* Модальне вікно Банку Айрон-доларів */}
-      {authedTeam !== null && (
-        <IronBank
-          myTeam={authedTeam}
-          open={bankOpen}
-          onClose={() => { if (!tourOpen) setBankOpen(false); }}
-        />
+                <button
+                  type="button"
+                  onClick={startTour}
+                  aria-label="Пройти навчання"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border text-xs font-bold active:scale-95 transition-all shadow-sm ${
+                    isDark 
+                      ? 'border-[#FA5A15]/30 bg-[#FA5A15]/10 text-[#FA5A15] hover:bg-[#FA5A15]/20' 
+                      : 'border-orange-200 bg-orange-50 text-[#FA5A15] hover:bg-orange-100'
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span className="hidden xs:inline sm:inline">Інструктаж</span>
+                </button>
+
+                <div className="text-right pl-1">
+                  <p className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Команда
+                  </p>
+                  <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">
+                    #{authedTeam}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3 pt-2">
+            {!isMobile && (
+              <div className={`sticky top-[65px] z-20 px-1 py-2 backdrop-blur-md transition-colors ${
+                isDark ? 'bg-[#07090E]/90' : 'bg-[#F1F5F9]/90'
+              }`}>
+                <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />
+              </div>
+            )}
+            {isMobile && <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />}
+
+            <TabsContent value="teams" className="mt-2 animate-fade-in">
+              <TeamsView
+                myTeam={authedTeam}
+                openTeam={openTeam}
+                onOpenTeamChange={setOpenTeam}
+                editChild={editChild}
+                onEditChildChange={(c) => { if (tourOpen && !c) return; setEditChild(c); }}
+                onFirstTeamChild={setFirstTeamChild}
+              />
+            </TabsContent>
+
+            <TabsContent value="schedule" className="mt-2 animate-fade-in">
+              <div data-tour="step-schedule-timeline">
+                <ScheduleView
+                  myTeam={authedTeam}
+                  isStaff
+                  onFairAction={() => setActiveTab('fair')}
+                />
+              </div>
+            </TabsContent>
+
+            {talent.active && (
+              <TabsContent value="talent" className="mt-2 animate-fade-in">
+                <TalentTeamView myTeam={authedTeam} />
+              </TabsContent>
+            )}
+
+            <TabsContent value="fair" className="mt-2 animate-fade-in">
+              <div data-tour="step-fair-terminal">
+                <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
+              </div>
+            </TabsContent>
+
+            {TRAIN_FEATURE_ENABLED && (
+              <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
+                <div data-tour="step-7-coupes-root" className="space-y-3">
+                  <TrainPublishStatus />
+                  <p className={`text-[10px] uppercase tracking-[0.2em] px-1 font-bold ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
+                    {TRAIN_TITLE}
+                  </p>
+                  <CoupeSwapSettings myTeam={authedTeam} />
+                  <CoupeManager myTeam={authedTeam} />
+                </div>
+              </TabsContent>
+            )}
+
+            <TabsContent value="transfers" className="mt-2 animate-fade-in">
+              <TransfersView myTeam={authedTeam} />
+            </TabsContent>
+
+            <TabsContent value="notifications" className="mt-2 animate-fade-in">
+              <NotificationsView myTeam={authedTeam} onRestartTour={startTour} />
+            </TabsContent>
+          </Tabs>
+
+          <div 
+            className="fixed right-4 flex flex-col gap-2.5 z-40"
+            style={{
+              bottom: isMobile 
+                ? 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' 
+                : '1.75rem'
+            }}
+          >
+            <Button
+              onClick={() => {
+                haptics.impact('light');
+                setBankOpen(true);
+              }}
+              data-tour="step-5-bank-button"
+              className="h-12 w-12 rounded-2xl shadow-2xl p-0 bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-90 transition-all border border-orange-400/30"
+              title="Банк Айрон-доларів"
+            >
+              <Wallet className="w-5 h-5" />
+            </Button>
+
+            <Button
+              onClick={handleExport}
+              className={`h-11 w-11 rounded-2xl shadow-xl p-0 border active:scale-90 transition-all ${
+                isDark 
+                  ? 'bg-[#0F1523]/90 hover:bg-[#151D2F] border-white/10 text-slate-300 hover:text-white' 
+                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 shadow-md'
+              }`}
+              title="Експорт списків в Excel"
+            >
+              <Download className="w-4 h-4 text-emerald-500" />
+            </Button>
+          </div>
+
+          <SupervisorTour
+            open={tourOpen}
+            teamNumber={authedTeam}
+            myTeam={authedTeam}
+            activeTab={activeTab}
+            firstTeamChild={firstTeamChild}
+            onTabChange={setActiveTab}
+            setOpenTeam={setOpenTeam}
+            setEditChild={setEditChild}
+            setBankOpen={setBankOpen}
+            onClose={() => setTourOpen(false)}
+          />
+
+          {authedTeam !== null && (
+            <IronBank
+              myTeam={authedTeam}
+              open={bankOpen}
+              onClose={() => { if (!tourOpen) setBankOpen(false); }}
+            />
+          )}
+        </>
       )}
     </div>
   );
