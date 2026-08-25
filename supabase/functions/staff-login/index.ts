@@ -53,19 +53,12 @@ function passwordMatches(input: string, expected: string): boolean {
   return constantTimeEqual(inp, exp) || constantTimeEqual(toLatinLayout(inp), exp);
 }
 
-/** Отримання збереженої карти паролів з активної зміни */
-async function getShiftPasswords(svc: any): Promise<{ shiftId: string | null; passwords: Record<string, string> }> {
-  const { data } = await svc
-    .from('shifts')
-    .select('id, team_passwords')
-    .order('start_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const map = (data?.team_passwords && typeof data.team_passwords === 'object')
-    ? (data.team_passwords as Record<string, string>)
-    : {};
-  return { shiftId: data?.id ?? null, passwords: map };
+/** Отримання збереженої карти паролів з таблиці team_passwords */
+async function getTeamPasswords(svc: any): Promise<Record<string, string>> {
+  const { data } = await svc.from('team_passwords').select('team, password');
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) map[String(row.team)] = row.password;
+  return map;
 }
 
 Deno.serve(async (req) => {
