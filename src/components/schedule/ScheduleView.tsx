@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
-import { CalendarDays, Users, Building2, Sparkles } from 'lucide-react';
+import { CalendarDays, Users, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -19,15 +19,16 @@ import {
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
 import { localISO } from '@/hooks/useAutoTodayDate';
 import HallBookingModal from '@/components/schedule/HallBookingModal';
-import { hallBadge, hallName, type HallBooking } from '@/types/halls';
-import { hhmm, toMinutes } from '@/lib/halls';
+import { type HallBooking } from '@/types/halls';
+import { toMinutes } from '@/lib/halls';
 import { useHaptics } from '@/hooks/useHaptics';
 
+// Тимчасовий прапорець: модуль залів приховано
 const HALL_FEATURE_ENABLED = false;
 
 interface Props {
   myTeam?: number | null;
-  /** Режим для дитини: доступний лише розклад власної команди на сьогодні */
+  /** Режим для учасника: доступний лише розклад власної команди */
   lockTeam?: boolean;
   /** Режим супроводу: доступні всі дні зміни та фільтр за командами */
   isStaff?: boolean;
@@ -79,7 +80,7 @@ const ScheduleView = ({
 
   const haptics = useHaptics();
 
-  // Оновлення часу кожні 30 секунд
+  // Оновлення часу кожні 30 секунд для розрахунку таймінгу подій
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
@@ -139,9 +140,9 @@ const ScheduleView = ({
     };
   }, []);
 
-  // Завантаження броней залів, позначених як видимі в розкладі
+  // Завантаження броней залів (якщо увімкнено)
   useEffect(() => {
-    if (!activeDay) return;
+    if (!activeDay || !HALL_FEATURE_ENABLED) return;
     let cancelled = false;
 
     const loadBookings = async () => {
@@ -170,14 +171,14 @@ const ScheduleView = ({
     };
   }, [activeDay, team]);
 
-  // ✅ ЧИСТИЙ СПИСОК ДАТ ЗМІНИ (БЕЗ ЗМІШУВАННЯ З ЛЮТИМ)
+  // Чистий список дат зміни
   const days = useMemo(() => {
     if (lockTeam) return [todayISO()];
     const dates = [...new Set(schedules.map((s) => s.date))].sort();
     return dates.length ? dates : [todayISO()];
   }, [schedules, lockTeam]);
 
-  // Автоматичний вибір актуального дня: сьогодні (якщо входить у зміну) або перший день зміни
+  // Автоматичний вибір актуального дня
   useEffect(() => {
     if (!days.length) return;
     setActiveDay((cur) => {
@@ -249,7 +250,6 @@ const ScheduleView = ({
     return e ? { event: e, inMin: e.startMin - nowRel } : null;
   }, [visibleEvents, nowRel, isToday]);
 
-  // Об'єднання репетицій та подій дня
   type TimelineRow =
     | { kind: 'event'; startMin: number; endMin: number; event: NormalizedScheduleItem }
     | { kind: 'booking'; startMin: number; endMin: number; booking: HallBooking };
@@ -282,7 +282,7 @@ const ScheduleView = ({
 
   if (!schedules.length && !teamBookings.length) {
     return (
-      <div className="w-full space-y-3.5 select-none pb-32">
+      <div className="w-full space-y-3 select-none pb-32">
         <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2">
           <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
@@ -292,17 +292,16 @@ const ScheduleView = ({
     );
   }
 
-  const tabCls = 'shrink-0 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-200 active:scale-95 select-none';
+  const tabCls = 'shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-95 select-none min-h-[36px] flex items-center justify-center';
 
   return (
-    <div className="w-full space-y-3 select-none px-3 sm:px-4 pb-36 overflow-x-hidden">
-
+    <div className="w-full space-y-3.5 select-none pb-36 overflow-x-hidden">
       
-      {/* ================= 1. ШАПКА: РОЗКЛАД + БРОНЮВАННЯ ЗАЛІВ ================= */}
+      {/* ================= 1. ШАПКА: РОЗКЛАД + КНОПКА ЗАЛІВ ================= */}
       <div className="w-full flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground">
-            Розклад
+            Розклад подій
           </span>
         </div>
 
@@ -313,7 +312,7 @@ const ScheduleView = ({
               haptics.impact('light');
               setBookingsOpen(true);
             }}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 px-2.5 sm:px-3 py-1.5 text-[11px] font-bold text-primary active:scale-95 transition-all shadow-sm"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 px-3 py-1.5 text-[11px] font-bold text-primary active:scale-95 transition-all shadow-sm"
           >
             <Building2 className="h-3.5 w-3.5 text-primary" strokeWidth={2.2} />
             <span>Бронювання залів</span>
@@ -326,91 +325,95 @@ const ScheduleView = ({
         )}
       </div>
 
-      {/* ================= 2. СЕЛЕКТОР ДАТ (АДАПТИВНИЙ РЯДОК) ================= */}
+      {/* ================= 2. СЕЛЕКТОР ДАТ (БЕЗ ЗРІЗАННЯ КРАЇВ) ================= */}
       {days.length > 1 && (
-        <div className="w-full flex gap-1.5 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain">
-          {days.map((d) => {
-            const p = dayParts(d);
-            const active = d === activeDay;
-            return (
-              <button
-                key={d}
-                ref={active ? activeDayRef : undefined}
-                onClick={() => {
-                  haptics.impact('light');
-                  setActiveDay(d);
-                }}
-                className={`shrink-0 select-none rounded-2xl border px-3 py-1.5 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[54px] ${
-                  active
-                    ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.35)] scale-[1.02]'
-                    : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <span className="text-[9px] uppercase font-mono font-bold opacity-80">{p.weekday}</span>
-                <span className="font-mono text-sm font-black tabular-nums my-1">{p.day}</span>
-                <span className="text-[8px] font-medium opacity-80">{p.month}</span>
-              </button>
-            );
-          })}
+        <div className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
+          <div className="flex items-center gap-2 px-1">
+            {days.map((d) => {
+              const p = dayParts(d);
+              const active = d === activeDay;
+              return (
+                <button
+                  key={d}
+                  ref={active ? activeDayRef : undefined}
+                  onClick={() => {
+                    haptics.impact('light');
+                    setActiveDay(d);
+                  }}
+                  className={`shrink-0 select-none rounded-2xl border px-3 py-2 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[56px] ${
+                    active
+                      ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.4)] scale-[1.02]'
+                      : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span className="text-[9px] uppercase font-mono font-bold opacity-85">{p.weekday}</span>
+                  <span className="font-mono text-sm font-black tabular-nums my-1">{p.day}</span>
+                  <span className="text-[8px] font-medium opacity-85">{p.month}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ ================= */}
+      {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ (БЕЗ ЗРІЗАННЯ ЗЛІВА) ================= */}
       {lockTeam ? (
-        <div className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2 shadow-sm">
+        <div className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
           <p className="text-xs font-semibold text-foreground">
             Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
           </p>
         </div>
       ) : (
-        <div className="w-full flex gap-1.5 overflow-x-auto pb-1 no-scrollbar overscroll-x-contain">
-          <button
-            onClick={() => {
-              haptics.selection();
-              setFilterTeam(null);
-            }}
-            className={`${tabCls} ${
-              filterTeam === null 
-                ? 'bg-primary text-primary-foreground font-bold shadow-sm' 
-                : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Всі команди
-          </button>
-
-          {myTeam != null && (
+        <div className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
+          <div className="flex items-center gap-1.5 px-1">
             <button
               onClick={() => {
                 haptics.selection();
-                setFilterTeam(myTeam);
+                setFilterTeam(null);
               }}
               className={`${tabCls} ${
-                filterTeam === myTeam 
+                filterTeam === null 
                   ? 'bg-primary text-primary-foreground font-bold shadow-sm' 
                   : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
               }`}
             >
-              Моя команда (№{myTeam})
+              Всі команди
             </button>
-          )}
 
-          {TEAMS.filter((t) => t !== myTeam).map((t) => (
-            <button
-              key={t}
-              onClick={() => {
-                haptics.selection();
-                setFilterTeam(filterTeam === t ? null : t);
-              }}
-              className={`${tabCls} font-mono font-bold tabular-nums ${
-                filterTeam === t 
-                  ? 'bg-primary text-primary-foreground shadow-sm' 
-                  : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              К#{t}
-            </button>
-          ))}
+            {myTeam != null && (
+              <button
+                onClick={() => {
+                  haptics.selection();
+                  setFilterTeam(myTeam);
+                }}
+                className={`${tabCls} ${
+                  filterTeam === myTeam 
+                    ? 'bg-primary text-primary-foreground font-bold shadow-sm' 
+                    : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Моя команда (№{myTeam})
+              </button>
+            )}
+
+            {TEAMS.filter((t) => t !== myTeam).map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  haptics.selection();
+                  setFilterTeam(filterTeam === t ? null : t);
+                }}
+                className={`${tabCls} font-mono font-bold tabular-nums ${
+                  filterTeam === t 
+                    ? 'bg-primary text-primary-foreground shadow-sm' 
+                    : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                К#{t}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -442,19 +445,19 @@ const ScheduleView = ({
         </Card>
       )}
 
-      {/* Якщо немає подій на день */}
+      {/* Якщо немає подій на обраний день */}
       {timelineRows.length === 0 && (
         <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">
             {idsForDate(activeDay).length
               ? 'Подій на цей день немає'
-              : 'Розклад на цей день готується супроводом табору'}
+              : 'Розклад на цей день готується супроводом проєкту'}
           </p>
         </Card>
       )}
 
-      {/* ================= 5. ХРОНОЛОГІЧНИЙ СПИСОК ПОДІЙ + РЕПЕТИЦІЇ ================= */}
+      {/* ================= 5. ХРОНОЛОГІЧНИЙ СПИСОК ПОДІЙ ================= */}
       <div className="w-full space-y-2.5">
         {timelineRows.map((row) => {
           if (row.kind === 'booking') return null;
@@ -476,7 +479,7 @@ const ScheduleView = ({
         })}
       </div>
 
-      {/* Модальне вікно бронювання залів (тимчасово вимкнено) */}
+      {/* Модальне вікно бронювання залів */}
       {HALL_FEATURE_ENABLED && isStaff && myTeam != null && activeDay && (
         <HallBookingModal
           open={bookingsOpen}
