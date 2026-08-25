@@ -665,24 +665,20 @@ const DataTab = () => {
         loaded = true;
       }
 
-      // Fallback на прямий запит у БД
+      // Fallback: дефолтні паролі для виявлених команд
       if (!loaded) {
         const [{ data: kids }, { data: shiftList }] = await Promise.all([
           supabase.from('children').select('team_number'),
-          supabase.from('shifts').select('id, team_passwords, assigned_teams').order('start_date', { ascending: false }).limit(1),
+          supabase.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
         ]);
 
         const detectedTeams = Array.from(new Set((kids || []).map((k: any) => k.team_number).filter(Boolean))).sort((a, b) => a - b);
         const assigned = shiftList?.[0]?.assigned_teams || [];
         const allTeams = Array.from(new Set([...detectedTeams, ...assigned])).sort((a, b) => a - b);
-        
-        const shiftMap = (shiftList?.[0]?.team_passwords && typeof shiftList[0].team_passwords === 'object')
-          ? (shiftList[0].team_passwords as Record<string, string>)
-          : {};
 
         const list = (allTeams.length ? allTeams : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((t) => ({
           team: t,
-          password: shiftMap[String(t)] || `Супровід${t}`,
+          password: `Супровід${t}`,
         }));
 
         setPasswords(list);
