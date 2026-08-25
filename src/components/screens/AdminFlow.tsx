@@ -665,24 +665,20 @@ const DataTab = () => {
         loaded = true;
       }
 
-      // Fallback на прямий запит у БД
+      // Fallback: дефолтні паролі для виявлених команд
       if (!loaded) {
         const [{ data: kids }, { data: shiftList }] = await Promise.all([
           supabase.from('children').select('team_number'),
-          supabase.from('shifts').select('id, team_passwords, assigned_teams').order('start_date', { ascending: false }).limit(1),
+          supabase.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
         ]);
 
         const detectedTeams = Array.from(new Set((kids || []).map((k: any) => k.team_number).filter(Boolean))).sort((a, b) => a - b);
         const assigned = shiftList?.[0]?.assigned_teams || [];
         const allTeams = Array.from(new Set([...detectedTeams, ...assigned])).sort((a, b) => a - b);
-        
-        const shiftMap = (shiftList?.[0]?.team_passwords && typeof shiftList[0].team_passwords === 'object')
-          ? (shiftList[0].team_passwords as Record<string, string>)
-          : {};
 
         const list = (allTeams.length ? allTeams : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((t) => ({
           team: t,
-          password: shiftMap[String(t)] || `Супровід${t}`,
+          password: `Супровід${t}`,
         }));
 
         setPasswords(list);
@@ -712,7 +708,7 @@ const DataTab = () => {
     toast.success(`Пароль для команди №${p.team} скопійовано`);
   };
 
-  // ✅ БЕЗПЕЧНЕ ЗБЕРЕЖЕННЯ ПАРОЛЯ З АВТО-FALLBACK У БД (БЕЗ 500/400 ПОМИЛОК)
+  // ✅ Збереження пароля через Edge Function (upsert у таблицю team_passwords)
   const savePassword = async (teamNum: number, newPass: string) => {
     const trimmed = newPass.trim().toLowerCase();
     if (!trimmed) {
@@ -722,45 +718,15 @@ const DataTab = () => {
 
     setSavingPw(true);
     try {
-      let savedOnServer = false;
-
-      // 1. Спроба через Edge Function
-      try {
-        const { data, error } = await supabase.functions.invoke('staff-login', {
-          body: { 
-            action: 'update_team_password', 
-            team: teamNum, 
-            team_number: teamNum, 
-            password: trimmed 
-          },
-        });
-        if (!error && (data?.ok || data?.success || data?.passwords)) {
-          savedOnServer = true;
-        }
-      } catch {
-        // Якщо Edge Function ще не має оновленого методу — спокійно переходимо до прямого збереження в БД
-      }
-
-      // 2. Прямий fallback у таблицю shifts (поле team_passwords)
-      if (!savedOnServer) {
-        const { data: shifts } = await supabase
-          .from('shifts')
-          .select('id, team_passwords')
-          .order('start_date', { ascending: false })
-          .limit(1);
-
-        if (shifts && shifts.length > 0) {
-          const activeShift = shifts[0];
-          const currentMap = (activeShift.team_passwords && typeof activeShift.team_passwords === 'object')
-            ? { ...(activeShift.team_passwords as Record<string, string>) }
-            : {};
-          currentMap[String(teamNum)] = trimmed;
-
-          await supabase
-            .from('shifts')
-            .update({ team_passwords: currentMap })
-            .eq('id', activeShift.id);
-        }
+      const { data, error } = await supabase.functions.invoke('staff-login', {
+        body: {
+          action: 'update_team_password',
+          team: teamNum,
+          password: trimmed,
+        },
+      });
+      if (error || !data?.ok) {
+        throw new Error(data?.error || error?.message || 'save_failed');
       }
 
       // 3. Миттєве оновлення локального списку паролів

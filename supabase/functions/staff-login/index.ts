@@ -53,19 +53,12 @@ function passwordMatches(input: string, expected: string): boolean {
   return constantTimeEqual(inp, exp) || constantTimeEqual(toLatinLayout(inp), exp);
 }
 
-/** Отримання збереженої карти паролів з активної зміни */
-async function getShiftPasswords(svc: any): Promise<{ shiftId: string | null; passwords: Record<string, string> }> {
-  const { data } = await svc
-    .from('shifts')
-    .select('id, team_passwords')
-    .order('start_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const map = (data?.team_passwords && typeof data.team_passwords === 'object')
-    ? (data.team_passwords as Record<string, string>)
-    : {};
-  return { shiftId: data?.id ?? null, passwords: map };
+/** Отримання збереженої карти паролів з таблиці team_passwords */
+async function getTeamPasswords(svc: any): Promise<Record<string, string>> {
+  const { data } = await svc.from('team_passwords').select('team, password');
+  const map: Record<string, string> = {};
+  for (const row of data ?? []) map[String(row.team)] = row.password;
+  return map;
 }
 
 Deno.serve(async (req) => {
@@ -88,9 +81,10 @@ Deno.serve(async (req) => {
       const { data: roles } = await svc.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin');
       if (!roles?.length) return json({ error: 'forbidden' }, 403);
 
-      const [{ data: teams }, { data: shifts }] = await Promise.all([
+      const [{ data: teams }, { data: shifts }, passwordMap] = await Promise.all([
         svc.from('children').select('team_number'),
-        svc.from('shifts').select('id, team_passwords, assigned_teams').order('start_date', { ascending: false }).limit(1),
+        svc.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
+        getTeamPasswords(svc),
       ]);
 
       const detectedTeams = (teams ?? []).map((t: { team_number: number }) => t.team_number).filter(Boolean);
@@ -98,13 +92,9 @@ Deno.serve(async (req) => {
       const unique = [...new Set([...detectedTeams, ...assigned])].sort((a: number, b: number) => a - b);
       const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-      const shiftMap = (shifts?.[0]?.team_passwords && typeof shifts[0].team_passwords === 'object')
-        ? (shifts[0].team_passwords as Record<string, string>)
-        : {};
-
       const list = teamList.map((t: number) => ({
         team: t,
-        password: shiftMap[String(t)] || defaultSupervisorPassword(t),
+        password: passwordMap[String(t)] || defaultSupervisorPassword(t),
       }));
 
       return json({ passwords: list });
@@ -130,17 +120,9 @@ Deno.serve(async (req) => {
         return json({ error: 'invalid_team_or_password' }, 400);
       }
 
-      const { shiftId, passwords: currentMap } = await getShiftPasswords(svc);
-      if (!shiftId) {
-        return json({ error: 'no_active_shift_found' }, 404);
-      }
-
-      currentMap[String(targetTeam)] = targetPass;
-
       const { error: updateErr } = await svc
-        .from('shifts')
-        .update({ team_passwords: currentMap })
-        .eq('id', shiftId);
+        .from('team_passwords')
+        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' });
 
       if (updateErr) {
         console.error('Update error:', updateErr);
@@ -181,7 +163,7 @@ Deno.serve(async (req) => {
 
     // Вхід супроводу команди:
     // 1) Перевірка індивідуального пароля з бази (наприклад, "потяг.гори")
-    const { passwords: customMap } = await getShiftPasswords(adminClient());
+    const customMap = await getTeamPasswords(adminClient());
     const customPass = customMap[String(team)];
 
     let ok = false;
