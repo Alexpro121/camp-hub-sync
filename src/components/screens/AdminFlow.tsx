@@ -1,5 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Upload, Trash2, Calendar, CalendarDays, Mic2, Wand2, Plus, Loader2, Database, FileSpreadsheet, CheckCircle2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, Link2, Train, ShoppingBag, Copy, Search, ChevronDown, Pencil } from 'lucide-react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { 
+  ArrowLeft, 
+  Upload, 
+  Trash2, 
+  Calendar, 
+  CalendarDays, 
+  Mic2, 
+  Wand2, 
+  Plus, 
+  Loader2, 
+  Database, 
+  FileSpreadsheet, 
+  CheckCircle2, 
+  BarChart3, 
+  AlertTriangle, 
+  Coins, 
+  Users, 
+  ArrowRightLeft, 
+  Link2, 
+  Train, 
+  ShoppingBag, 
+  Copy, 
+  Search, 
+  ChevronDown, 
+  Pencil,
+  RefreshCw,
+  KeyRound,
+  Check
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,14 +41,31 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Child, Shift, ShiftType } from '@/types/app';
 import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
-
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import { shiftStatus } from '@/lib/shift';
 import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import TeamTagInput from '@/components/admin/TeamTagInput';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
 import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
@@ -40,6 +85,26 @@ const SHIFT_LABELS: Record<ShiftType, string> = {
   sports: 'Спортивна зміна',
 };
 
+// Словник коротких, позитивних українських слів для паролів
+const MEMORABLE_UKR_WORDS = [
+  'потяг', 'рейка', 'вагон', 'шлях', 'колія', 'ранок', 'вечір',
+  'сокіл', 'гори', 'ліс', 'плай', 'рута', 'зірка', 'озеро',
+  'стежка', 'сонце', 'бук', 'вогонь', 'вітер', 'небо', 'карпати',
+  'залізниця', 'клуб', 'хвиля', 'квітка', 'явір', 'ялина', 'стріла',
+  'буковель', 'локомотив', 'пісня', 'друзі', 'сила', 'мрія',
+  'світло', 'крила', 'крок', 'драйв', 'іскра', 'сміливість', 'світан'
+];
+
+/** Генерація пароля з 2 коротких українських слів у нижньому регістрі через крапку */
+export const generateMemorablePassword = (): string => {
+  const w1 = MEMORABLE_UKR_WORDS[Math.floor(Math.random() * MEMORABLE_UKR_WORDS.length)];
+  let w2 = MEMORABLE_UKR_WORDS[Math.floor(Math.random() * MEMORABLE_UKR_WORDS.length)];
+  while (w2 === w1) {
+    w2 = MEMORABLE_UKR_WORDS[Math.floor(Math.random() * MEMORABLE_UKR_WORDS.length)];
+  }
+  return `${w1}.${w2}`;
+};
+
 const AdminFlow = ({ onBack }: Props) => {
   useEffect(() => { saveSession('admin'); }, []);
 
@@ -51,49 +116,73 @@ const AdminFlow = ({ onBack }: Props) => {
 
   return (
     <ActiveShiftProvider>
-    <div className="min-h-screen max-w-3xl mx-auto pb-16 safe-bottom">
-      <div className="app-bar px-4 py-3 safe-top border-b border-border/40">
-        <div className="flex items-center justify-between">
-          <button onClick={handleExit} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-smooth min-h-[44px] pr-2">
-            <ArrowLeft className="w-4 h-4" /> Вийти
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">👑</span>
-            <p className="text-lg font-black uppercase text-gradient-primary">Admin</p>
+      <div className="min-h-[100dvh] max-w-3xl mx-auto pb-24 safe-bottom select-none bg-[#07090E] text-slate-100">
+        <header className="px-4 py-3 safe-top border-b border-white/10 bg-[#0F1523]/80 backdrop-blur-xl sticky top-0 z-30">
+          <div className="flex items-center justify-between">
+            <button 
+              onClick={handleExit} 
+              className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors min-h-[40px] pr-2"
+            >
+              <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
+              <span>Вийти</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">👑</span>
+              <p className="text-base sm:text-lg font-black uppercase text-[#FA5A15] tracking-wide">
+                Штаб Адміністратора
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="mt-2">
-          <ActiveShiftSwitcher />
-        </div>
+          <div className="mt-2">
+            <ActiveShiftSwitcher />
+          </div>
+        </header>
+
+        <Tabs defaultValue="shifts" className="w-full px-3 pt-2">
+          <div className="sticky top-[108px] z-20 px-1 py-2 bg-[#07090E]/90 backdrop-blur-md">
+            <TabsList className={`grid ${TRAIN_FEATURE_ENABLED ? 'grid-cols-7' : 'grid-cols-6'} h-[52px] w-full p-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md`}>
+              <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <Calendar className="w-4 h-4" /> <span>Зміни</span>
+              </TabsTrigger>
+              <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <CalendarDays className="w-4 h-4" /> <span>Розклад</span>
+              </TabsTrigger>
+              <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <Mic2 className="w-4 h-4" /> <span>Таланти</span>
+              </TabsTrigger>
+              {TRAIN_FEATURE_ENABLED && (
+                <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                  <Train className="w-4 h-4" /> <span>Потяг</span>
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <ShoppingBag className="w-4 h-4" /> <span>Ярмарок</span>
+              </TabsTrigger>
+              <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <BarChart3 className="w-4 h-4" /> <span>Статистика</span>
+              </TabsTrigger>
+              <TabsTrigger value="data" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <Database className="w-4 h-4" /> <span>База</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="shifts" className="mt-3 animate-fade-in"><ShiftsTab /></TabsContent>
+          <TabsContent value="schedule" className="mt-3 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
+          <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
+          {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
+          <TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>
+          <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
+          <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
+        </Tabs>
       </div>
-
-      <Tabs defaultValue="shifts" className="w-full px-3">
-        <div className="sticky top-[112px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
-          <TabsList className={`grid ${TRAIN_FEATURE_ENABLED ? 'grid-cols-7' : 'grid-cols-6'} h-[54px] w-full p-1`}>
-            <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Calendar className="w-[18px] h-[18px]" /> <span>Зміни</span></TabsTrigger>
-            <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[11px] leading-none"><CalendarDays className="w-[18px] h-[18px]" /> <span>Розклад</span></TabsTrigger>
-            <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Mic2 className="w-[18px] h-[18px]" /> <span>Таланти</span></TabsTrigger>
-            {TRAIN_FEATURE_ENABLED && (<TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Train className="w-[18px] h-[18px]" /> <span>Потяг</span></TabsTrigger>)}
-            <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[11px] leading-none"><ShoppingBag className="w-[18px] h-[18px]" /> <span>Ярмарок</span></TabsTrigger>
-            <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[11px] leading-none"><BarChart3 className="w-[18px] h-[18px]" /> <span>Статистика</span></TabsTrigger>
-            <TabsTrigger value="data" className="flex-col gap-0.5 h-full text-[11px] leading-none"><Database className="w-[18px] h-[18px]" /> <span>База</span></TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="shifts" className="mt-3"><ShiftsTab /></TabsContent>
-        <TabsContent value="schedule" className="mt-3 space-y-4"><AdminScheduleEditor /></TabsContent>
-        <TabsContent value="talent" className="mt-3"><TalentAdmin /></TabsContent>
-        {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3"><TrainTab /></TabsContent>)}
-        <TabsContent value="fair" className="mt-3"><AdminPrintQRCodes /></TabsContent>
-        <TabsContent value="stats" className="mt-3"><StatsTab /></TabsContent>
-        <TabsContent value="data" className="mt-3"><DataTab /></TabsContent>
-      </Tabs>
-    </div>
     </ActiveShiftProvider>
   );
 };
 
-/* ---------- SHIFTS + UPLOAD COMBINED TAB ---------- */
+/* =========================================================================
+   ВКЛАДКА 1: КЕРУВАННЯ ЗМІНАМИ ТА ІМПОРТ
+========================================================================= */
 const ShiftsTab = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [name, setName] = useState('');
@@ -125,15 +214,12 @@ const ShiftsTab = () => {
 
   const computeEnd = (startStr: string, t: ShiftType) => {
     if (!startStr || t === 'international') return '';
-    // Sports shifts are structurally identical to short ones.
-    // Auto-suggest +1 extra day vs nominal length (e.g. long shift = 12 days → start + 12)
     const days = t === 'long' ? 12 : 5;
     const d = new Date(startStr);
     d.setDate(d.getDate() + days);
     return d.toISOString().slice(0, 10);
   };
 
-  /** Short shifts ride along with the long shift — dates come from it automatically. */
   const baseLong = shifts.find((s) => (s.shift_category ?? s.shift_type) === 'long' && !s.deleted_at) ?? null;
 
   const onTypeChange = (t: ShiftType) => {
@@ -165,37 +251,36 @@ const ShiftsTab = () => {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  /** Fields shared by both create paths — category, team range and phase dates. */
-  const shiftPayload = () => {
-    return {
-      name,
-      shift_type: type,
-      shift_category: type,
-      assigned_teams: teams,
-      // Phase dates are derived from the entry period — no manual fields needed.
-      travel_start_date: start || null,
-      hotel_start_date: start ? addDays(start, 1) : null,
-      start_date: start,
-      end_date: end,
-      team_offset: 0,
-      is_active: true,
-    };
-  };
+  const shiftPayload = () => ({
+    name,
+    shift_type: type,
+    shift_category: type,
+    assigned_teams: teams,
+    travel_start_date: start || null,
+    hotel_start_date: start ? addDays(start, 1) : null,
+    start_date: start,
+    end_date: end,
+    team_offset: 0,
+    is_active: true,
+  });
 
-  /** Step 1 — read the source (file or Google Sheet), analyze columns, show preview. */
   const analyze = async () => {
-    if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
+    if (!name || !start || !end) { toast.error('Заповніть назву та дати зміни'); return; }
     if (!file && !sheetUrl.trim()) { await createOnly(); return; }
     if (sheetUrl.trim() && !parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
+    
     setAnalyzing(true);
     island.showExcelProgress(15, file ? file.name : 'Google Sheets');
     try {
       const res = file ? await analyzeFile(file) : await analyzeSheetUrl(sheetUrl);
       island.showExcelProgress(70, file ? file.name : 'Google Sheets');
-      if (!res.rows.length) { island.hide(); toast.warning('У таблиці не знайдено рядків з дітьми'); return; }
+      if (!res.rows.length) { 
+        island.hide(); 
+        toast.warning('У таблиці не знайдено записів про учасників'); 
+        return; 
+      }
       setSourceLabel(file ? file.name : sheetUrl.trim());
       setPreview(res);
-      // Teams are derived from the file itself — never from a template.
       if (res.detectedTeams.length) setTeams(res.detectedTeams);
       setPreviewOpen(true);
       island.showExcelProgress(100, file ? file.name : 'Google Sheets');
@@ -208,7 +293,6 @@ const ShiftsTab = () => {
     }
   };
 
-  /** Long shift is the anchor: short shifts follow its entry period. */
   const syncShortShifts = async (startDate: string, endDate: string) => {
     await supabase
       .from('shifts')
@@ -218,10 +302,10 @@ const ShiftsTab = () => {
   };
 
   const createOnly = async () => {
-    if (!name || !start || !end) { toast.error('Заповни назву та дати'); return; }
+    if (!name || !start || !end) { toast.error('Заповніть назву та дати'); return; }
     setCreating(true);
     try {
-      const detected = preview.detectedTeams;
+      const detected = preview?.detectedTeams ?? [];
       const finalTeams = [...new Set([...teams, ...detected])].sort((a, b) => a - b);
       const { data: shift, error: shErr } = await supabase
         .from('shifts')
@@ -230,7 +314,7 @@ const ShiftsTab = () => {
         .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       if (type === 'long') await syncShortShifts(start, end);
-      toast.success('Зміну створено');
+      toast.success('Зміну успішно створено');
       reset();
       load();
     } catch (err: any) {
@@ -240,7 +324,6 @@ const ShiftsTab = () => {
     }
   };
 
-  /** Step 2 — confirmed in preview: create the shift and write deduplicated rows. */
   const confirmImport = async () => {
     if (!preview) return;
     setCreating(true);
@@ -254,7 +337,6 @@ const ShiftsTab = () => {
       const dbRows = valid.map(r => toDbRow(r, shift.id));
       island.showExcelProgress(45, sourceLabel || 'Google Sheets');
 
-      // Dedup by shift_id + team_number + normalized name against what's already stored
       const { data: existing } = await supabase
         .from('children').select('id, full_name, team_number').eq('shift_id', shift.id);
       const map = new Map<string, string>();
@@ -287,8 +369,8 @@ const ShiftsTab = () => {
       });
 
       island.showExcelProgress(100, sourceLabel || 'Google Sheets');
-      island.showSuccess('Зміну успішно імпортовано!', `${valid.length} дітей додано`);
-      toast.success(`Зміну створено · імпортовано ${valid.length} дітей`);
+      island.showSuccess('Зміну успішно імпортовано!', `${valid.length} учасників додано`);
+      toast.success(`Зміну створено · імпортовано ${valid.length} учасників`);
       setPreviewOpen(false);
       reset();
       load();
@@ -301,7 +383,6 @@ const ShiftsTab = () => {
   };
 
   const remove = async (id: string) => {
-    // Cascade: get child IDs of this shift to remove their transfers, then children, file refs, finally the shift
     const { data: kids } = await supabase.from('children').select('id').eq('shift_id', id);
     const childIds = (kids || []).map((k: any) => k.id);
     if (childIds.length) {
@@ -316,8 +397,8 @@ const ShiftsTab = () => {
 
   return (
     <div className="space-y-4">
-      {creating && <FullScreenLoader label={preview ? 'Імпорт таблиці' : 'Створення зміни'} />}
-      {analyzing && <FullScreenLoader label="ШІ аналізує структуру таблиці…" />}
+      {creating && <FullScreenLoader label={preview ? 'Імпорт таблиці...' : 'Створення зміни...'} />}
+      {analyzing && <FullScreenLoader label="Аналіз структури таблиці..." />}
       <ImportPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
@@ -325,18 +406,25 @@ const ShiftsTab = () => {
         busy={creating}
         onConfirm={confirmImport}
       />
-      <Card className="p-5 bg-gradient-card space-y-3">
-        <h3 className="font-bold uppercase text-sm tracking-wide">Створити зміну і завантажити таблицю</h3>
+      <Card className="p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-3xl space-y-3 shadow-xl">
+        <h3 className="font-bold uppercase text-xs tracking-wider text-[#FA5A15]">
+          Створити зміну та імпортувати учасників
+        </h3>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Назва зміни</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Літо-2026 #1" className="h-11" />
+            <Label className="text-xs text-slate-300">Назва зміни</Label>
+            <Input 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="Зміна #1 · Карпати" 
+              className="h-11 rounded-xl bg-white/5 border-white/10 text-white" 
+            />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Тип</Label>
+            <Label className="text-xs text-slate-300">Тип зміни</Label>
             <Select value={type} onValueChange={(v) => onTypeChange(v as ShiftType)}>
-              <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="h-11 rounded-xl bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-[#0F1523] border-white/10 text-white">
                 <SelectItem value="long">{SHIFT_LABELS.long}</SelectItem>
                 <SelectItem value="short">{SHIFT_LABELS.short}</SelectItem>
                 <SelectItem value="sports">{SHIFT_LABELS.sports}</SelectItem>
@@ -346,17 +434,29 @@ const ShiftsTab = () => {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Початок</Label>
-              <Input type="date" value={start} disabled={(type === 'short' || type === 'sports') && !!baseLong} onChange={e => onStartChange(e.target.value)} className="h-11" />
+              <Label className="text-xs text-slate-300">Початок</Label>
+              <Input 
+                type="date" 
+                value={start} 
+                disabled={(type === 'short' || type === 'sports') && !!baseLong} 
+                onChange={e => onStartChange(e.target.value)} 
+                className="h-11 rounded-xl bg-white/5 border-white/10 text-white" 
+              />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Кінець <span className="text-primary/70">(авто)</span></Label>
-              <Input type="date" value={end} disabled={(type === 'short' || type === 'sports') && !!baseLong} onChange={e => setEnd(e.target.value)} className="h-11" />
+              <Label className="text-xs text-slate-300">Кінець <span className="text-[#FA5A15]">(авто)</span></Label>
+              <Input 
+                type="date" 
+                value={end} 
+                disabled={(type === 'short' || type === 'sports') && !!baseLong} 
+                onChange={e => setEnd(e.target.value)} 
+                className="h-11 rounded-xl bg-white/5 border-white/10 text-white" 
+              />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs">Команди зміни</Label>
+            <Label className="text-xs text-slate-300">Команди зміни</Label>
             <TeamTagInput value={teams} onChange={setTeams} />
             <Button
               type="button"
@@ -368,25 +468,15 @@ const ShiftsTab = () => {
                 setTeams(detected);
                 toast.success(`Визначено команди: ${detected.map((t) => `№${t}`).join(', ')}`);
               }}
-              className="h-9 text-xs"
+              className="h-9 text-xs rounded-xl bg-white/10 hover:bg-white/15 text-white"
             >
-              <Wand2 className="w-3.5 h-3.5 mr-1.5" /> Автовизначити команди з файлу
+              <Wand2 className="w-3.5 h-3.5 mr-1.5 text-[#FA5A15]" /> Автовизначити команди з файлу
             </Button>
-            <p className="text-[10px] text-muted-foreground">
-              Діти цих команд автоматично прив'язуються до зміни. Команди беруться лише з таблиці або з введених вручну чипсів.
-            </p>
           </div>
 
-          {(type === 'short' || type === 'sports') && baseLong && (
-            <p className="text-[10px] text-muted-foreground rounded-lg border border-border/40 bg-muted/25 p-2.5">
-              Дати цієї зміни синхронізовано з довгою зміною «{baseLong.name}»
-              ({baseLong.start_date} → {baseLong.end_date}). Фази подорожі рахуються автоматично.
-            </p>
-          )}
-
-          {/* File upload area */}
-          <div className="space-y-1.5">
-            <Label className="text-xs">Варіант А · Файл (.xlsx / .xls / .csv)</Label>
+          {/* Завантаження файлу */}
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs text-slate-300">Варіант А · Файл Excel (.xlsx / .xls / .csv)</Label>
             <input
               ref={fileRef}
               type="file"
@@ -397,71 +487,71 @@ const ShiftsTab = () => {
             />
             <label
               htmlFor="shift-file-up"
-              className={`flex items-center gap-3 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-smooth ${file ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/40'}`}
+              className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 border-dashed cursor-pointer transition-all ${
+                file ? 'border-[#FA5A15]/60 bg-[#FA5A15]/10' : 'border-white/10 hover:border-[#FA5A15]/40 bg-white/[0.02]'
+              }`}
             >
               {file ? (
                 <>
-                  <CheckCircle2 className="w-6 h-6 text-primary shrink-0" />
+                  <CheckCircle2 className="w-6 h-6 text-[#FA5A15] shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{file.name}</p>
-                    <p className="text-[11px] text-muted-foreground">Натисни «Створити» щоб завантажити</p>
+                    <p className="text-sm font-semibold truncate text-white">{file.name}</p>
+                    <p className="text-[11px] text-slate-400">Файл готовий до аналізу</p>
                   </div>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={(e) => { e.preventDefault(); setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
-                    className="shrink-0"
+                    className="shrink-0 text-slate-400 hover:text-rose-400"
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </>
               ) : (
                 <>
-                  <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                    <Upload className="w-5 h-5 text-primary" />
+                  <div className="w-10 h-10 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
+                    <Upload className="w-5 h-5 text-[#FA5A15]" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium">Обрати файл</p>
-                    <p className="text-[11px] text-muted-foreground">Стовпці: Наявність, №, № Команди, ПІБ, Телефон, Команда, Примітка</p>
+                    <p className="text-sm font-semibold text-slate-200">Обрати файл списку</p>
+                    <p className="text-[11px] text-slate-400">Стовпці: № Команди, ПІБ, Телефон, Наявність тощо</p>
                   </div>
                 </>
               )}
             </label>
-            <p className="text-[10px] text-muted-foreground">
-              Команди читаються прямо зі стовпця «№ Команди». Якщо дитина вже існує — її дані оновляться.
-            </p>
           </div>
 
-          {/* Google Sheets URL */}
+          {/* Google Sheets */}
           <div className="space-y-1.5">
-            <Label className="text-xs">Варіант Б · Посилання на Google Таблицю</Label>
+            <Label className="text-xs text-slate-300">Варіант Б · Посилання на Google Таблицю</Label>
             <div className="relative">
-              <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Link2 className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
                 value={sheetUrl}
                 onChange={e => setSheetUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/…"
-                className="h-11 pl-9 text-xs"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="h-11 pl-9 text-xs rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-500"
                 disabled={!!file}
               />
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Таблиця має бути відкрита за посиланням («Усі, хто має посилання — Переглядач»). ШІ сам розпізнає колонки навіть з описками.
-            </p>
           </div>
 
-          <Button onClick={analyze} disabled={creating || analyzing} className="w-full h-12 font-bold uppercase">
+          <Button 
+            onClick={analyze} 
+            disabled={creating || analyzing} 
+            className="w-full h-12 font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-lg active:scale-[0.98] transition-transform mt-2"
+          >
             {creating || analyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : (file || sheetUrl.trim())
-              ? <><Wand2 className="w-4 h-4 mr-2" strokeWidth={1.75} /> Аналізувати таблицю</>
+              ? <><Wand2 className="w-4 h-4 mr-2" /> Аналізувати структуру таблиці</>
               : <><Plus className="w-4 h-4 mr-2" /> Створити зміну</>}
           </Button>
         </div>
       </Card>
 
       <div className="space-y-2">
-        <h3 className="font-bold uppercase text-sm tracking-wide px-1">Активні зміни</h3>
+        <h3 className="font-bold uppercase text-xs tracking-wider text-slate-400 px-1">Активні зміни проєкту</h3>
         {shifts.length === 0 ? (
-          <Card className="p-6 text-center bg-card/50"><p className="text-sm text-muted-foreground">Немає змін</p></Card>
+          <Card className="p-6 text-center bg-[#0F1523]/60 border-white/10 rounded-2xl"><p className="text-sm text-slate-400">Немає зареєстрованих змін</p></Card>
         ) : shifts.map(s => (
           <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} />
         ))}
@@ -481,67 +571,54 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
 
   const status = shiftStatus(s);
   const statusMeta: Record<typeof status, { label: string; cls: string }> = {
-    active:   { label: 'Активна',   cls: 'bg-success/20 text-success border-success/40' },
-    upcoming: { label: 'Майбутня',  cls: 'bg-primary/20 text-primary border-primary/40' },
-    finished: { label: 'Завершена', cls: 'bg-muted text-muted-foreground border-border' },
+    active:   { label: 'Активна',   cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+    upcoming: { label: 'Майбутня',  cls: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+    finished: { label: 'Завершена', cls: 'bg-white/5 text-slate-400 border-white/10' },
   };
 
   return (
-    <Card className="p-3 flex items-center gap-3 bg-gradient-card">
-      <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-        <Calendar className="w-4 h-4 text-primary" />
+    <Card className="p-3.5 flex items-center gap-3 bg-[#0F1523]/80 border border-white/10 rounded-2xl shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
+        <Calendar className="w-4 h-4 text-[#FA5A15]" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-sm font-bold truncate">{s.name}</p>
+          <p className="text-sm font-bold truncate text-white">{s.name}</p>
           <Badge className={`text-[9px] px-1.5 py-0 h-4 border ${statusMeta[status].cls}`}>
             {statusMeta[status].label}
           </Badge>
-          {(s.shift_category ?? s.shift_type) === 'sports' && (
-            <Badge className="text-[9px] px-1.5 py-0 h-4 border bg-amber-500/20 text-amber-400 border-amber-500/40">
-              ⚡ Спортивна зміна
-            </Badge>
-          )}
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-slate-400 mt-0.5">
           {SHIFT_LABELS[(s.shift_category ?? s.shift_type) as ShiftType] ?? SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
         </p>
-        <p className="text-[11px] text-muted-foreground">
-          Команди {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
+        <p className="text-[11px] text-slate-500">
+          Команди: {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
         </p>
-        <p className="text-[11px] text-primary mt-0.5 flex items-center gap-1">
-          <FileSpreadsheet className="w-3 h-3" /> {count ?? '...'} дітей
+        <p className="text-[11px] text-[#FA5A15] font-semibold mt-0.5 flex items-center gap-1">
+          <FileSpreadsheet className="w-3 h-3" /> {count ?? '...'} учасників
         </p>
       </div>
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button size="icon" variant="ghost" className="shrink-0">
-            <Trash2 className="w-4 h-4 text-destructive" />
+          <Button size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-400">
+            <Trash2 className="w-4 h-4" />
           </Button>
         </AlertDialogTrigger>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-[#0F1523] border-white/10 text-white rounded-3xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
+            <AlertDialogTitle className="flex items-center gap-2 text-base font-bold">
+              <AlertTriangle className="w-5 h-5 text-rose-500" />
               Видалити зміну «{s.name}»?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Буде безповоротно видалено:
-              <span className="block mt-2 space-y-0.5">
-                <span className="block">• {count ?? '…'} дітей цієї зміни</span>
-                <span className="block">• історію переведень цих дітей</span>
-                <span className="block">• посилання на завантажені файли зміни</span>
-              </span>
-              <span className="block mt-2 font-semibold text-destructive">
-                Цю дію не можна скасувати.
-              </span>
+            <AlertDialogDescription className="text-xs text-slate-400 space-y-1">
+              Будуть безповоротно видалені всі {count ?? '…'} учасників цієї зміни, їхні транзакції та історія переведень.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Скасувати</AlertDialogCancel>
-            <AlertDialogAction onClick={onDelete} className="bg-destructive hover:bg-destructive/90">
-              Видалити назавжди
+            <AlertDialogCancel className="bg-white/5 border-white/10 text-slate-300 rounded-xl text-xs">Скасувати</AlertDialogCancel>
+            <AlertDialogAction onClick={onDelete} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">
+              Видалити
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -550,13 +627,20 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
   );
 };
 
-/* ---------- DATA TAB ---------- */
+/* =========================================================================
+   ВКЛАДКА 2: БАЗА ДАНИХ ТА ГЕНЕРАТОР ПАРОЛІВ СУПРОВОДУ
+========================================================================= */
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
   const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwFilter, setPwFilter] = useState('');
+  
+  // Стейт діалогу редагування пароля
+  const [editDialogTeam, setEditDialogTeam] = useState<number | null>(null);
+  const [customPassword, setCustomPassword] = useState('');
+  const [savingPw, setSavingPw] = useState(false);
 
   const load = async () => {
     const { data } = await supabase.from('children').select('team_number');
@@ -571,19 +655,58 @@ const DataTab = () => {
       body: { action: 'list_team_passwords' },
     });
     setPwLoading(false);
-    if (error || !data?.passwords) { toast.error('Не вдалося отримати паролі'); return; }
+    if (error || !data?.passwords) { 
+      toast.error('Не вдалося отримати паролі'); 
+      return; 
+    }
     setPasswords(data.passwords);
   };
 
   const copyAll = async () => {
     if (!passwords?.length) return;
-    const text = passwords.map((p) => `Команда #${p.team}: ${p.password}`).join('\n');
+    const text = passwords.map((p) => `Команда №${p.team}: ${p.password}`).join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      toast.success('Усі паролі скопійовано');
+      toast.success('Усі паролі скопійовано в буфер');
     } catch {
       toast.error('Не вдалося скопіювати');
     }
+  };
+
+  const copySingle = (p: { team: number; password: string }) => {
+    navigator.clipboard.writeText(p.password);
+    toast.success(`Пароль для команди №${p.team} скопійовано`);
+  };
+
+  // Збереження пароля (через Edge Function або прямий update)
+  const savePassword = async (teamNum: number, newPass: string) => {
+    const trimmed = newPass.trim().toLowerCase();
+    if (!trimmed) {
+      toast.error('Пароль не може бути порожнім');
+      return;
+    }
+
+    setSavingPw(true);
+    try {
+      const { error } = await supabase.functions.invoke('staff-login', {
+        body: { action: 'update_team_password', team: teamNum, password: trimmed },
+      });
+      if (error) throw error;
+
+      setPasswords(prev => (prev || []).map(p => p.team === teamNum ? { ...p, password: trimmed } : p));
+      toast.success(`Пароль команди №${teamNum} оновлено: ${trimmed}`);
+      setEditDialogTeam(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Помилка збереження пароля');
+    } finally {
+      setSavingPw(false);
+    }
+  };
+
+  // Швидка автогенерація 2 слів через крапку для команди в 1 клік
+  const quickRegenerate = async (teamNum: number) => {
+    const newPass = generateMemorablePassword();
+    await savePassword(teamNum, newPass);
   };
 
   const filtered = (passwords || []).filter((p) =>
@@ -594,80 +717,220 @@ const DataTab = () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    toast.success('База очищена');
+    toast.success('Базу успішно очищено');
     load();
   };
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-5 bg-gradient-card">
-          <p className="text-xs uppercase text-muted-foreground tracking-wider">Дітей</p>
-          <p className="text-4xl font-black mt-1 text-gradient-primary tabular-nums">{count}</p>
+        <Card className="p-4 sm:p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-2xl">
+          <p className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Учасників у базі</p>
+          <p className="text-3xl sm:text-4xl font-black mt-1 text-[#FA5A15] font-mono tabular-nums">{count}</p>
         </Card>
-        <Card className="p-5 bg-gradient-card">
-          <p className="text-xs uppercase text-muted-foreground tracking-wider">Команд</p>
-          <p className="text-4xl font-black mt-1 text-gradient-primary tabular-nums">{teamsCount}</p>
+        <Card className="p-4 sm:p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-2xl">
+          <p className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Команд</p>
+          <p className="text-3xl sm:text-4xl font-black mt-1 text-white font-mono tabular-nums">{teamsCount}</p>
         </Card>
       </div>
 
-      <Card className="p-5 bg-gradient-card space-y-3">
-        <div>
-          <p className="text-xs uppercase text-muted-foreground tracking-wider">Паролі супроводу</p>
-          <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">
-            Унікальні паролі для кожної команди. Передавай їх особисто.
-          </p>
+      {/* Блок паролів супроводу */}
+      <Card className="p-4 sm:p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-3xl space-y-3 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase font-bold tracking-wider text-white flex items-center gap-1.5">
+              <KeyRound className="w-4 h-4 text-[#FA5A15]" />
+              Паролі супроводу
+            </p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Формат автогенерації: <code className="text-[#FA5A15] font-mono">слово.слово</code> (2 укр слова через крапку)
+            </p>
+          </div>
         </div>
-        <Button onClick={loadPasswords} disabled={pwLoading} variant="secondary" className="w-full h-11 font-bold uppercase">
-          {pwLoading ? 'Завантаження…' : 'Показати паролі'}
-        </Button>
-        {passwords && (
-          <div className="space-y-2">
-            <Button onClick={copyAll} variant="outline" className="w-full h-11 font-bold uppercase text-xs">
-              <Copy className="w-4 h-4 mr-1.5" /> Копіювати всі паролі
-            </Button>
+
+        {!passwords ? (
+          <Button 
+            onClick={loadPasswords} 
+            disabled={pwLoading} 
+            className="w-full h-11 font-bold uppercase rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10"
+          >
+            {pwLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <KeyRound className="w-4 h-4 mr-2 text-[#FA5A15]" />}
+            {pwLoading ? 'Завантаження...' : 'Показати паролі команд'}
+          </Button>
+        ) : (
+          <div className="space-y-2.5 animate-slide-up">
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={copyAll} 
+                variant="outline" 
+                className="h-10 text-xs font-bold rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 flex-1"
+              >
+                <Copy className="w-3.5 h-3.5 mr-1.5 text-[#FA5A15]" /> Копіювати всі паролі
+              </Button>
+              <Button
+                onClick={() => {
+                  const pass = generateMemorablePassword();
+                  navigator.clipboard.writeText(pass);
+                  toast.success(`Згенеровано приклад: ${pass} (скопійовано)`);
+                }}
+                variant="outline"
+                className="h-10 px-3 text-xs font-bold rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 shrink-0"
+                title="Згенерувати випадковий пароль для тесту"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+              </Button>
+            </div>
+
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
                 value={pwFilter}
                 onChange={(e) => setPwFilter(e.target.value)}
                 inputMode="numeric"
-                placeholder="Пошук за номером команди"
-                className="h-11 pl-9 text-sm"
+                placeholder="Пошук за номером команди..."
+                className="h-10 pl-9 text-xs rounded-xl bg-white/5 border-white/10 text-white placeholder:text-slate-500"
               />
             </div>
-            <div className="space-y-1.5 max-h-64 overflow-y-auto">
+
+            <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
               {filtered.map((p) => (
-                <div key={p.team} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-2">
-                  <span className="text-sm font-bold">#{p.team}</span>
-                  <span className="text-sm font-mono tracking-wider">{p.password}</span>
+                <div 
+                  key={p.team} 
+                  className="flex items-center justify-between gap-2 rounded-xl bg-white/[0.03] border border-white/5 hover:border-white/10 px-3 py-2 transition-colors"
+                >
+                  <span className="text-xs font-bold font-mono text-white shrink-0 min-w-[36px]">
+                    #{p.team}
+                  </span>
+
+                  <span className="text-xs font-mono font-bold text-[#FA5A15] tracking-wider truncate flex-1 text-center bg-black/30 py-1 px-2 rounded-lg border border-white/5">
+                    {p.password}
+                  </span>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Кнопка автогенерації 1 кліком */}
+                    <button
+                      type="button"
+                      onClick={() => quickRegenerate(p.team)}
+                      className="p-1.5 hover:bg-white/10 active:scale-90 rounded-lg transition-all text-slate-400 hover:text-amber-400"
+                      title="Перегенерувати 2 укр слова"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Кнопка ручного редагування */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditDialogTeam(p.team);
+                        setCustomPassword(p.password);
+                      }}
+                      className="p-1.5 hover:bg-white/10 active:scale-90 rounded-lg transition-all text-slate-400 hover:text-white"
+                      title="Редагувати або вписати свій пароль"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Кнопка копіювання */}
+                    <button
+                      type="button"
+                      onClick={() => copySingle(p)}
+                      className="p-1.5 hover:bg-white/10 active:scale-90 rounded-lg transition-all text-slate-400 hover:text-emerald-400"
+                      title="Скопіювати пароль"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
+
               {filtered.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-3">Нічого не знайдено</p>
+                <p className="text-xs text-slate-500 text-center py-4">Команд не знайдено</p>
               )}
             </div>
           </div>
         )}
       </Card>
 
+      {/* Діалог редагування/генерації пароля для конкретної команди */}
+      {editDialogTeam !== null && (
+        <Dialog open={editDialogTeam !== null} onOpenChange={(open) => !open && setEditDialogTeam(null)}>
+          <DialogContent className="bg-[#0F1523] border border-white/10 text-white rounded-3xl max-w-sm mx-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                <KeyRound className="w-5 h-5 text-[#FA5A15]" />
+                Пароль Команди №{editDialogTeam}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-400">
+                Введіть пароль вручну або натисніть «Згенерувати» (2 укр слова через крапку).
+              </DialogDescription>
+            </DialogHeader>
 
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-300">Пароль команди</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value.toLowerCase())}
+                    placeholder="потяг.гори"
+                    className="h-11 rounded-xl bg-white/5 border-white/10 text-white font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => setCustomPassword(generateMemorablePassword())}
+                    variant="outline"
+                    className="h-11 px-3 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-[#FA5A15] shrink-0"
+                    title="Згенерувати 2 укр слова"
+                  >
+                    <Wand2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 mt-2">
+              <Button
+                variant="ghost"
+                onClick={() => setEditDialogTeam(null)}
+                className="rounded-xl border border-white/10 bg-white/5 text-slate-300 text-xs"
+              >
+                Скасувати
+              </Button>
+              <Button
+                onClick={() => savePassword(editDialogTeam, customPassword)}
+                disabled={savingPw}
+                className="bg-[#FA5A15] hover:bg-[#FF7D3B] text-white rounded-xl text-xs font-bold"
+              >
+                {savingPw ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
+                Зберегти пароль
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Небезпечна дія: очищення бази */}
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="destructive" className="w-full h-12 font-bold uppercase">
-            <Trash2 className="w-4 h-4 mr-2" /> Очистити всю базу
+          <Button variant="destructive" className="w-full h-12 font-bold uppercase rounded-2xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 mt-4">
+            <Trash2 className="w-4 h-4 mr-2" /> Очистити базу учасників
           </Button>
         </AlertDialogTrigger>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-[#0F1523] border border-white/10 text-white rounded-3xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Видалити всі дані?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Це видалить дітей, переведення і сповіщення. Зміни і файли залишаться.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-500" />
+              Видалити всіх учасників?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-400">
+              Це безповоротно видалить усіх учасників, баланси, історію переведень та сповіщення. Самі зміни залишаться.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Скасувати</AlertDialogCancel>
-            <AlertDialogAction onClick={wipe} className="bg-destructive">Видалити</AlertDialogAction>
+            <AlertDialogCancel className="bg-white/5 border-white/10 text-slate-300 rounded-xl text-xs">Скасувати</AlertDialogCancel>
+            <AlertDialogAction onClick={wipe} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold">
+              Так, очистити
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -675,7 +938,9 @@ const DataTab = () => {
   );
 };
 
-/* ---------- STATS TAB ---------- */
+/* =========================================================================
+   ВКЛАДКА 3: СТАТИСТИКА ЗМІН
+========================================================================= */
 interface ShiftStats {
   shift: Shift;
   total: number;
@@ -743,19 +1008,18 @@ const StatsTab = () => {
   }, []);
 
   if (loading) {
-    return <Card className="p-8 text-center bg-gradient-card"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" /></Card>;
+    return <Card className="p-8 text-center bg-[#0F1523]/80 border-white/10 rounded-2xl"><Loader2 className="w-6 h-6 animate-spin mx-auto text-[#FA5A15]" /></Card>;
   }
 
   if (rows.length === 0 && !orphans) {
     return (
-      <Card className="p-8 text-center bg-gradient-card">
-        <BarChart3 className="w-10 h-10 text-muted-foreground/50 mx-auto mb-3" />
-        <p className="text-sm text-muted-foreground">Немає даних для аналізу</p>
+      <Card className="p-8 text-center bg-[#0F1523]/80 border-white/10 rounded-2xl">
+        <BarChart3 className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+        <p className="text-sm text-slate-400">Немає даних для аналізу</p>
       </Card>
     );
   }
 
-  // Aggregate header
   const totalKids = rows.reduce((s, r) => s + r.total, 0) + (orphans?.total || 0);
   const totalIron = rows.reduce((s, r) => s + r.ironTotal, 0) + (orphans?.iron || 0);
   const totalTransfers = rows.reduce((s, r) => s + r.transfers, 0);
@@ -767,14 +1031,13 @@ const StatsTab = () => {
         <ChildEditDialog child={editing} open={!!editing} onClose={() => setEditing(null)} />
       )}
 
-      {/* Aggregate cards */}
       <div className="grid grid-cols-3 gap-2">
-        <StatBox icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={totalKids} />
-        <StatBox icon={<Coins className="w-3.5 h-3.5" />} label="Айрон $" value={totalIron} />
+        <StatBox icon={<Users className="w-3.5 h-3.5" />} label="Учасників" value={totalKids} />
+        <StatBox icon={<Coins className="w-3.5 h-3.5" />} label="А$" value={totalIron} />
         <StatBox icon={<ArrowRightLeft className="w-3.5 h-3.5" />} label="Трансферів" value={totalTransfers} />
       </div>
 
-      <h3 className="font-bold uppercase text-sm tracking-wide px-1 pt-2">По змінах</h3>
+      <h3 className="font-bold uppercase text-xs tracking-wider text-slate-400 px-1 pt-2">По змінах</h3>
       {rows.map((r) => (
         <ShiftStatsCard
           key={r.shift.id}
@@ -785,16 +1048,15 @@ const StatsTab = () => {
       ))}
 
       {orphans && (
-        <Card className="p-4 bg-card/40 border-dashed space-y-2">
+        <Card className="p-4 bg-[#0F1523]/60 border border-dashed border-white/15 rounded-2xl space-y-2">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-muted-foreground" />
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Без зміни
+            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-300">
+              Поза змінами
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {orphans.total} дітей у {orphans.teams} командах · {orphans.iron} Айрон $.
-            Не прив'язані до жодної зміни.
+          <p className="text-xs text-slate-400">
+            {orphans.total} учасників у {orphans.teams} командах · {orphans.iron} А$. Не прив'язані до конкретної зміни.
           </p>
           <ChildPickList kids={orphanKids} onPick={setEditing} />
         </Card>
@@ -803,7 +1065,6 @@ const StatsTab = () => {
   );
 };
 
-/** Compact, tappable child rows — a click opens the full editor. */
 const ChildPickList = ({ kids, onPick }: { kids: Child[]; onPick: (c: Child) => void }) => {
   if (!kids.length) return null;
   return (
@@ -813,20 +1074,18 @@ const ChildPickList = ({ kids, onPick }: { kids: Child[]; onPick: (c: Child) => 
           key={c.id}
           type="button"
           onClick={() => onPick(c)}
-          className="w-full flex items-center gap-2 rounded-lg bg-surface-1 border border-border/40 px-3 py-2 text-left hover:border-primary/40 active:scale-[0.99] transition-smooth"
+          className="w-full flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/5 px-3 py-2 text-left hover:border-[#FA5A15]/40 active:scale-[0.99] transition-all"
         >
-          <span className="text-[10px] font-black tabular-nums w-8 shrink-0 text-muted-foreground">#{c.team_number}</span>
-          <span className="text-xs font-medium truncate flex-1">{c.full_name}</span>
-          <span className="text-[11px] tabular-nums text-primary shrink-0">{c.iron_dollars} $</span>
-          <Pencil className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-[10px] font-black font-mono tabular-nums w-8 shrink-0 text-slate-400">#{c.team_number}</span>
+          <span className="text-xs font-semibold truncate flex-1 text-slate-200">{c.full_name}</span>
+          <span className="text-xs font-mono font-bold text-[#FA5A15] shrink-0">{c.iron_dollars} А$</span>
+          <Pencil className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         </button>
       ))}
     </div>
   );
 };
 
-
-/** "1-6" / "7, 8" compact team range label. */
 const formatTeams = (teams: number[]): string => {
   if (!teams.length) return '—';
   const sorted = [...teams].sort((a, b) => a - b);
@@ -842,12 +1101,12 @@ const formatTeams = (teams: number[]): string => {
 };
 
 const StatBox = ({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) => (
-  <Card className="p-3 bg-gradient-card">
-    <div className="flex items-center gap-1 text-muted-foreground">
+  <Card className="p-3 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-2xl">
+    <div className="flex items-center gap-1 text-slate-400">
       {icon}
-      <p className="text-[10px] uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] uppercase font-bold tracking-wider">{label}</p>
     </div>
-    <p className="text-2xl font-black text-gradient-primary tabular-nums mt-1">{value}</p>
+    <p className="text-xl sm:text-2xl font-black text-[#FA5A15] font-mono tabular-nums mt-1">{value}</p>
   </Card>
 );
 
@@ -855,98 +1114,73 @@ const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStat
   const [showKids, setShowKids] = useState(false);
   const status = shiftStatus(r.shift);
   const statusMeta: Record<typeof status, { label: string; cls: string }> = {
-    active:   { label: 'Активна',   cls: 'bg-success/20 text-success border-success/40' },
-    upcoming: { label: 'Майбутня',  cls: 'bg-primary/20 text-primary border-primary/40' },
-    finished: { label: 'Завершена', cls: 'bg-muted text-muted-foreground border-border' },
+    active:   { label: 'Активна',   cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+    upcoming: { label: 'Майбутня',  cls: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
+    finished: { label: 'Завершена', cls: 'bg-white/5 text-slate-400 border-white/10' },
   };
   const presentPct = r.total ? Math.round((r.present / r.total) * 100) : 0;
   const loggedPct = r.total ? Math.round((r.loggedIn / r.total) * 100) : 0;
 
   return (
-    <Card className="p-4 bg-gradient-card space-y-3">
+    <Card className="p-4 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-2xl space-y-3 shadow-md">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="text-sm font-bold truncate">{r.shift.name}</p>
+            <p className="text-sm font-bold truncate text-white">{r.shift.name}</p>
             <Badge className={`text-[9px] px-1.5 py-0 h-4 border ${statusMeta[status].cls}`}>
               {statusMeta[status].label}
             </Badge>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-slate-400 mt-0.5">
             {SHIFT_LABELS[r.shift.shift_type]} · {r.shift.start_date} → {r.shift.end_date}
           </p>
-          <p className="text-[11px] text-primary mt-0.5">
-            {CATEGORY_LABELS[resolveShiftPhase(r.shift).category]} (Команди {formatTeams(teamsOf(r.shift))}): {r.total} дітей
-            {' · '}Етап: {resolveShiftPhase(r.shift).phaseTitle}
+          <p className="text-[11px] text-[#FA5A15] font-medium mt-0.5">
+            {CATEGORY_LABELS[resolveShiftPhase(r.shift).category]} (Команди: {formatTeams(teamsOf(r.shift))}): {r.total} учасників
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <MiniStat label="Дітей" value={r.total} />
+        <MiniStat label="Учасників" value={r.total} />
         <MiniStat label="Команд" value={r.teams} />
-        <MiniStat label="Присутніх" value={`${r.present}`} hint={`${presentPct}%`} />
-        <MiniStat label="Увійшло" value={`${r.loggedIn}`} hint={`${loggedPct}%`} />
+        <MiniStat label="Присутні" value={`${r.present}`} hint={`${presentPct}%`} />
+        <MiniStat label="Увійшли" value={`${r.loggedIn}`} hint={`${loggedPct}%`} />
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <MiniStat label="Айрон $" value={r.ironTotal} accent />
+        <MiniStat label="Баланс А$" value={`${r.ironTotal} А$`} accent />
         <MiniStat label="Трансферів" value={r.transfers} />
       </div>
-
-      {r.total > 0 && (
-        <div className="space-y-1.5 pt-1">
-          <div className="space-y-0.5">
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>Присутність</span>
-              <span className="tabular-nums">{presentPct}%</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
-              <div className="h-full bg-success transition-all" style={{ width: `${presentPct}%` }} />
-            </div>
-          </div>
-          <div className="space-y-0.5">
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>Зайшло у профіль</span>
-              <span className="tabular-nums">{loggedPct}%</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
-              <div className="h-full bg-gradient-primary transition-all" style={{ width: `${loggedPct}%` }} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {kids.length > 0 && onPickChild && (
         <div className="pt-1">
           <button
             type="button"
             onClick={() => setShowKids((v) => !v)}
-            className="w-full h-10 rounded-lg bg-surface-1 border border-border/40 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-smooth"
+            className="w-full h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-colors"
           >
             <ChevronDown className={`w-4 h-4 transition-transform ${showKids ? 'rotate-180' : ''}`} />
-            {showKids ? 'Сховати дітей' : `Показати дітей (${kids.length})`}
+            {showKids ? 'Сховати список' : `Переглянути учасників (${kids.length})`}
           </button>
-          <div className={`grid transition-[grid-template-rows] duration-300 ease-[var(--ease-out-expo)] ${showKids ? 'grid-rows-[1fr] mt-2' : 'grid-rows-[0fr]'}`}>
-            <div className="overflow-hidden">
+          {showKids && (
+            <div className="pt-2 animate-slide-up">
               <ChildPickList kids={kids} onPick={onPickChild} />
             </div>
-          </div>
+          )}
         </div>
       )}
     </Card>
-
   );
 };
 
 const MiniStat = ({ label, value, hint, accent }: { label: string; value: number | string; hint?: string; accent?: boolean }) => (
-  <div className="rounded-lg bg-surface-1 p-2 border border-border/40">
-    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+  <div className="rounded-xl bg-white/[0.03] p-2 border border-white/5">
+    <p className="text-[9px] uppercase font-bold tracking-wider text-slate-400">{label}</p>
     <div className="flex items-baseline gap-1 mt-0.5">
-      <p className={`text-lg font-black tabular-nums leading-none ${accent ? 'text-gradient-primary' : ''}`}>
+      <p className={`text-base sm:text-lg font-black font-mono tabular-nums leading-none ${accent ? 'text-[#FA5A15]' : 'text-white'}`}>
         {value}
       </p>
-      {hint && <span className="text-[9px] text-muted-foreground tabular-nums">{hint}</span>}
+      {hint && <span className="text-[9px] text-slate-400 font-mono tabular-nums">{hint}</span>}
     </div>
   </div>
 );
