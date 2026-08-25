@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { 
+  X, 
+  ChevronLeft, 
+  ChevronRight, 
+  Sparkles, 
+  Coins, 
+  Calendar, 
+  ShoppingBag, 
+  Users, 
+  Train, 
+  Bell, 
+  ShieldCheck,
+  Check
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -13,7 +26,8 @@ interface TourStep {
   selector: string;
   title: string;
   text: string;
-  /** Extra delay (ms) before searching for the target — dialogs need mount time. */
+  icon?: React.ComponentType<{ className?: string }>;
+  /** Додаткова затримка для відкриття діалогових вікон */
   delay?: number;
   onEnter?: () => void;
   onLeave?: () => void;
@@ -24,7 +38,7 @@ interface Props {
   teamNumber: number;
   myTeam: number;
   activeTab: string;
-  firstTeamChild: unknown | null;
+  firstTeamChild: any | null;
   onTabChange: (tab: string) => void;
   setOpenTeam: (team: number | null) => void;
   setEditChild: (child: any | null) => void;
@@ -39,7 +53,6 @@ const SupervisorTour = ({
   open,
   teamNumber,
   myTeam,
-  activeTab,
   firstTeamChild,
   onTabChange,
   setOpenTeam,
@@ -50,85 +63,152 @@ const SupervisorTour = ({
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [ready, setReady] = useState(false);
-  const [cardSize, setCardSize] = useState({ w: 320, h: 240 });
+  const [cardSize, setCardSize] = useState({ w: 340, h: 240 });
   const cardRef = useRef<HTMLDivElement>(null);
   const haptics = useHaptics();
+
+  // Демонстраційний учасник на випадок, якщо список команди порожній
+  const fallbackChild = useMemo(() => ({
+    id: 'tour-mock-child-preview',
+    full_name: 'Остапенко Максим Олександрович',
+    team_number: myTeam,
+    iron_dollars: 150,
+    is_present: true,
+    row_number: 1,
+    team_name: 'Збірна',
+    notes: 'Активний учасник, бере участь у вечорі талантів',
+  }), [myTeam]);
+
+  const activeChild = firstTeamChild || fallbackChild;
 
   const cleanup = useCallback(() => {
     setEditChild(null);
     setBankOpen(false);
   }, [setEditChild, setBankOpen]);
 
+  // 11 вичерпних кроків інтерактивного навчання Супроводу
   const steps: TourStep[] = useMemo(() => [
     {
       targetTab: 'teams',
       selector: '[data-tour="step-1-sort"]',
       title: 'Вітаємо у проєкті! 👋',
-      text: 'Тут ти можеш відфільтрувати дітей своєї команди: за присутністю, балансом Айрон-доларів або наявністю нотаток.',
-      onEnter: () => { onTabChange('teams'); setOpenTeam(null); setEditChild(null); setBankOpen(false); },
+      text: 'Це твій робочий простір. Тут ти можеш шукати учасників своєї команди, сортувати за присутністю, балансом А$ або наявністю нотаток.',
+      icon: Users,
+      onEnter: () => { 
+        onTabChange('teams'); 
+        setOpenTeam(null); 
+        setEditChild(null); 
+        setBankOpen(false); 
+      },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-2-my-team"]',
       title: 'Твоя команда',
-      text: 'Картка команди має бейдж «МОЯ». Натисни на неї (або ми вже розкрили її для тебе), щоб побачити список усіх дітей.',
-      onEnter: () => { onTabChange('teams'); setOpenTeam(myTeam); },
+      text: 'Картка твоєї команди позначена бейджем «МОЯ». Натисни на неї, щоб відкрити повний список учасників.',
+      icon: Users,
+      onEnter: () => { 
+        onTabChange('teams'); 
+        setOpenTeam(myTeam); 
+      },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-3-presence-toggle"]',
       title: 'Швидка присутність',
-      text: 'Натискай цей чекбокс для швидкої відмітки присутності. Працює миттєво та оптимістично навіть офлайн.',
-      onEnter: () => { onTabChange('teams'); setOpenTeam(myTeam); },
+      text: 'Відмічай присутність учасників в 1 дотик. Працює миттєво та оптимістично навіть у разі нестабільного зв\'язку.',
+      icon: Check,
+      onEnter: () => { 
+        onTabChange('teams'); 
+        setOpenTeam(myTeam); 
+      },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-4-iron-adjustment"]',
-      title: 'Айрон-Долари дитини',
-      text: 'У профілі дитини ти можеш швидко нарахувати або списати валюту кнопками плюс/мінус за активність на проєкті.',
+      title: 'Айрон-долари (А$)',
+      text: 'Нараховуй та списуй валюту проєкту А$ за активність, командні перемоги та участь у подіях.',
+      icon: Coins,
       delay: 300,
-      onEnter: () => { setOpenTeam(myTeam); if (firstTeamChild) setEditChild(firstTeamChild); },
+      onEnter: () => { 
+        setOpenTeam(myTeam); 
+        setEditChild(activeChild); 
+      },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-4-notes"]',
       title: 'Нотатки супроводу',
-      text: 'Записуй сюди важливі спостереження (здоров\'я, таланти, поведінка). Нотатки бачить лише супровід та адміністрація.',
+      text: 'Фіксуй важливі спостереження (стан здоров\'я, таланти, особливості). Нотатки є конфіденційними і доступні лише супроводу та штабу.',
+      icon: ShieldCheck,
       delay: 200,
-      onEnter: () => { if (firstTeamChild) setEditChild(firstTeamChild); },
+      onEnter: () => { 
+        setEditChild(activeChild); 
+      },
       onLeave: () => setEditChild(null),
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-5-bank-balance"]',
-      title: 'Банк Айрон-Доларів',
-      text: 'Це твій персональний баланс команди. Встановлюй ліміт бюджету та зручно контролюй, скільки коштів уже роздано дітям.',
+      title: 'Банк Айрон-доларів',
+      text: 'Твій командний фонд А$. Контролюй ліміт бюджету та переглядай, скільки коштів уже нараховано команді.',
+      icon: Coins,
       delay: 300,
-      onEnter: () => { setEditChild(null); setBankOpen(true); },
+      onEnter: () => { 
+        setEditChild(null); 
+        setBankOpen(true); 
+      },
       onLeave: () => setBankOpen(false),
+    },
+    {
+      targetTab: 'fair',
+      selector: '[data-tour="step-fair-terminal"]',
+      title: 'Термінал каси Air Pay',
+      text: '100% безконтактна оплата ярмарку по повітрю! Коли учасник надсилає запит на твою касу — підтверджуй списання в 1 клік.',
+      icon: ShoppingBag,
+      onEnter: () => { 
+        setBankOpen(false); 
+        setEditChild(null); 
+        onTabChange('fair'); 
+      },
+    },
+    {
+      targetTab: 'schedule',
+      selector: '[data-tour="step-schedule-timeline"]',
+      title: 'Розклад подій дня',
+      text: 'Хронологічний розклад зміни, перемикач дат, фільтр команд та таймер зворотного відліку до наступної активності.',
+      icon: Calendar,
+      onEnter: () => { 
+        onTabChange('schedule'); 
+      },
     },
     {
       targetTab: 'transfers',
       selector: '[data-tour="step-6-transfers-root"]',
       title: 'Трансфери між командами',
-      text: 'Потрібно перевести дитину в іншу команду або зробити рівноцінний обмін «дитина на дитину»? Усе робиться тут.',
-      onEnter: () => { setBankOpen(false); setEditChild(null); onTabChange('transfers'); },
+      text: 'Зручне переведення учасників між командами або рівноцінний обмін «учасник на учасника» без плутанини.',
+      icon: Users,
+      onEnter: () => { 
+        onTabChange('transfers'); 
+      },
     },
     ...(TRAIN_FEATURE_ENABLED ? [{
       targetTab: 'coupes',
       selector: '[data-tour="step-7-coupes-root"]',
-      title: 'Розселення по купе',
-      text: 'Керуй розміщенням пасажирів у потязі, вказуй ролі (Учасник, Супровід, Спікер) та контролюй посадку.',
+      title: 'Купе в потязі УЗ',
+      text: 'Контролюй розсадження команди у вагоні, перевіряй номери місць та позначай посадку учасників.',
+      icon: Train,
       onEnter: () => onTabChange('coupes'),
     }] : []),
     {
       targetTab: 'notifications',
       selector: '[data-tour="step-8-notifications-root"]',
-      title: 'Стрічка подій та вихід',
-      text: 'Тут з\'являються всі сповіщення проєкту. Коли завершиш зміну — натискай «Вийти». Бажаємо крутого проєкту!',
+      title: 'Стрічка сповіщень',
+      text: 'Усі оголошення штабу проєкту з\'являються тут. За потреби ти завжди можеш пройти це навчання ще раз. Успішної зміни!',
+      icon: Bell,
       onEnter: () => onTabChange('notifications'),
     },
-  ], [myTeam, firstTeamChild, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ], [myTeam, activeChild, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
   const total = steps.length;
   const step = steps[index];
@@ -138,28 +218,26 @@ const SupervisorTour = ({
     if (!open) return;
     setIndex(0);
     haptics.notification('success');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, haptics]);
 
-  // Mark the body while the tour runs — dialogs then render without their own dim,
-  // so the tour overlay stays a single, monolithic, never-flashing layer.
   useEffect(() => {
     if (!open) return;
     document.body.setAttribute('data-tour-active', 'true');
     return () => { document.body.removeAttribute('data-tour-active'); };
   }, [open]);
 
-  // Run the step's onEnter whenever it becomes current
   useEffect(() => {
     if (!open || !step) return;
     step.onEnter?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, index]);
+  }, [open, index, step]);
 
   const measure = useCallback(() => {
     if (!step) return;
     const el = document.querySelector(step.selector) as HTMLElement | null;
-    if (!el) return;
+    if (!el) {
+      setRect(null);
+      return;
+    }
     const r = el.getBoundingClientRect();
     setRect((prev) => {
       if (prev && Math.abs(prev.top - r.top) < 0.5 && Math.abs(prev.left - r.left) < 0.5
@@ -168,17 +246,21 @@ const SupervisorTour = ({
     });
   }, [step]);
 
-  // Locate target (onEnter → rAF → 180ms for the dialog animation) then glide focus
+  // Плавне позиціонування та автопошук елемента в DOM
   useLayoutEffect(() => {
     if (!open || !step) return;
     let cancelled = false;
     let tries = 0;
     setReady(false);
+
     const tick = () => {
       if (cancelled) return;
       const el = document.querySelector(step.selector) as HTMLElement | null;
       if (el) {
-        try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { /* noop */ }
+        try { 
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); 
+        } catch { /* noop */ }
+        
         setTimeout(() => {
           if (cancelled) return;
           requestAnimationFrame(() => {
@@ -186,23 +268,24 @@ const SupervisorTour = ({
             measure();
             setReady(true);
           });
-        }, 380);
+        }, 300);
         return;
       }
-      if (tries++ < 16) setTimeout(tick, 200);
+      if (tries++ < 18) setTimeout(tick, 150);
     };
-    const t = setTimeout(() => requestAnimationFrame(tick), (step.delay ?? 0) + 180);
+
+    const t = setTimeout(() => requestAnimationFrame(tick), (step.delay ?? 0) + 140);
     return () => { cancelled = true; clearTimeout(t); };
   }, [open, index, step, measure]);
 
-  // Keep the spotlight glued to the target
+  // Відстеження зміни розмірів вікна
   useEffect(() => {
     if (!open) return;
     let raf = 0;
     const on = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     window.addEventListener('resize', on);
     window.addEventListener('scroll', on, true);
-    const iv = setInterval(on, 500);
+    const iv = setInterval(on, 400);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', on);
@@ -211,7 +294,6 @@ const SupervisorTour = ({
     };
   }, [open, measure]);
 
-  // Track the tooltip's own size for accurate clamping
   useEffect(() => {
     if (!open) return;
     const el = cardRef.current;
@@ -223,7 +305,6 @@ const SupervisorTour = ({
     return () => ro.disconnect();
   }, [open, index]);
 
-
   const finish = useCallback(() => {
     localStorage.setItem(tourStorageKey(teamNumber), new Date().toISOString());
     cleanup();
@@ -232,23 +313,30 @@ const SupervisorTour = ({
   }, [teamNumber, cleanup, haptics, onClose]);
 
   const skip = useCallback(() => {
+    haptics.impact('light');
     cleanup();
     onClose();
-  }, [cleanup, onClose]);
+  }, [cleanup, onClose, haptics]);
 
-  const goTo = (next: number) => {
-    if (next === index) return;
+  const goTo = (nextIdx: number) => {
+    if (nextIdx === index) return;
     steps[index]?.onLeave?.();
     haptics.selection();
-    setIndex(next);
+    setIndex(nextIdx);
   };
-
 
   const next = () => {
-    if (isLast) { steps[index]?.onLeave?.(); finish(); return; }
+    if (isLast) { 
+      steps[index]?.onLeave?.(); 
+      finish(); 
+      return; 
+    }
     goTo(index + 1);
   };
-  const prev = () => { if (index > 0) goTo(index - 1); };
+
+  const prev = () => { 
+    if (index > 0) goTo(index - 1); 
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -259,8 +347,7 @@ const SupervisorTour = ({
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, index]);
+  });
 
   if (!open || !step) return null;
 
@@ -268,137 +355,146 @@ const SupervisorTour = ({
   const vh = window.innerHeight;
   const tooltipWidth = Math.min(vw - PADDING * 2, 360);
 
-  // ---- Horizontal clamp -------------------------------------------------
+  // Горизонтальне вирівнювання
   let left = rect
     ? rect.left + (rect.width - tooltipWidth) / 2
     : (vw - tooltipWidth) / 2;
   left = Math.max(PADDING, Math.min(vw - tooltipWidth - PADDING, left));
 
-  // ---- Vertical placement ----------------------------------------------
+  // Вертикальне позиціонування
   const cardH = cardSize.h || 240;
   const spaceBelow = rect ? vh - (rect.bottom + SPOT_PAD) : vh;
   const spaceAbove = rect ? rect.top - SPOT_PAD : vh;
-  // Elements that dominate the screen (open dialogs) -> pin to the bottom third.
   const isHuge = rect ? rect.height > vh * 0.55 : false;
 
   let topStyle: number;
-
   if (!rect || isHuge) {
-    topStyle = vh - cardH - 16;
-  } else if (spaceBelow >= Math.max(200, cardH + 24)) {
+    topStyle = vh - cardH - 24;
+  } else if (spaceBelow >= Math.max(180, cardH + 20)) {
     topStyle = rect.bottom + SPOT_PAD + 12;
-  } else if (spaceAbove >= cardH + 24) {
+  } else if (spaceAbove >= cardH + 20) {
     topStyle = rect.top - SPOT_PAD - 12 - cardH;
   } else {
-    // Nothing fits cleanly — dock to whichever side has more room.
-    topStyle = spaceBelow >= spaceAbove ? vh - cardH - 16 : PADDING;
+    topStyle = spaceBelow >= spaceAbove ? vh - cardH - 24 : PADDING;
   }
-
   topStyle = Math.max(PADDING, Math.min(vh - cardH - PADDING, topStyle));
 
-  // Spotlight geometry — a single persistent element whose giant box-shadow
-  // IS the dim layer, so the background never remounts or re-fades.
+  // Геометрія Spotlight
   const spotW = rect ? rect.width + SPOT_PAD * 2 : 0;
   const spotH = rect ? rect.height + SPOT_PAD * 2 : 0;
   const spotX = rect ? rect.left - SPOT_PAD : vw / 2;
   const spotY = rect ? rect.top - SPOT_PAD : vh / 2;
 
+  const StepIcon = step.icon || Sparkles;
+
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] animate-fade-in"
-      style={{ pointerEvents: 'auto', animationDuration: '200ms' }}
+      className="fixed inset-0 z-[9999] select-none animate-fade-in"
+      style={{ pointerEvents: 'auto', animationDuration: '220ms' }}
       role="dialog"
       aria-modal="true"
-      aria-label="Навчання супроводу"
+      aria-label="Інтерактивне навчання супроводу"
     >
-      {/* Monolithic dim + gliding spotlight cut-out (mounted once per tour) */}
+      {/* Пружинний Spotlight оверлей у стилі Apple */}
       <div
-        className="tour-spotlight absolute top-0 left-0 rounded-2xl pointer-events-none gpu-accelerated"
+        className="tour-spotlight absolute top-0 left-0 rounded-2xl pointer-events-none transform-gpu will-change-transform"
         style={{
           width: spotW,
           height: spotH,
           transform: `translate3d(${spotX}px, ${spotY}px, 0)`,
-          boxShadow:
-            '0 0 0 9999px rgba(0,0,0,0.75), 0 0 0 4px hsl(var(--primary) / 0.6), 0 0 25px hsl(var(--primary) / 0.4)',
+          boxShadow: '0 0 0 9999px rgba(5, 7, 13, 0.82), 0 0 0 3px #FA5A15, 0 0 32px rgba(250, 90, 21, 0.45)',
+          transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), width 0.35s ease, height 0.35s ease',
         }}
       />
 
-      {/* Click blocker: nothing outside the coach card is interactive */}
+      {/* Блокувальник кліків повз картку */}
       <div
         className="absolute inset-0"
         onClick={(e) => e.stopPropagation()}
         onTouchMove={(e) => e.preventDefault()}
       />
 
-      {/* Coach card */}
+      {/* Картка підказки (Obsidian Glass) */}
       <div
         ref={cardRef}
-        className="tour-card absolute top-0 left-0 rounded-2xl border border-primary/30 bg-card/95 mobile-glass backdrop-blur-xl shadow-2xl p-4"
+        className="tour-card absolute top-0 left-0 rounded-3xl border border-white/15 bg-[#0A0E18]/95 text-slate-100 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] p-4 sm:p-5 transform-gpu will-change-transform"
         style={{
           width: tooltipWidth,
           transform: `translate3d(${left}px, ${topStyle}px, 0)`,
-          opacity: ready || !rect ? 1 : 0.85,
+          opacity: ready || !rect ? 1 : 0.88,
           maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
           overflowY: 'auto',
+          transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease',
         }}
       >
-        <div key={index} className="tour-content-in">
+        <div key={index} className="space-y-3">
+          {/* Шапка кроку */}
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
+              <StepIcon className="w-5 h-5 text-[#FA5A15]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase font-mono font-bold tracking-widest text-[#FA5A15]">
+                Крок {index + 1} з {total}
+              </p>
+              <h3 className="font-bold text-base text-white leading-tight mt-0.5">
+                {step.title}
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={skip}
+              aria-label="Пропустити навчання"
+              className="w-8 h-8 -mt-1 -mr-1 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-        <div className="flex items-start gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center shrink-0">
-            <Sparkles className="w-4 h-4 text-primary" />
+          {/* Текст підказки */}
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            {step.text}
+          </p>
+
+          {/* Прогрес-бар */}
+          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#FA5A15] to-[#FF7D3B] transition-all duration-300 shadow-[0_0_12px_rgba(250,90,21,0.6)]"
+              style={{ width: `${((index + 1) / total) * 100}%` }}
+            />
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Крок {index + 1} з {total}
-            </p>
-            <h3 className="font-black text-base leading-tight mt-0.5">{step.title}</h3>
+
+          {/* Кнопки керування */}
+          <div className="flex items-center gap-2 pt-1">
+            {index > 0 && (
+              <Button 
+                variant="ghost" 
+                onClick={prev} 
+                className="h-11 px-3 flex-1 text-xs font-bold rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                <span>Назад</span>
+              </Button>
+            )}
+            <Button
+              onClick={next}
+              className="h-11 px-4 flex-[1.6] text-xs font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-md active:scale-95 transition-all"
+            >
+              <span>{isLast ? 'Завершити' : 'Далі'}</span>
+              {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
+            </Button>
           </div>
+
           <button
             type="button"
             onClick={skip}
-            aria-label="Пропустити навчання"
-            className="w-9 h-9 -mt-1 -mr-1 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground active:scale-90 transition-transform"
+            className="w-full text-[11px] font-medium text-slate-500 hover:text-slate-300 py-1 transition-colors text-center"
           >
-            <X className="w-4 h-4" />
+            Пропустити навчання
           </button>
-        </div>
-
-        <p className="text-sm text-muted-foreground mt-2.5 leading-relaxed">{step.text}</p>
-
-        <div className="mt-3 h-1.5 rounded-full bg-secondary overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-primary transition-all duration-500"
-            style={{ width: `${((index + 1) / total) * 100}%` }}
-          />
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          {index > 0 && (
-            <Button variant="ghost" onClick={prev} className="h-11 px-3 flex-1 text-xs font-bold">
-              <ChevronLeft className="w-4 h-4 mr-1" /> Назад
-            </Button>
-          )}
-          <Button
-            onClick={next}
-            className="h-11 px-3 flex-[1.6] text-xs font-bold uppercase bg-gradient-primary"
-          >
-            {isLast ? 'Завершити' : 'Далі'}
-            {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
-          </Button>
-        </div>
-
-        <button
-          type="button"
-          onClick={skip}
-          className="mt-2 w-full text-[11px] text-muted-foreground hover:text-foreground py-2 transition-colors"
-        >
-          Пропустити навчання
-        </button>
         </div>
       </div>
     </div>,
-
     document.body,
   );
 };
