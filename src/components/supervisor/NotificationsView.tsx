@@ -28,9 +28,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
 import { InlineLoader } from '@/components/ui/loader';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useDynamicIsland } from '@/context/DynamicIslandContext'; // 👈 Dynamic Island
 
 interface Props {
   myTeam: number;
@@ -82,7 +82,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: UserCheck,
       color: 'text-emerald-400',
       bg: 'bg-emerald-500/15 border-emerald-500/30',
-      isSystemLog: true
     };
   }
   if (text.includes('трансфер') || text.includes('переведен') || text.includes('купе') || text.includes('потяг')) {
@@ -90,7 +89,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: ArrowLeftRight,
       color: 'text-sky-400',
       bg: 'bg-sky-500/15 border-sky-500/30',
-      isSystemLog: false
     };
   }
   if (text.includes('ярмарок') || text.includes('айрон') || text.includes('а$') || text.includes('баланс') || text.includes('оплат')) {
@@ -98,7 +96,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Coins,
       color: 'text-[#FA5A15]',
       bg: 'bg-[#FA5A15]/15 border-[#FA5A15]/30',
-      isSystemLog: false
     };
   }
   if (text.includes('розклад') || text.includes('поді') || text.includes('зал') || text.includes('репетиц')) {
@@ -106,7 +103,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Calendar,
       color: 'text-indigo-400',
       bg: 'bg-indigo-500/15 border-indigo-500/30',
-      isSystemLog: false
     };
   }
   if (text.includes('оголошення') || text.includes('штаб') || text.includes('увага') || text.includes('адмін')) {
@@ -114,7 +110,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Megaphone,
       color: 'text-amber-400',
       bg: 'bg-amber-500/15 border-amber-500/30',
-      isSystemLog: false
     };
   }
 
@@ -122,7 +117,6 @@ const getNotificationVisuals = (notif: AppNotification) => {
     icon: Bell,
     color: 'text-primary',
     bg: 'bg-primary/15 border-primary/30',
-    isSystemLog: false
   };
 };
 
@@ -130,7 +124,9 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [hideSystemLogs, setHideSystemLogs] = useState(false);
+  
   const haptics = useHaptics();
+  const island = useDynamicIsland(); // 👈 Підключення Dynamic Island
 
   const [seenBefore, setSeenBefore] = useState<string>(() => {
     return localStorage.getItem(SEEN_KEY(myTeam)) || '1970-01-01T00:00:00.000Z';
@@ -203,15 +199,19 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     [visibleItems, seenBefore]
   );
 
+  // Позначити всі як прочитані ➔ Відправляємо в Dynamic Island
   const markAllRead = () => {
     haptics.impact('light');
     const now = new Date().toISOString();
     localStorage.setItem(SEEN_KEY(myTeam), now);
     setSeenBefore(now);
     emitBadgeSync();
-    toast.success('Усі сповіщення позначено як прочитані');
+    
+    // 🏝️ Сповіщення в острівець
+    island.showSuccess('Усі сповіщення прочитано', 'Стрічку оновлено');
   };
 
+  // Очистити стрічку для команди ➔ Відправляємо в Dynamic Island
   const clearForMe = () => {
     haptics.notification('success');
     const now = new Date().toISOString();
@@ -220,7 +220,9 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     setClearedBefore(now);
     setSeenBefore(now);
     emitBadgeSync();
-    toast.success(`Стрічку очищено для команди №${myTeam}`);
+
+    // 🏝️ Сповіщення в острівець
+    island.showSuccess('Стрічку очищено', `Для команди №${myTeam}`);
   };
 
   if (loading) {
@@ -364,44 +366,4 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
               className={`p-3.5 rounded-2xl flex items-start gap-3 transition-all duration-200 backdrop-blur-xl ${
                 isUnread
                   ? 'bg-gradient-to-r from-[#0F1523] to-[#161F33] border-[#FA5A15]/40 shadow-[0_0_18px_rgba(250,90,21,0.12)]'
-                  : 'bg-[#0F1523]/70 border-white/5 hover:border-white/10'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${visuals.bg}`}>
-                <IconComponent className={`w-5 h-5 ${visuals.color}`} strokeWidth={1.9} />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                  <p className="font-bold text-xs sm:text-sm text-slate-100 truncate">
-                    {n.title || 'Повідомлення проєкту'}
-                  </p>
-                  {isUnread && (
-                    <span className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-md bg-[#FA5A15]/15 border border-[#FA5A15]/30 text-[9px] font-black text-[#FA5A15] uppercase tracking-wider">
-                      <CircleDot className="w-2 h-2 animate-pulse" />
-                      Нове
-                    </span>
-                  )}
-                </div>
-
-                {cleanMsg && (
-                  <p className="text-xs text-slate-300 break-words leading-relaxed font-medium">
-                    {cleanMsg}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 mt-2 pt-1 border-t border-white/5">
-                  <span className="text-[10px] font-mono font-medium text-slate-500">
-                    {formatNotifTime(n.created_at)}
-                  </span>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-export default NotificationsView;
+                  : 'bg-[#0F1523]/70 border-white/5 hover:bord
