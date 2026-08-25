@@ -12,7 +12,9 @@ import {
   Train, 
   ShoppingBag, 
   HelpCircle,
-  Crown
+  Crown,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -63,11 +65,35 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [openTeam, setOpenTeam] = useState<number | null>(null);
   const [editChild, setEditChild] = useState<any | null>(null);
   const [firstTeamChild, setFirstTeamChild] = useState<any | null>(null);
+
+  // Керування темою оформлення для кабінету супроводу
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('supervisor_theme_mode');
+    return saved ? saved === 'dark' : true;
+  });
   
   const haptics = useHaptics();
   const talent = useTalentEventActive();
   const fair = useAggressiveFairUnlock(authedTeam !== null);
   const isMobile = useIsMobile();
+
+  // Синхронізація теми з документом
+  useEffect(() => {
+    localStorage.setItem('supervisor_theme_mode', isDark ? 'dark' : 'light');
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDark]);
+
+  const toggleTheme = useCallback(() => {
+    haptics.impact('light');
+    setIsDark((prev) => !prev);
+  }, [haptics]);
 
   // Список вкладок для нижнього плаваючого Dock
   const tabItems: DockItem[] = [
@@ -245,17 +271,19 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   ========================================================================= */
   if (showAdminAnim) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-[#07090E] text-slate-100 select-none">
+      <div className={`min-h-[100dvh] flex flex-col items-center justify-center p-6 select-none transition-colors duration-300 ${
+        isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
+      }`}>
         <div className="animate-fade-in text-center space-y-4">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shadow-[0_0_40px_rgba(245,158,11,0.4)]">
             <Crown className="w-12 h-12 sm:w-14 sm:h-14 text-amber-400" />
             <div className="absolute inset-0 rounded-3xl bg-amber-500/25 blur-2xl animate-pulse" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white uppercase">
+            <h1 className={`text-3xl font-black tracking-tight uppercase ${isDark ? 'text-white' : 'text-slate-900'}`}>
               Адміністратор
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            <p className={`text-xs sm:text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               Доступ підтверджено. Перехід до головного штабу проєкту...
             </p>
           </div>
@@ -269,34 +297,58 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   ========================================================================= */
   if (authedTeam === null) {
     return (
-      <div className="min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none bg-[#07090E] text-slate-100">
+      <div className={`min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none transition-colors duration-300 ${
+        isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
+      }`}>
         {loading && <FullScreenLoader label="Перевірка доступу супроводу..." />}
         
         <div>
-          <button 
-            onClick={onBack} 
-            className="inline-flex items-center gap-1.5 min-h-[40px] px-2 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors active:scale-95 mb-6"
-          >
-            <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
-            <span>Назад</span>
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button 
+              onClick={onBack} 
+              className={`inline-flex items-center gap-1.5 min-h-[40px] px-2 text-xs sm:text-sm font-semibold transition-colors active:scale-95 ${
+                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
+              <span>Назад</span>
+            </button>
+
+            {/* Перемикач теми на екрані входу */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Змінити тему оформлення"
+              className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                isDark 
+                  ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            </button>
+          </div>
 
           <div className="animate-slide-up space-y-4">
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FA5A15]/10 border border-[#FA5A15]/20 text-[10px] font-bold tracking-widest text-[#FA5A15] uppercase mb-2">
                 ШТАБ СУПРОВОДУ
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+              <h1 className={`text-2xl sm:text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 Я супровід
               </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              <p className={`text-xs sm:text-sm mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                 Введіть номер своєї команди та пароль для входу в систему
               </p>
             </div>
 
-            <Card className="p-4 sm:p-6 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 space-y-4 shadow-2xl rounded-3xl">
+            <Card className={`p-4 sm:p-6 space-y-4 shadow-xl rounded-3xl backdrop-blur-xl border transition-colors ${
+              isDark 
+                ? 'bg-[#0F1523]/85 border-white/10' 
+                : 'bg-white/95 border-slate-200/90 shadow-md'
+            }`}>
               <div className="space-y-1.5">
-                <Label htmlFor="team" className="text-xs font-semibold text-white">
+                <Label htmlFor="team" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   Номер команди
                 </Label>
                 <Input
@@ -306,12 +358,16 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                   placeholder="6"
                   value={team}
                   onChange={(e) => setTeam(e.target.value)}
-                  className="h-12 text-base bg-white/5 border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:border-[#FA5A15]"
+                  className={`h-12 text-base rounded-xl ${
+                    isDark 
+                      ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
+                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
+                  }`}
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="pwd" className="text-xs font-semibold text-white">
+                <Label htmlFor="pwd" className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   Пароль доступу
                 </Label>
                 <Input
@@ -322,7 +378,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  className="h-12 text-base bg-white/5 border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:border-[#FA5A15] font-mono"
+                  className={`h-12 text-base rounded-xl font-mono ${
+                    isDark 
+                      ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-[#FA5A15]' 
+                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-[#FA5A15]'
+                  }`}
                 />
               </div>
 
@@ -337,7 +397,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           </div>
         </div>
 
-        <footer className="text-center py-2 text-[11px] text-slate-500">
+        <footer className={`text-center py-2 text-[11px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
           Всеукраїнський проєкт «Залізна Зміна» · Штаб координації проєкту
         </footer>
       </div>
@@ -348,35 +408,70 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
      ГОЛОВНИЙ РОБОЧИЙ ЕКРАН СУПРОВОДУ
   ========================================================================= */
   return (
-    <div className="min-h-[100dvh] w-full max-w-3xl mx-auto pb-36 safe-bottom overflow-x-hidden select-none bg-[#07090E] text-slate-100">
+    <div className={`min-h-[100dvh] w-full max-w-3xl mx-auto pb-36 safe-bottom overflow-x-hidden select-none transition-colors duration-300 ${
+      isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
+    }`}>
       
       {/* Верхня фіксована панель */}
-      <header className="px-4 py-3 safe-top border-b border-white/10 bg-[#0F1523]/80 backdrop-blur-xl sticky top-0 z-30">
+      <header className={`px-4 py-3 safe-top border-b backdrop-blur-xl sticky top-0 z-30 transition-colors ${
+        isDark 
+          ? 'border-white/10 bg-[#0F1523]/80' 
+          : 'border-slate-200/80 bg-white/90 shadow-sm'
+      }`}>
         <div className="flex items-center justify-between gap-2">
           <button 
             onClick={logout} 
             data-tour="step-8-logout-button" 
-            className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm"
+            className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 border text-xs font-semibold transition-all shadow-sm ${
+              isDark 
+                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white' 
+                : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900'
+            }`}
           >
             <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
             <span>Вийти</span>
           </button>
 
           <div className="flex items-center gap-2">
+            {/* Перемикач теми оформлення */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Змінити тему оформлення"
+              title="Змінити тему оформлення"
+              className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
+                isDark 
+                  ? 'bg-white/5 border-white/10 text-amber-400 hover:bg-white/10' 
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            </button>
+
+            {/* Кнопка запуску інструктажу */}
             <button
               type="button"
               onClick={startTour}
               aria-label="Пройти навчання"
               title="Пройти навчання"
-              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-[#FA5A15]/30 bg-[#FA5A15]/10 text-[#FA5A15] hover:bg-[#FA5A15]/20 text-xs font-bold active:scale-95 transition-all shadow-sm"
+              className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border text-xs font-bold active:scale-95 transition-all shadow-sm ${
+                isDark 
+                  ? 'border-[#FA5A15]/30 bg-[#FA5A15]/10 text-[#FA5A15] hover:bg-[#FA5A15]/20' 
+                  : 'border-orange-200 bg-orange-50 text-[#FA5A15] hover:bg-orange-100'
+              }`}
             >
               <HelpCircle className="w-4 h-4" />
               <span className="hidden xs:inline sm:inline">Інструктаж</span>
             </button>
 
+            {/* Номер команди */}
             <div className="text-right pl-1">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Команда</p>
-              <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">#{authedTeam}</p>
+              <p className={`text-[9px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Команда
+              </p>
+              <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">
+                #{authedTeam}
+              </p>
             </div>
           </div>
         </div>
@@ -385,7 +480,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       {/* Вкладки робочого простору */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3 pt-2">
         {!isMobile && (
-          <div className="sticky top-[65px] z-20 px-1 py-2 bg-[#07090E]/90 backdrop-blur-md">
+          <div className={`sticky top-[65px] z-20 px-1 py-2 backdrop-blur-md transition-colors ${
+            isDark ? 'bg-[#07090E]/90' : 'bg-[#F4F6F9]/90'
+          }`}>
             <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />
           </div>
         )}
@@ -433,7 +530,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
             <div data-tour="step-7-coupes-root" className="space-y-3">
               <TrainPublishStatus />
-              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 px-1 font-bold">{TRAIN_TITLE}</p>
+              <p className={`text-[10px] uppercase tracking-[0.2em] px-1 font-bold ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}>
+                {TRAIN_TITLE}
+              </p>
               <CoupeSwapSettings myTeam={authedTeam} />
               <CoupeManager myTeam={authedTeam} />
             </div>
@@ -474,10 +575,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
         <Button
           onClick={handleExport}
-          className="h-11 w-11 rounded-2xl shadow-xl p-0 bg-[#0F1523]/90 hover:bg-[#151D2F] border border-white/10 text-slate-300 hover:text-white active:scale-90 transition-all"
+          className={`h-11 w-11 rounded-2xl shadow-xl p-0 border active:scale-90 transition-all ${
+            isDark 
+              ? 'bg-[#0F1523]/90 hover:bg-[#151D2F] border-white/10 text-slate-300 hover:text-white' 
+              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 hover:text-slate-900 shadow-md'
+          }`}
           title="Експорт списків в Excel"
         >
-          <Download className="w-4 h-4 text-emerald-400" />
+          <Download className="w-4 h-4 text-emerald-500" />
         </Button>
       </div>
 
