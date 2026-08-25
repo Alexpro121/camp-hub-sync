@@ -13,8 +13,9 @@ import {
   Megaphone, 
   Coins, 
   Calendar, 
-  Sparkles,
-  CheckCheck
+  CheckCheck,
+  UserCheck,
+  Filter
 } from 'lucide-react';
 import {
   AlertDialog, 
@@ -62,15 +63,34 @@ const formatNotifTime = (isoString: string) => {
   }
 };
 
-// Підбір відповідної іконки та акцентного кольору залежно від змісту сповіщення
+// Очищення сирих ISO-таймстемпів із повідомлення
+const sanitizeMessage = (msg: string | null) => {
+  if (!msg) return '';
+  return msg
+    .replace(/·\s*\d{4}-\d{2}-\d{2}T[\d:.Z+-]+/gi, '')
+    .replace(/\d{4}-\d{2}-\d{2}T[\d:.Z+-]+/gi, '')
+    .trim();
+};
+
+// Розумний підбір іконки та стилю
 const getNotificationVisuals = (notif: AppNotification) => {
-  const text = `${notif.title || ''} ${notif.message || ''}`.toLowerCase();
+  const title = (notif.title || '').toLowerCase();
+  const text = `${title} ${notif.message || ''}`.toLowerCase();
   
+  if (title.includes('вхід')) {
+    return {
+      icon: UserCheck,
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/15 border-emerald-500/30',
+      isSystemLog: true
+    };
+  }
   if (text.includes('трансфер') || text.includes('переведен') || text.includes('купе') || text.includes('потяг')) {
     return {
       icon: ArrowLeftRight,
       color: 'text-sky-400',
       bg: 'bg-sky-500/15 border-sky-500/30',
+      isSystemLog: false
     };
   }
   if (text.includes('ярмарок') || text.includes('айрон') || text.includes('а$') || text.includes('баланс') || text.includes('оплат')) {
@@ -78,6 +98,7 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Coins,
       color: 'text-[#FA5A15]',
       bg: 'bg-[#FA5A15]/15 border-[#FA5A15]/30',
+      isSystemLog: false
     };
   }
   if (text.includes('розклад') || text.includes('поді') || text.includes('зал') || text.includes('репетиц')) {
@@ -85,6 +106,7 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Calendar,
       color: 'text-indigo-400',
       bg: 'bg-indigo-500/15 border-indigo-500/30',
+      isSystemLog: false
     };
   }
   if (text.includes('оголошення') || text.includes('штаб') || text.includes('увага') || text.includes('адмін')) {
@@ -92,6 +114,7 @@ const getNotificationVisuals = (notif: AppNotification) => {
       icon: Megaphone,
       color: 'text-amber-400',
       bg: 'bg-amber-500/15 border-amber-500/30',
+      isSystemLog: false
     };
   }
 
@@ -99,12 +122,14 @@ const getNotificationVisuals = (notif: AppNotification) => {
     icon: Bell,
     color: 'text-primary',
     bg: 'bg-primary/15 border-primary/30',
+    isSystemLog: false
   };
 };
 
 const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hideSystemLogs, setHideSystemLogs] = useState(false);
   const haptics = useHaptics();
 
   const [seenBefore, setSeenBefore] = useState<string>(() => {
@@ -115,13 +140,11 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     return localStorage.getItem(CLEARED_KEY(myTeam)) || '1970-01-01T00:00:00.000Z';
   });
 
-  // Синхронізація події скидання бейджа в системі
   const emitBadgeSync = useCallback(() => {
     window.dispatchEvent(new Event('storage'));
     window.dispatchEvent(new CustomEvent('helpsuprov:notif-sync'));
   }, []);
 
-  // Завантаження списку сповіщень та Realtime слухач
   useEffect(() => {
     let cancelled = false;
 
@@ -153,7 +176,7 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     };
   }, []);
 
-  // Миттєво позначаємо сповіщення як прочитані для команди при відкритті вкладки
+  // Миттєве позначення як прочитані
   useEffect(() => {
     const now = new Date().toISOString();
     const timer = setTimeout(() => {
@@ -165,17 +188,21 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     return () => clearTimeout(timer);
   }, [myTeam, emitBadgeSync]);
 
-  const visibleItems = useMemo(
-    () => items.filter((n) => n.created_at > clearedBefore),
-    [items, clearedBefore],
-  );
+  const visibleItems = useMemo(() => {
+    return items
+      .filter((n) => n.created_at > clearedBefore)
+      .filter((n) => {
+        if (!hideSystemLogs) return true;
+        const title = (n.title || '').toLowerCase();
+        return !title.includes('вхід');
+      });
+  }, [items, clearedBefore, hideSystemLogs]);
 
   const unreadCount = useMemo(
     () => visibleItems.filter((n) => n.created_at > seenBefore).length,
     [visibleItems, seenBefore]
   );
 
-  // Позначити всі як прочитані вручну
   const markAllRead = () => {
     haptics.impact('light');
     const now = new Date().toISOString();
@@ -185,7 +212,6 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     toast.success('Усі сповіщення позначено як прочитані');
   };
 
-  // Очистити стрічку для своєї команди
   const clearForMe = () => {
     haptics.notification('success');
     const now = new Date().toISOString();
@@ -215,12 +241,10 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     </Button>
   ) : null;
 
-  // ================= СТАН: ПОРОЖНЯ СТРІЧКА =================
   if (visibleItems.length === 0) {
     return (
       <div data-tour="step-8-notifications-root" className="space-y-3 select-none pb-24">
         {tourButton}
-        
         <Card className="p-8 text-center bg-[#0F1523]/80 backdrop-blur-xl border border-white/10 rounded-3xl shadow-sm space-y-3">
           <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto">
             <Bell className="w-6 h-6 text-slate-500" strokeWidth={1.75} />
@@ -236,7 +260,6 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     );
   }
 
-  // ================= СТАН: АКТИВНА СТРІЧКА СПОВІЩЕНЬ =================
   return (
     <div data-tour="step-8-notifications-root" className="space-y-3 select-none pb-24">
       {tourButton}
@@ -255,6 +278,22 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Фільтр системних логів */}
+          <button
+            onClick={() => {
+              haptics.impact('light');
+              setHideSystemLogs(!hideSystemLogs);
+            }}
+            className={`h-8 px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all ${
+              hideSystemLogs 
+                ? 'bg-[#FA5A15]/20 text-[#FA5A15] border border-[#FA5A15]/30' 
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>{hideSystemLogs ? 'Тільки важливі' : 'Всі'}</span>
+          </button>
+
           {unreadCount > 0 && (
             <Button
               size="sm"
@@ -290,7 +329,7 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
                     Будуть приховані всі поточні повідомлення для команди <strong className="text-white">№{myTeam}</strong>.
                   </span>
                   <span className="block text-slate-500 text-[11px]">
-                    Нові сповіщення після очищення надходитимуть у звичному режимі.
+                    Нові оголошення штабу з'являтимуться в звичному режимі.
                   </span>
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -311,12 +350,13 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
         </div>
       </div>
 
-      {/* Список карток сповіщень */}
+      {/* Список карток */}
       <div className="space-y-2">
         {visibleItems.map((n) => {
           const isUnread = n.created_at > seenBefore;
           const visuals = getNotificationVisuals(n);
           const IconComponent = visuals.icon;
+          const cleanMsg = sanitizeMessage(n.message);
 
           return (
             <Card
@@ -327,12 +367,10 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
                   : 'bg-[#0F1523]/70 border-white/5 hover:border-white/10'
               }`}
             >
-              {/* Іконка категорії */}
               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${visuals.bg}`}>
                 <IconComponent className={`w-5 h-5 ${visuals.color}`} strokeWidth={1.9} />
               </div>
 
-              {/* Текстовий блок */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1.5 mb-0.5">
                   <p className="font-bold text-xs sm:text-sm text-slate-100 truncate">
@@ -346,9 +384,11 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
                   )}
                 </div>
 
-                <p className="text-xs text-slate-300 break-words leading-relaxed">
-                  {n.message}
-                </p>
+                {cleanMsg && (
+                  <p className="text-xs text-slate-300 break-words leading-relaxed font-medium">
+                    {cleanMsg}
+                  </p>
+                )}
 
                 <div className="flex items-center gap-2 mt-2 pt-1 border-t border-white/5">
                   <span className="text-[10px] font-mono font-medium text-slate-500">
