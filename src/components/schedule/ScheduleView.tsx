@@ -23,6 +23,8 @@ import { hallBadge, hallName, type HallBooking } from '@/types/halls';
 import { hhmm, toMinutes } from '@/lib/halls';
 import { useHaptics } from '@/hooks/useHaptics';
 
+const HALL_FEATURE_ENABLED = false;
+
 interface Props {
   myTeam?: number | null;
   /** Режим для дитини: доступний лише розклад власної команди на сьогодні */
@@ -260,14 +262,16 @@ const ScheduleView = ({
       event: e,
     }));
 
-    teamBookings.forEach((b) => {
-      rows.push({
-        kind: 'booking',
-        startMin: toMinutes(b.start_time),
-        endMin: toMinutes(b.end_time),
-        booking: b,
+    if (HALL_FEATURE_ENABLED) {
+      teamBookings.forEach((b) => {
+        rows.push({
+          kind: 'booking',
+          startMin: toMinutes(b.start_time),
+          endMin: toMinutes(b.end_time),
+          booking: b,
+        });
       });
-    });
+    }
 
     return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
   }, [visibleEvents, teamBookings]);
@@ -302,7 +306,7 @@ const ScheduleView = ({
           </span>
         </div>
 
-        {isStaff && myTeam != null && (
+        {HALL_FEATURE_ENABLED && isStaff && myTeam != null && (
           <button
             type="button"
             onClick={() => {
@@ -453,43 +457,7 @@ const ScheduleView = ({
       {/* ================= 5. ХРОНОЛОГІЧНИЙ СПИСОК ПОДІЙ + РЕПЕТИЦІЇ ================= */}
       <div className="w-full space-y-2.5">
         {timelineRows.map((row) => {
-          if (row.kind === 'booking') {
-            const b = row.booking;
-            const active = isToday && nowRel >= row.startMin && nowRel < row.endMin;
-            
-            return (
-              <article
-                key={`b-${b.id}`}
-                className={`relative overflow-hidden rounded-2xl border border-l-4 border-white/10 border-l-[#FA5A15] bg-card/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-xl transition-all active:scale-[0.99] ${
-                  active ? 'border-[#FA5A15]/50 shadow-[0_0_20px_rgba(250,90,21,0.2)]' : ''
-                } ${isToday && nowRel >= row.endMin ? 'opacity-50' : ''}`}
-              >
-                <header className="flex items-center justify-between gap-2 mb-1">
-                  <span className="font-mono text-xs sm:text-sm font-bold tabular-nums text-foreground">
-                    {hhmm(b.start_time)} – {hhmm(b.end_time)}
-                  </span>
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#FA5A15]/40 bg-[#FA5A15]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#FA5A15]">
-                    <Sparkles className="h-2.5 w-2.5" strokeWidth={2.5} />
-                    Репетиція
-                  </span>
-                </header>
-
-                <h3 className="break-words text-sm sm:text-base font-bold tracking-tight text-foreground">
-                  {sentenceCase(b.title || 'Репетиція')}
-                </h3>
-
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold ${hallBadge(b.hall_id)}`}>
-                    <Building2 className="h-3 w-3" strokeWidth={2} />
-                    {hallName(b.hall_id)}
-                  </span>
-                  <span className="font-mono text-[10px] sm:text-[11px] font-semibold text-muted-foreground">
-                    Команда №{b.team_number}
-                  </span>
-                </div>
-              </article>
-            );
-          }
+          if (row.kind === 'booking') return null;
 
           const e = row.event;
           const isNow = currentEvent?.id === e.id;
@@ -508,8 +476,8 @@ const ScheduleView = ({
         })}
       </div>
 
-      {/* Модальне вікно бронювання залів */}
-      {isStaff && myTeam != null && activeDay && (
+      {/* Модальне вікно бронювання залів (тимчасово вимкнено) */}
+      {HALL_FEATURE_ENABLED && isStaff && myTeam != null && activeDay && (
         <HallBookingModal
           open={bookingsOpen}
           onOpenChange={setBookingsOpen}
