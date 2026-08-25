@@ -12,9 +12,7 @@ import {
   Train, 
   ShoppingBag, 
   HelpCircle,
-  Crown,
-  Shield,
-  Lock
+  Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -95,7 +93,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     if (authedTeam !== null) setOpenTeam(authedTeam);
   }, [authedTeam]);
 
-  // Запуск навчального туру для супроводу
+  // Автоматичний запуск навчального туру для нового супроводу
   useEffect(() => {
     if (authedTeam === null) return;
     const GLOBAL_SEEN_KEY = 'helpsuprov:tour-seen-global';
@@ -108,14 +106,16 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     return () => clearTimeout(t);
   }, [authedTeam]);
 
-  const startTour = () => {
+  const startTour = useCallback(() => {
+    haptics.impact('light');
     setActiveTab('teams');
     setEditChild(null);
     setBankOpen(false);
     setTourOpen(true);
-  };
+  }, [haptics]);
 
   const handleTabChange = (v: string) => {
+    haptics.impact('light');
     if (v === 'talent') talent.markSeen();
     setActiveTab(v);
   };
@@ -138,7 +138,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     restore();
   }, []);
 
-  // Відстеження нечитаних сповіщень
+  // Відстеження та миттєве скидання нечитаних сповіщень
   useEffect(() => {
     if (authedTeam === null) return;
 
@@ -160,13 +160,16 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => recompute())
       .subscribe();
 
+    // Слухаємо системні події оновлення стрічки
     const onStorage = () => recompute();
     window.addEventListener('storage', onStorage);
+    window.addEventListener('helpsuprov:notif-sync', onStorage);
     const interval = setInterval(recompute, 15000);
 
     return () => {
       supabase.removeChannel(ch);
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('helpsuprov:notif-sync', onStorage);
       clearInterval(interval);
     };
   }, [authedTeam]);
@@ -222,6 +225,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   };
 
   const handleExport = async () => {
+    haptics.impact('light');
     const { data, error } = await supabase
       .from('children')
       .select('*')
@@ -237,22 +241,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   };
 
   /* =========================================================================
-     АНІМАЦІЯ ПЕРЕХОДУ В АДМІНКУ
+     АНІМАЦІЯ ПЕРЕХОДУ В АДМІНІСТРАТИВНИЙ ШТАБ
   ========================================================================= */
   if (showAdminAnim) {
     return (
-      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-background text-foreground select-none">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-6 bg-[#07090E] text-slate-100 select-none">
         <div className="animate-fade-in text-center space-y-4">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl bg-amber-500/20 border border-amber-500/35 flex items-center justify-center shadow-[0_0_40px_rgba(245,158,11,0.4)]">
             <Crown className="w-12 h-12 sm:w-14 sm:h-14 text-amber-400" />
             <div className="absolute inset-0 rounded-3xl bg-amber-500/25 blur-2xl animate-pulse" />
           </div>
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground uppercase">
+            <h1 className="text-3xl font-black tracking-tight text-white uppercase">
               Адміністратор
             </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Доступ підтверджено. Перехід до головного штабу...
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Доступ підтверджено. Перехід до головного штабу проєкту...
             </p>
           </div>
         </div>
@@ -265,34 +269,34 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   ========================================================================= */
   if (authedTeam === null) {
     return (
-      <div className="min-h-[100dvh] px-4 py-6 max-w-md mx-auto safe-top safe-bottom flex flex-col justify-between select-none">
-        {loading && <FullScreenLoader label="Перевірка доступу..." />}
+      <div className="min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none bg-[#07090E] text-slate-100">
+        {loading && <FullScreenLoader label="Перевірка доступу супроводу..." />}
         
         <div>
           <button 
             onClick={onBack} 
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors active:scale-95 mb-6"
+            className="inline-flex items-center gap-1.5 min-h-[40px] px-2 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors active:scale-95 mb-6"
           >
-            <ArrowLeft className="w-4 h-4 text-primary" /> 
+            <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
             <span>Назад</span>
           </button>
 
           <div className="animate-slide-up space-y-4">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold tracking-widest text-primary uppercase mb-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FA5A15]/10 border border-[#FA5A15]/20 text-[10px] font-bold tracking-widest text-[#FA5A15] uppercase mb-2">
                 ШТАБ СУПРОВОДУ
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                 Я супровід
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                Введіть номер своєї команди та пароль куратора
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Введіть номер своєї команди та пароль для входу в систему
               </p>
             </div>
 
-            <Card className="p-4 sm:p-6 bg-card/85 backdrop-blur-md border-border/60 space-y-4 shadow-xl rounded-3xl">
+            <Card className="p-4 sm:p-6 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 space-y-4 shadow-2xl rounded-3xl">
               <div className="space-y-1.5">
-                <Label htmlFor="team" className="text-xs font-semibold text-foreground">
+                <Label htmlFor="team" className="text-xs font-semibold text-white">
                   Номер команди
                 </Label>
                 <Input
@@ -302,12 +306,12 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                   placeholder="6"
                   value={team}
                   onChange={(e) => setTeam(e.target.value)}
-                  className="h-12 text-base bg-surface-1/50 border-border/60 rounded-xl"
+                  className="h-12 text-base bg-white/5 border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:border-[#FA5A15]"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="pwd" className="text-xs font-semibold text-foreground">
+                <Label htmlFor="pwd" className="text-xs font-semibold text-white">
                   Пароль доступу
                 </Label>
                 <Input
@@ -318,23 +322,23 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  className="h-12 text-base bg-surface-1/50 border-border/60 rounded-xl font-mono"
+                  className="h-12 text-base bg-white/5 border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:border-[#FA5A15] font-mono"
                 />
               </div>
 
               <Button 
                 onClick={handleLogin} 
                 disabled={loading} 
-                className="w-full h-12 text-base font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-transform shadow-md rounded-2xl"
+                className="w-full h-12 text-base font-bold bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-[0.98] transition-transform shadow-lg rounded-xl"
               >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти в штаб'}
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Увійти в кабінет'}
               </Button>
             </Card>
           </div>
         </div>
 
-        <footer className="text-center py-2 text-[11px] text-muted-foreground/60">
-          Залізна Зміна · Координація табору
+        <footer className="text-center py-2 text-[11px] text-slate-500">
+          Всеукраїнський проєкт «Залізна Зміна» · Штаб координації проєкту
         </footer>
       </div>
     );
@@ -344,17 +348,17 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
      ГОЛОВНИЙ РОБОЧИЙ ЕКРАН СУПРОВОДУ
   ========================================================================= */
   return (
-    <div className="min-h-[100dvh] max-w-3xl mx-auto pb-32 safe-bottom overflow-x-hidden select-none">
+    <div className="min-h-[100dvh] w-full max-w-3xl mx-auto pb-36 safe-bottom overflow-x-hidden select-none bg-[#07090E] text-slate-100">
       
-      {/* Верхня навігаційна панель */}
-      <div className="px-4 py-3 safe-top border-b border-border/40 bg-card/60 backdrop-blur-md sticky top-0 z-30">
+      {/* Верхня фіксована панель */}
+      <header className="px-4 py-3 safe-top border-b border-white/10 bg-[#0F1523]/80 backdrop-blur-xl sticky top-0 z-30">
         <div className="flex items-center justify-between gap-2">
           <button 
             onClick={logout} 
             data-tour="step-8-logout-button" 
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card/80 hover:bg-card active:scale-95 border border-border/50 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm"
           >
-            <ArrowLeft className="w-3.5 h-3.5 text-primary" strokeWidth={2} />
+            <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
             <span>Вийти</span>
           </button>
 
@@ -364,30 +368,30 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
               onClick={startTour}
               aria-label="Пройти навчання"
               title="Пройти навчання"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary text-[11px] font-bold active:scale-90 transition-transform"
+              className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl border border-[#FA5A15]/30 bg-[#FA5A15]/10 text-[#FA5A15] hover:bg-[#FA5A15]/20 text-xs font-bold active:scale-95 transition-all shadow-sm"
             >
-              <HelpCircle className="w-3.5 h-3.5" />
+              <HelpCircle className="w-4 h-4" />
               <span className="hidden xs:inline sm:inline">Інструктаж</span>
             </button>
 
             <div className="text-right pl-1">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Команда</p>
-              <p className="text-base sm:text-lg font-black text-primary leading-none font-mono">#{authedTeam}</p>
+              <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Команда</p>
+              <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">#{authedTeam}</p>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Вкладки робочого простору */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full px-3 pt-2">
         {!isMobile && (
-          <div className="sticky top-[60px] z-20 -mx-3 px-3 py-2 bg-background/85 backdrop-blur-md">
+          <div className="sticky top-[65px] z-20 px-1 py-2 bg-[#07090E]/90 backdrop-blur-md">
             <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />
           </div>
         )}
         {isMobile && <TabDock items={tabItems} value={activeTab} onChange={handleTabChange} />}
 
-        {/* 1. КОМАНДИ ТА ДІТИ */}
+        {/* 1. КОМАНДИ ТА УЧАСНИКИ */}
         <TabsContent value="teams" className="mt-2 animate-fade-in">
           <TeamsView
             myTeam={authedTeam}
@@ -401,11 +405,13 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
         {/* 2. РОЗКЛАД */}
         <TabsContent value="schedule" className="mt-2 animate-fade-in">
-          <ScheduleView
-            myTeam={authedTeam}
-            isStaff
-            onFairAction={() => setActiveTab('fair')}
-          />
+          <div data-tour="step-schedule-timeline">
+            <ScheduleView
+              myTeam={authedTeam}
+              isStaff
+              onFairAction={() => setActiveTab('fair')}
+            />
+          </div>
         </TabsContent>
 
         {/* 3. ТАЛАНТИ */}
@@ -415,18 +421,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
           </TabsContent>
         )}
 
-        {/* 4. КАСА ЯРМАРКУ (AIR PAY + QR) */}
+        {/* 4. КАСА ЯРМАРКУ (AIR PAY) */}
         <TabsContent value="fair" className="mt-2 animate-fade-in">
-          <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
+          <div data-tour="step-fair-terminal">
+            <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
+          </div>
         </TabsContent>
 
         {/* 5. ПОТЯГ ТА КУПЕ */}
         {TRAIN_FEATURE_ENABLED && (
           <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
-            <TrainPublishStatus />
-            <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground px-1 font-bold">{TRAIN_TITLE}</p>
-            <CoupeSwapSettings myTeam={authedTeam} />
-            <CoupeManager myTeam={authedTeam} />
+            <div data-tour="step-7-coupes-root" className="space-y-3">
+              <TrainPublishStatus />
+              <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 px-1 font-bold">{TRAIN_TITLE}</p>
+              <CoupeSwapSettings myTeam={authedTeam} />
+              <CoupeManager myTeam={authedTeam} />
+            </div>
           </TabsContent>
         )}
 
@@ -441,12 +451,22 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         </TabsContent>
       </Tabs>
 
-      {/* Плаваючі кнопки швидкої дії (Банк та Експорт) */}
-      <div className={`fixed right-4 ${isMobile ? 'bottom-[calc(5.25rem+env(safe-area-inset-bottom))]' : 'bottom-6'} flex flex-col gap-2.5 z-40`}>
+      {/* Плаваючі кнопки швидкої дії (Банк А$ та Excel-експорт) */}
+      <div 
+        className="fixed right-4 flex flex-col gap-2.5 z-40"
+        style={{
+          bottom: isMobile 
+            ? 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' 
+            : '1.75rem'
+        }}
+      >
         <Button
-          onClick={() => setBankOpen(true)}
+          onClick={() => {
+            haptics.impact('light');
+            setBankOpen(true);
+          }}
           data-tour="step-5-bank-button"
-          className="h-13 w-13 rounded-2xl shadow-xl p-0 bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-90 transition-all"
+          className="h-12 w-12 rounded-2xl shadow-2xl p-0 bg-[#FA5A15] hover:bg-[#FF7D3B] text-white active:scale-90 transition-all border border-orange-400/30"
           title="Банк Айрон-доларів"
         >
           <Wallet className="w-5 h-5" />
@@ -454,14 +474,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
         <Button
           onClick={handleExport}
-          className="h-11 w-11 rounded-2xl shadow-md p-0 bg-card/85 hover:bg-card border border-border/60 text-muted-foreground hover:text-foreground active:scale-90 transition-all"
+          className="h-11 w-11 rounded-2xl shadow-xl p-0 bg-[#0F1523]/90 hover:bg-[#151D2F] border border-white/10 text-slate-300 hover:text-white active:scale-90 transition-all"
           title="Експорт списків в Excel"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-4 h-4 text-emerald-400" />
         </Button>
       </div>
 
-      {/* Інструктаж / Онбординг тур */}
+      {/* Інтерактивний тур навчання */}
       <SupervisorTour
         open={tourOpen}
         teamNumber={authedTeam}
@@ -475,7 +495,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
         onClose={() => setTourOpen(false)}
       />
 
-      {/* Модальне вікно банку */}
+      {/* Модальне вікно Банку Айрон-доларів */}
       {authedTeam !== null && (
         <IronBank
           myTeam={authedTeam}
