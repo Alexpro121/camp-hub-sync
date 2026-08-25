@@ -161,27 +161,27 @@ Deno.serve(async (req) => {
       return json({ role: 'admin', team, session });
     }
 
-    // Вхід супроводу команди:
-    // 1) Перевірка індивідуального пароля з бази (наприклад, "потяг.гори")
+    // =========================================================================
+    // ВХІД СУПРОВОДУ (СТРОГА ПЕРЕВІРКА БЕЗ ДЕФОЛТНОГО ОБХОДУ)
+    // =========================================================================
     const customMap = await getTeamPasswords(adminClient());
     const customPass = customMap[String(team)];
 
     let ok = false;
+
     if (customPass) {
+      // 🔒 ЯКЩО ПАРОЛЬ БУВ СТВОРЕНИЙ — ПРИЙМАЄТЬСЯ ВИКЛЮЧНО ВІН!
+      // Дефолтний "Супровід<номер>" більше НЕ підходить!
       ok = passwordMatches(password, customPass);
-    }
-
-    // 2) Резервна перевірка дефолтного "Супровід<номер>"
-    if (!ok) {
+    } else {
+      // ⚠️ Тільки якщо пароль ще ніколи не змінювався — працює дефолтний
       ok = passwordMatches(password, defaultSupervisorPassword(team));
-    }
-
-    // 3) Резервна перевірка HMAC-пароля
-    if (!ok) {
-      try {
-        ok = passwordMatches(password, await supervisorPassword(team));
-      } catch (_e) {
-        ok = false;
+      if (!ok) {
+        try {
+          ok = passwordMatches(password, await supervisorPassword(team));
+        } catch (_e) {
+          ok = false;
+        }
       }
     }
 
