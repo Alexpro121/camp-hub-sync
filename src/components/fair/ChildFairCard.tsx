@@ -33,7 +33,7 @@ type PayStatus = 'idle' | 'sending' | 'pending' | 'success' | 'rejected';
 
 const PRESET_AMOUNTS = [5, 10, 15, 20];
 
-const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive = true }: Props) => {
+const ChildFairCard = ({ childId, balance, onPaid, childName, childTeam, isLive = false }: Props) => {
   const [selectedAmount, setSelectedAmount] = useState<number>(20);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [targetTeam, setTargetTeam] = useState<string>(String(childTeam || 1));
