@@ -690,6 +690,24 @@ export type Database = {
           },
         ]
       }
+      team_passwords: {
+        Row: {
+          password: string
+          team: number
+          updated_at: string | null
+        }
+        Insert: {
+          password: string
+          team: number
+          updated_at?: string | null
+        }
+        Update: {
+          password?: string
+          team?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       train_coupes: {
         Row: {
           boarding_city: string | null
