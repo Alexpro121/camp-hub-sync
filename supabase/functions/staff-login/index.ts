@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
 
     // Вхід супроводу команди:
     // 1) Перевірка індивідуального пароля з бази (наприклад, "потяг.гори")
-    const { passwords: customMap } = await getShiftPasswords(adminClient());
+    const customMap = await getTeamPasswords(adminClient());
     const customPass = customMap[String(team)];
 
     let ok = false;
