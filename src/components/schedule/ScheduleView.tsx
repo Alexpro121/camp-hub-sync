@@ -23,6 +23,8 @@ import { hallBadge, hallName, type HallBooking } from '@/types/halls';
 import { hhmm, toMinutes } from '@/lib/halls';
 import { useHaptics } from '@/hooks/useHaptics';
 
+const HALL_FEATURE_ENABLED = false;
+
 interface Props {
   myTeam?: number | null;
   /** Режим для дитини: доступний лише розклад власної команди на сьогодні */
