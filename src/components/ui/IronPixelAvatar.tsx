@@ -6,10 +6,12 @@ interface Props {
   name: string;
   size?: number;
   className?: string;
+  /** Чистий рендер піксель-арту без рамок і внутрішнього сяйва. */
+  bare?: boolean;
 }
 
 /** Піксельний аватар учасника проєкту «Залізна Зміна» з анімацією появи та морганням. */
-const IronPixelAvatar = ({ name, size = 56, className }: Props) => {
+const IronPixelAvatar = ({ name, size = 56, className, bare = false }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const data = useMemo(() => generateIronAvatar(name), [name]);
   const [visible, setVisible] = useState(false);
