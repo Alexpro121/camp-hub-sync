@@ -383,13 +383,7 @@ const ChildFlow = ({ onBack }: Props) => {
             {/* Аватар та ім'я */}
             <div className="flex items-center gap-3.5 mb-3.5">
               <div className="relative shrink-0">
-                <div className={`w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg shadow-inner ${
-                  isDark 
-                    ? 'bg-gradient-to-br from-[#182236] to-[#0F1626] border border-white/10 text-white' 
-                    : 'bg-gradient-to-br from-orange-100 to-orange-50 border border-orange-200 text-[#FA5A15]'
-                }`}>
-                  {getInitials(child.full_name)}
-                </div>
+                <IronPixelAvatar name={child.full_name} size={56} className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl" />
                 {child.has_logged_in && (
                   <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#0F1523] flex items-center justify-center shadow">
                     <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
