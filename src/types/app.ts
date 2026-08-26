@@ -119,6 +119,22 @@ export interface TalentEvent {
   updated_at: string;
 }
 
+export type TalentFileKind = 'audio' | 'image' | 'video' | 'doc';
+
+export interface TalentAttachment {
+  id: string;
+  /** Призначення файлу, яке вказує Супровід (наприклад «Фонограма (мінус)») */
+  label: string;
+  fileName: string;
+  /** Розширення файлу — заблоковане для редагування */
+  fileExt: string;
+  storagePath: string;
+  fileUrl: string;
+  fileType: TalentFileKind;
+  fileSize: number;
+  uploadedAt: number;
+}
+
 export interface TalentEntry {
   id: string;
   event_id: string;
@@ -129,7 +145,12 @@ export interface TalentEntry {
   order_index: number;
   created_by: string | null;
   created_at: string;
+  attachments?: TalentAttachment[] | null;
+  technical_notes?: string | null;
+  performance_order?: number | null;
+  pause_after?: number | null;
 }
+
 
 export interface Broadcast {
   id: string;
