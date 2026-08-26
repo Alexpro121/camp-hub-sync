@@ -63,8 +63,26 @@ const TeamsView = ({
     localStorage.setItem('helpsuprov:team-sort', sortMode);
   }, [sortMode]);
 
+  // Миттєвий старт із локального снепшота (Zero-Wait UI).
+  useEffect(() => {
+    const snap = outbox.getTeamsSnapshot<Child[]>();
+    if (snap?.data?.length) {
+      setChildren(snap.data);
+      setLoading(false);
+      setFromSnapshot(true);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
+    // Якщо мережа мовчить довше 1.5 с — не тримаємо користувача на спінері.
+    const slowTimer = setTimeout(() => {
+      if (!mounted) return;
+      const snap = outbox.getTeamsSnapshot<Child[]>();
+      if (snap?.data?.length) { setChildren(snap.data); setFromSnapshot(true); }
+      setLoading(false);
+    }, 1500);
+
     const load = async () => {
       // Load all shifts and pick the truly active one based on real date
       const { data: shifts } = await supabase
@@ -80,6 +98,7 @@ const TeamsView = ({
         query = query.eq('shift_id', activeShiftId);
       }
       const { data } = await query;
+      if (!data) return;
 
       // Frontend dedup as safety net
       const seen = new Set<string>();
@@ -90,35 +109,31 @@ const TeamsView = ({
         return true;
       });
 
-      if (mounted) { setChildren(unique as Child[]); setLoading(false); }
+      outbox.saveTeamsSnapshot(unique);
+      if (mounted) { setChildren(unique as Child[]); setLoading(false); setFromSnapshot(false); }
     };
-    load();
+    load().catch(() => { if (mounted) setLoading(false); });
 
     const channel = supabase
       .channel('children-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => load())
       .subscribe();
-    return () => { mounted = false; supabase.removeChannel(channel); };
+    return () => { mounted = false; clearTimeout(slowTimer); supabase.removeChannel(channel); };
   }, []);
 
+  /** Присутність: 0 мс у UI, мережа — фоном через Outbox. */
   const togglePresent = (c: Child) => {
     if (c.team_number !== myTeam) return;
     const next = !c.is_present;
     haptics.selection();
-    // Optimistic update — instant UI feedback
-    setChildren((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_present: next } : x)));
-    // Fire-and-forget DB sync; revert on failure
-    supabase
-      .from('children')
-      .update({ is_present: next })
-      .eq('id', c.id)
-      .then(({ error }) => {
-        if (error) {
-          haptics.notification('error');
-          setChildren((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_present: !next } : x)));
-        }
-      });
+    setChildren((prev) => {
+      const updated = prev.map((x) => (x.id === c.id ? { ...x, is_present: next } : x));
+      outbox.saveTeamsSnapshot(updated);
+      return updated;
+    });
+    outbox.enqueue('PRESENCE', c.id, { isPresent: next });
   };
+
 
   const teams = Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b);
 
