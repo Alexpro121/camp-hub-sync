@@ -33,6 +33,7 @@ import type { Child } from '@/types/app';
 import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
+import IronPixelAvatar from '@/components/ui/IronPixelAvatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
