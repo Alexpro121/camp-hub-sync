@@ -211,7 +211,7 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
             </Badge>
             <p className="text-sm flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-success shrink-0" strokeWidth={1.75} />
-              Знайдено в базі списку табору: {matched.length} з {rows.length}
+              Знайдено в базі списку Проєкту: {matched.length} з {rows.length}
             </p>
             {unmatched.length > 0 && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">

@@ -129,7 +129,7 @@ const PhaseBanner = ({ status, teamNumber, compact, className }: Props) => {
             {!status.currentPhase.includes('FINISHED') && (
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-1 border border-border/40 text-[9px] font-bold uppercase tracking-wider text-foreground/80 shrink-0">
                 <span className={cn('w-1.5 h-1.5 rounded-full animate-pulse', meta.dot)} />
-                {isPreparing ? 'Очікування' : isTravel ? 'У дорозі' : 'У таборі'}
+                {isPreparing ? 'Очікування' : isTravel ? 'У дорозі' : 'На локації'}
               </span>
             )}
           </div>

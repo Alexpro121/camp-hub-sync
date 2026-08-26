@@ -16,7 +16,7 @@ export interface HallConfig {
 }
 
 /** 
- * Список 8 фіксованих локацій табору з адаптивними кольорами (Light / Dark) 
+ * Список 8 фіксованих локацій Проєкту з адаптивними кольорами (Light / Dark) 
  */
 export const HALLS_LIST: HallConfig[] = [
   { 
