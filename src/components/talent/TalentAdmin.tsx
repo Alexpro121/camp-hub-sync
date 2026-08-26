@@ -20,7 +20,12 @@ import {
   Search,
   CheckCircle2,
   Radio,
-  Clock
+  Clock,
+  Link2,
+  Copy,
+  Paperclip,
+  Minus,
+  Plus
 } from 'lucide-react';
 import {
   AlertDialog, 
@@ -40,6 +45,13 @@ import type { TalentEntry, TalentEvent } from '@/types/app';
 import { buildRunningOrder } from '@/lib/talent';
 import { useActiveShift } from '@/context/ActiveShiftContext';
 import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
+import { parseAttachments } from '@/lib/talentMedia';
+
+/** Генератор українського пароля сцени формату слово.слово */
+const STAGE_WORDS_A = ['сцена', 'локомотив', 'вогонь', 'карпати', 'колія', 'софіт', 'мікрофон', 'гуцул', 'вершина', 'сталь'];
+const STAGE_WORDS_B = ['звук', 'драйв', 'ритм', 'світло', 'пульт', 'акорд', 'ефір', 'фінал', 'бас', 'промінь'];
+const genStagePassword = () =>
+  `${STAGE_WORDS_A[Math.floor(Math.random() * STAGE_WORDS_A.length)]}.${STAGE_WORDS_B[Math.floor(Math.random() * STAGE_WORDS_B.length)]}`;
 
 const STATUS_META: Record<string, { label: string; cls: string; dot: string }> = {
   draft: { 
@@ -95,6 +107,10 @@ const TalentAdmin = () => {
   const [editing, setEditing] = useState<TalentEntry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteCandidateId, setDeleteCandidateId] = useState<string | null>(null);
+  const [stagePassword, setStagePassword] = useState<string | null>(null);
+  const [stageBusy, setStageBusy] = useState(false);
+
+  const stageUrl = `${window.location.origin}/stage-console${shiftId ? `?shift=${shiftId}` : ''}`;
 
   const load = async () => {
     let q = supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
@@ -108,6 +124,48 @@ const TalentAdmin = () => {
     } else {
       setEntries([]);
     }
+
+    const { data: access } = await supabase
+      .from('talent_stage_access')
+      .select('access_password')
+      .eq('shift_id', shiftId as string)
+      .maybeSingle();
+    setStagePassword(access?.access_password ?? null);
+  };
+
+  /** Створення (або оновлення) пароля доступу до пульта сцени */
+  const createStageLink = async () => {
+    setStageBusy(true);
+    const pass = genStagePassword();
+    const { error } = await supabase
+      .from('talent_stage_access')
+      .upsert({ shift_id: shiftId, access_password: pass }, { onConflict: 'shift_id' });
+    setStageBusy(false);
+    if (error) { toast.error('Не вдалося створити посилання для сцени'); return; }
+    setStagePassword(pass);
+    toast.success('Посилання для сцени створено');
+  };
+
+  const copyStageInvite = async () => {
+    if (!stagePassword) return;
+    const text = `🎛️ Пульт звукорежисера «Вечір Талантів»:\nПорядок виступів і треки: ${stageUrl}\nПароль: ${stagePassword}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Скопійовано для звукорежисера');
+    } catch {
+      toast.error('Не вдалося скопіювати. Скопіюйте текст вручну.');
+    }
+  };
+
+  /** Пауза після номера вимірюється виключно кількістю виступів */
+  const setPause = async (entry: TalentEntry, value: number) => {
+    const pause = Math.max(0, Math.min(5, value));
+    setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, break_needed_after: pause, pause_after: pause } : e)));
+    const { error } = await supabase
+      .from('talent_entries')
+      .update({ break_needed_after: pause, pause_after: pause })
+      .eq('id', entry.id);
+    if (error) { toast.error('Не вдалося змінити паузу'); load(); }
   };
 
   useEffect(() => {
@@ -202,7 +260,7 @@ const TalentAdmin = () => {
       target_teams: [],
       sent_by: 'Супровід',
     });
-    toast.success('Сценарій опубліковано для табору');
+    toast.success('Сценарій опубліковано для всіх учасників зміни');
   };
 
   // Фільтрація номерів при пошуку
@@ -421,6 +479,37 @@ const TalentAdmin = () => {
 
       </Card>
 
+      {/* Посилання для звукорежисера та світловика */}
+      <Card className="p-4 rounded-2xl border border-white/10 bg-[#0F1523]/85 space-y-2.5 shadow-md">
+        <div className="flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-[#FA5A15]" />
+          <p className="text-xs font-black uppercase tracking-wide text-foreground">Пульт сцени (звук і світло)</p>
+        </div>
+
+        {stagePassword ? (
+          <div className="space-y-2">
+            <div className="rounded-xl bg-black/30 border border-white/10 p-2.5 space-y-1">
+              <p className="text-[10px] uppercase text-muted-foreground font-semibold">Посилання</p>
+              <p className="text-[11px] font-mono text-slate-200 break-all">{stageUrl}</p>
+              <p className="text-[10px] uppercase text-muted-foreground font-semibold pt-1">Пароль</p>
+              <p className="text-sm font-black font-mono text-[#FA5A15]">{stagePassword}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={copyStageInvite} className="flex-1 h-11 text-xs font-bold uppercase bg-[#FA5A15] hover:bg-[#FA5A15]/90 text-white">
+                <Copy className="w-4 h-4 mr-1.5" /> Скопіювати для звукорежисера
+              </Button>
+              <Button variant="outline" onClick={createStageLink} disabled={stageBusy} className="h-11 text-xs font-bold uppercase">
+                {stageBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Новий пароль'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button onClick={createStageLink} disabled={stageBusy} className="w-full h-11 text-xs font-bold uppercase bg-[#FA5A15] hover:bg-[#FA5A15]/90 text-white">
+            {stageBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Wand2 className="w-4 h-4 mr-1.5" /> Створити посилання для сцени</>}
+          </Button>
+        )}
+      </Card>
+
       {/* Пошук якщо номерів багато */}
       {entries.length > 4 && (
         <div className="relative">
@@ -457,13 +546,33 @@ const TalentAdmin = () => {
               <div className="flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground mt-0.5">
                 <span className="font-semibold text-foreground/90">Команда #{e.team_number}</span>
                 
-                {/* Пауза як кількість виступів */}
-                {e.break_needed_after > 0 && (
-                  <span className="inline-flex items-center gap-1 text-warning font-medium bg-warning/15 px-2 py-0.5 rounded-md border border-warning/30 text-[10px]">
-                    <Coffee className="w-3 h-3" />
-                    <span>Пауза: {formatActsCount(e.break_needed_after)}</span>
-                  </span>
-                )}
+                {/* Прикріплені медіафайли */}
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                  <Paperclip className="w-3 h-3" />
+                  {parseAttachments(e.attachments).length} файл(ів)
+                </span>
+
+                {/* Пауза вимірюється виключно кількістю виступів */}
+                <span className="inline-flex items-center gap-1 bg-warning/15 px-1.5 py-0.5 rounded-md border border-warning/30 text-[10px] text-warning font-medium">
+                  <Coffee className="w-3 h-3" />
+                  <button
+                    type="button"
+                    onClick={() => setPause(e, (e.break_needed_after || 0) - 1)}
+                    aria-label="Зменшити паузу"
+                    className="w-5 h-5 rounded flex items-center justify-center hover:bg-warning/20 active:scale-90"
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="tabular-nums">Пауза: {formatActsCount(e.break_needed_after || 0)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPause(e, (e.break_needed_after || 0) + 1)}
+                    aria-label="Збільшити паузу"
+                    className="w-5 h-5 rounded flex items-center justify-center hover:bg-warning/20 active:scale-90"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </span>
               </div>
 
               {e.description && (
