@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DynamicIslandProvider } from "@/context/DynamicIslandContext";
 import DynamicIsland from "@/components/ui/DynamicIsland";
 import Index from "./pages/Index.tsx";
+import StageConsole from "./pages/StageConsole.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
