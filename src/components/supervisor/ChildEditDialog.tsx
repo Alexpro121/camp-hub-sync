@@ -97,7 +97,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
 
     if (delta !== 0) {
       island.showSuccess(
-        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} Iron Dollars!`,
+        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} A$!`,
         queued ? `${child.full_name} · збережено офлайн` : child.full_name,
       );
     } else {
