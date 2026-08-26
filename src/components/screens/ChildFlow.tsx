@@ -96,6 +96,17 @@ const ChildFlow = ({ onBack }: Props) => {
   // Сповіщення про події розкладу у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
 
+  // Перший вхід учасника — кінематографічна генерація піксельного аватара
+  useEffect(() => {
+    if (!child?.id) return;
+    try {
+      if (!localStorage.getItem(`iron:avatar-revealed:${child.id}`)) {
+        setIsRevealingAvatar(true);
+      }
+    } catch { /* сховище недоступне */ }
+  }, [child?.id]);
+
+
   // Синхронізація теми + автоматичне повернення темної теми для адміна/супроводу при виході
   useEffect(() => {
     localStorage.setItem('child_theme_mode', isDark ? 'dark' : 'light');
