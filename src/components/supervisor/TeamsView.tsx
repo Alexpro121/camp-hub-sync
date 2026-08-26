@@ -9,6 +9,8 @@ import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useHaptics } from '@/hooks/useHaptics';
+import { outbox } from '@/lib/outboxEngine';
+
 
 interface Props {
   myTeam: number;
@@ -42,7 +44,9 @@ const TeamsView = ({
 }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fromSnapshot, setFromSnapshot] = useState(false);
   const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
+
   const [editChildLocal, setEditChildLocal] = useState<Child | null>(null);
   const openTeam = openTeamProp !== undefined ? openTeamProp : openTeamLocal;
   const setOpenTeam = (v: number | null) => {
