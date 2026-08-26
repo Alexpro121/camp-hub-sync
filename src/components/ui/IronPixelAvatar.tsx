@@ -6,10 +6,12 @@ interface Props {
   name: string;
   size?: number;
   className?: string;
+  /** Чистий рендер піксель-арту без рамок і внутрішнього сяйва. */
+  bare?: boolean;
 }
 
 /** Піксельний аватар учасника проєкту «Залізна Зміна» з анімацією появи та морганням. */
-const IronPixelAvatar = ({ name, size = 56, className }: Props) => {
+const IronPixelAvatar = ({ name, size = 56, className, bare = false }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const data = useMemo(() => generateIronAvatar(name), [name]);
   const [visible, setVisible] = useState(false);
@@ -46,8 +48,10 @@ const IronPixelAvatar = ({ name, size = 56, className }: Props) => {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-white/10',
-        'shadow-[inset_0_1px_8px_rgba(255,255,255,0.08),0_2px_12px_rgba(0,0,0,0.35)]',
+        'relative overflow-hidden',
+        bare
+          ? 'rounded-xl shadow-md shrink-0'
+          : 'rounded-2xl border border-white/10 shadow-[inset_0_1px_8px_rgba(255,255,255,0.08),0_2px_12px_rgba(0,0,0,0.35)]',
         'transition-all duration-500 ease-out',
         visible ? 'opacity-100 scale-100' : 'opacity-0 scale-75',
         className,
@@ -62,10 +66,12 @@ const IronPixelAvatar = ({ name, size = 56, className }: Props) => {
         height={AVATAR_GRID * 4}
         className="w-full h-full [image-rendering:pixelated]"
       />
-      {/* Внутрішнє сяйво */}
-      <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/10 via-transparent to-black/20" />
+      {!bare && (
+        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/10 via-transparent to-black/20" />
+      )}
     </div>
   );
+
 };
 
 export default memo(IronPixelAvatar);

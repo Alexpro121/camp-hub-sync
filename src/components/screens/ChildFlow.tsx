@@ -34,6 +34,7 @@ import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IronPixelAvatar from '@/components/ui/IronPixelAvatar';
+import IronAvatarReveal from '@/components/ui/IronAvatarReveal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
@@ -77,6 +78,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'schedule' | 'fair' | 'talent'>('profile');
   const [suggestions, setSuggestions] = useState<NameSuggestion<Candidate>[]>([]);
   const [certModalOpen, setCertModalOpen] = useState(false);
+  const [isRevealingAvatar, setIsRevealingAvatar] = useState(false);
 
   // Керування темою оформлення для кабінету учасника
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -93,6 +95,17 @@ const ChildFlow = ({ onBack }: Props) => {
 
   // Сповіщення про події розкладу у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
+
+  // Перший вхід учасника — кінематографічна генерація піксельного аватара
+  useEffect(() => {
+    if (!child?.id) return;
+    try {
+      if (!localStorage.getItem(`iron:avatar-revealed:${child.id}`)) {
+        setIsRevealingAvatar(true);
+      }
+    } catch { /* сховище недоступне */ }
+  }, [child?.id]);
+
 
   // Синхронізація теми + автоматичне повернення темної теми для адміна/супроводу при виході
   useEffect(() => {
@@ -379,7 +392,7 @@ const ChildFlow = ({ onBack }: Props) => {
             {/* Аватар та ім'я */}
             <div className="flex items-center gap-3.5 mb-3.5">
               <div className="relative shrink-0">
-                <IronPixelAvatar name={child.full_name} size={56} className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl" />
+                <IronPixelAvatar name={child.full_name} size={56} bare className="rounded-xl overflow-hidden shadow-md shrink-0" />
                 {child.has_logged_in && (
                   <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#0F1523] flex items-center justify-center shadow">
                     <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
@@ -709,6 +722,18 @@ const ChildFlow = ({ onBack }: Props) => {
           onClose={() => setCertModalOpen(false)}
           initialName={child.full_name}
         />
+
+        {/* Кінематографічна генерація аватара при першому вході */}
+        {isRevealingAvatar && (
+          <IronAvatarReveal
+            name={child.full_name}
+            onComplete={() => {
+              try { localStorage.setItem(`iron:avatar-revealed:${child.id}`, 'true'); } catch { /* ignore */ }
+              setIsRevealingAvatar(false);
+            }}
+          />
+        )}
+
       </div>
     );
   }
