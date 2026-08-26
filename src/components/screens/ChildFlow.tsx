@@ -711,6 +711,18 @@ const ChildFlow = ({ onBack }: Props) => {
           onClose={() => setCertModalOpen(false)}
           initialName={child.full_name}
         />
+
+        {/* Кінематографічна генерація аватара при першому вході */}
+        {isRevealingAvatar && (
+          <IronAvatarReveal
+            name={child.full_name}
+            onComplete={() => {
+              try { localStorage.setItem(`iron:avatar-revealed:${child.id}`, 'true'); } catch { /* ignore */ }
+              setIsRevealingAvatar(false);
+            }}
+          />
+        )}
+
       </div>
     );
   }
