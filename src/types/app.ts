@@ -145,7 +145,8 @@ export interface TalentEntry {
   order_index: number;
   created_by: string | null;
   created_at: string;
-  attachments?: TalentAttachment[] | null;
+  /** JSONB із бази — розбирати через parseAttachments() */
+  attachments?: unknown;
   technical_notes?: string | null;
   performance_order?: number | null;
   pause_after?: number | null;
