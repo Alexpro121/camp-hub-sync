@@ -12,6 +12,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { onIslandMessage } from '@/lib/islandBus';
 import { useHaptics } from '@/hooks/useHaptics';
+import { networkPulse } from '@/lib/networkEngine';
+import { outbox } from '@/lib/outboxEngine';
+
 
 export type IslandState =
   | 'HIDDEN'
@@ -227,6 +230,26 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
       set('SUCCESS_TOAST', { title: 'Онлайн', subtitle: 'Зв’язок відновлено' }, 2500);
     }
   }, [online, pending, showOffline, set]);
+
+  // 1b. Реальний пульс мережі + статус черги Outbox
+  useEffect(() => {
+    const offPulse = networkPulse.subscribe((s) => {
+      if (s.quality === 'OFFLINE') {
+        const q = outbox.pending;
+        set('OFFLINE', { queued: q }, 4000);
+      }
+    });
+    const offFlush = outbox.onFlushComplete((done, failed) => {
+      if (done > 0) {
+        set('SUCCESS_TOAST', {
+          title: `Синхронізовано · ${done} ${done === 1 ? 'дію' : 'дій'} збережено`,
+          subtitle: failed > 0 ? `${failed} чекають на зв’язок` : undefined,
+        }, 3000);
+      }
+    });
+    return () => { offPulse(); offFlush(); };
+  }, [set]);
+
 
   // 2. Realtime-сповіщення від супроводу чи штабу (Broadcasts)
   useEffect(() => {

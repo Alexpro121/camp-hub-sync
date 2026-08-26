@@ -8,16 +8,26 @@ const CHILD_ARCHIVE_KEY = 'zz_child_persistent_passport_v1';
 export interface ChildArchiveData {
   child: Child;
   transactions: IronTx[];
+  /** Розклад дня/зміни для офлайн-паспорта Учасника. */
+  schedule?: unknown[];
+  /** Місце в потязі (купе/місце), якщо відоме. */
+  coupe?: { coupe_number?: number | null; seat?: string | null } | null;
   savedAt: string;
   isArchived: boolean;
 }
 
-/** Зберігає повний зліпок профілю дитини на пристрої */
-export const saveChildArchiveSnapshot = (child: Child, transactions: IronTx[] = []) => {
+/** Зберігає повний зліпок профілю Учасника на пристрої (офлайн-паспорт) */
+export const saveChildArchiveSnapshot = (
+  child: Child,
+  transactions: IronTx[] = [],
+  extra?: { schedule?: unknown[]; coupe?: ChildArchiveData['coupe'] },
+) => {
   try {
     const payload: ChildArchiveData = {
       child,
       transactions,
+      schedule: extra?.schedule,
+      coupe: extra?.coupe ?? null,
       savedAt: new Date().toISOString(),
       isArchived: true,
     };
@@ -26,6 +36,7 @@ export const saveChildArchiveSnapshot = (child: Child, transactions: IronTx[] = 
     console.error('[Session] Не вдалося зберегти офлайн-паспорт:', e);
   }
 };
+
 
 /** Отримує збережений табірний паспорт дитини */
 export const getChildArchiveSnapshot = (): ChildArchiveData | null => {

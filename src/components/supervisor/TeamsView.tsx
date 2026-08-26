@@ -4,11 +4,13 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash, CloudOff } from 'lucide-react';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useHaptics } from '@/hooks/useHaptics';
+import { outbox } from '@/lib/outboxEngine';
+
 
 interface Props {
   myTeam: number;
@@ -42,7 +44,9 @@ const TeamsView = ({
 }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fromSnapshot, setFromSnapshot] = useState(false);
   const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
+
   const [editChildLocal, setEditChildLocal] = useState<Child | null>(null);
   const openTeam = openTeamProp !== undefined ? openTeamProp : openTeamLocal;
   const setOpenTeam = (v: number | null) => {
@@ -63,8 +67,26 @@ const TeamsView = ({
     localStorage.setItem('helpsuprov:team-sort', sortMode);
   }, [sortMode]);
 
+  // Миттєвий старт із локального снепшота (Zero-Wait UI).
+  useEffect(() => {
+    const snap = outbox.getTeamsSnapshot<Child[]>();
+    if (snap?.data?.length) {
+      setChildren(snap.data);
+      setLoading(false);
+      setFromSnapshot(true);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
+    // Якщо мережа мовчить довше 1.5 с — не тримаємо користувача на спінері.
+    const slowTimer = setTimeout(() => {
+      if (!mounted) return;
+      const snap = outbox.getTeamsSnapshot<Child[]>();
+      if (snap?.data?.length) { setChildren(snap.data); setFromSnapshot(true); }
+      setLoading(false);
+    }, 1500);
+
     const load = async () => {
       // Load all shifts and pick the truly active one based on real date
       const { data: shifts } = await supabase
@@ -80,6 +102,7 @@ const TeamsView = ({
         query = query.eq('shift_id', activeShiftId);
       }
       const { data } = await query;
+      if (!data) return;
 
       // Frontend dedup as safety net
       const seen = new Set<string>();
@@ -90,35 +113,31 @@ const TeamsView = ({
         return true;
       });
 
-      if (mounted) { setChildren(unique as Child[]); setLoading(false); }
+      outbox.saveTeamsSnapshot(unique);
+      if (mounted) { setChildren(unique as Child[]); setLoading(false); setFromSnapshot(false); }
     };
-    load();
+    load().catch(() => { if (mounted) setLoading(false); });
 
     const channel = supabase
       .channel('children-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => load())
       .subscribe();
-    return () => { mounted = false; supabase.removeChannel(channel); };
+    return () => { mounted = false; clearTimeout(slowTimer); supabase.removeChannel(channel); };
   }, []);
 
+  /** Присутність: 0 мс у UI, мережа — фоном через Outbox. */
   const togglePresent = (c: Child) => {
     if (c.team_number !== myTeam) return;
     const next = !c.is_present;
     haptics.selection();
-    // Optimistic update — instant UI feedback
-    setChildren((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_present: next } : x)));
-    // Fire-and-forget DB sync; revert on failure
-    supabase
-      .from('children')
-      .update({ is_present: next })
-      .eq('id', c.id)
-      .then(({ error }) => {
-        if (error) {
-          haptics.notification('error');
-          setChildren((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_present: !next } : x)));
-        }
-      });
+    setChildren((prev) => {
+      const updated = prev.map((x) => (x.id === c.id ? { ...x, is_present: next } : x));
+      outbox.saveTeamsSnapshot(updated);
+      return updated;
+    });
+    outbox.enqueue('PRESENCE', c.id, { isPresent: next });
   };
+
 
   const teams = Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b);
 
@@ -162,7 +181,14 @@ const TeamsView = ({
 
   return (
     <>
+      {fromSnapshot && (
+        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0F1523]/95 px-3 py-2 text-xs text-amber-300 backdrop-blur-2xl">
+          <CloudOff className="h-4 w-4 shrink-0" />
+          <span className="truncate">Локальні дані · зміни збережуться та підуть у мережу автоматично</span>
+        </div>
+      )}
       {/* Sort selector */}
+
       <div data-tour="step-1-sort" className="flex items-center gap-2 mb-3 px-1">
         <ArrowUpDown className="w-4 h-4 text-muted-foreground shrink-0" />
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
