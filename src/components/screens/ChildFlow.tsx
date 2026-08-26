@@ -272,11 +272,6 @@ const ChildFlow = ({ onBack }: Props) => {
     toast.success(label);
   };
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase() || 'УЧ';
-  };
 
   // Розрахунок кількості колонок для вкладок (тільки реально активні модулі)
   const tabColumnsCount = useMemo(() => {
