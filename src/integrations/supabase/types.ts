@@ -610,6 +610,7 @@ export type Database = {
       }
       talent_entries: {
         Row: {
+          attachments: Json
           break_needed_after: number
           created_at: string
           created_by: string | null
@@ -617,11 +618,15 @@ export type Database = {
           event_id: string
           id: string
           order_index: number
+          pause_after: number
+          performance_order: number | null
           team_number: number
+          technical_notes: string | null
           title: string
           updated_at: string
         }
         Insert: {
+          attachments?: Json
           break_needed_after?: number
           created_at?: string
           created_by?: string | null
@@ -629,11 +634,15 @@ export type Database = {
           event_id: string
           id?: string
           order_index?: number
+          pause_after?: number
+          performance_order?: number | null
           team_number: number
+          technical_notes?: string | null
           title: string
           updated_at?: string
         }
         Update: {
+          attachments?: Json
           break_needed_after?: number
           created_at?: string
           created_by?: string | null
@@ -641,7 +650,10 @@ export type Database = {
           event_id?: string
           id?: string
           order_index?: number
+          pause_after?: number
+          performance_order?: number | null
           team_number?: number
+          technical_notes?: string | null
           title?: string
           updated_at?: string
         }
@@ -685,6 +697,38 @@ export type Database = {
             foreignKeyName: "talent_events_shift_id_fkey"
             columns: ["shift_id"]
             isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_stage_access: {
+        Row: {
+          access_password: string
+          created_at: string
+          id: string
+          shift_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_password: string
+          created_at?: string
+          id?: string
+          shift_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_password?: string
+          created_at?: string
+          id?: string
+          shift_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_stage_access_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: true
             referencedRelation: "shifts"
             referencedColumns: ["id"]
           },
@@ -939,6 +983,10 @@ export type Database = {
           id: string
           team_number: number
         }[]
+      }
+      verify_stage_password: {
+        Args: { p_password: string; p_shift_id: string }
+        Returns: boolean
       }
     }
     Enums: {

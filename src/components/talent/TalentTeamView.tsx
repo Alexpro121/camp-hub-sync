@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil } from 'lucide-react';
+import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
 import { useHaptics } from '@/hooks/useHaptics';
 import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
+import { parseAttachments } from '@/lib/talentMedia';
 
 interface Props { myTeam?: number | null; }
 
@@ -48,20 +49,23 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
     if (!event || myTeam == null) return;
     if (!title.trim()) { toast.error('Введи назву номеру'); return; }
     setSaving(true);
-    const { error } = await supabase.from('talent_entries').insert({
+    const pause = Math.max(0, parseInt(breaks, 10) || 0);
+    const { data, error } = await supabase.from('talent_entries').insert({
       event_id: event.id,
       team_number: myTeam,
       title: title.trim(),
-      break_needed_after: Math.max(0, parseInt(breaks, 10) || 0),
+      break_needed_after: pause,
+      pause_after: pause,
       order_index: entries.length,
       created_by: `Команда #${myTeam}`,
-    });
+    }).select('*').maybeSingle();
     setSaving(false);
     if (error) { toast.error('Не вдалося додати номер'); return; }
     haptics.notification('success');
     setTitle(''); setBreaks('0');
-    toast.success('Номер додано');
-    load();
+    toast.success('Номер додано — прикріпіть фонограму та медіа');
+    await load();
+    if (data) setEditing(data as TalentEntry);
   };
 
   const remove = async (id: string) => {
@@ -121,9 +125,14 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold truncate">{e.title}</p>
                 {e.description && <p className="text-[11px] text-muted-foreground truncate">{e.description}</p>}
-                {e.break_needed_after > 0 && (
-                  <p className="text-[11px] text-warning flex items-center gap-1"><Coffee className="w-3 h-3" /> перерва {e.break_needed_after}</p>
-                )}
+                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                  {e.break_needed_after > 0 && (
+                    <span className="text-[11px] text-warning flex items-center gap-1"><Coffee className="w-3 h-3" /> пауза: {e.break_needed_after} виступ(ів)</span>
+                  )}
+                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <Paperclip className="w-3 h-3" /> {parseAttachments(e.attachments).length} файл(ів)
+                  </span>
+                </div>
               </div>
               {collecting && (
                 <>

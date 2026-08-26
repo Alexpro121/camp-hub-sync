@@ -38,7 +38,7 @@ export const saveChildArchiveSnapshot = (
 };
 
 
-/** Отримує збережений табірний паспорт дитини */
+/** Отримує збережений паспорт Учасника */
 export const getChildArchiveSnapshot = (): ChildArchiveData | null => {
   try {
     const raw = localStorage.getItem(CHILD_ARCHIVE_KEY);
