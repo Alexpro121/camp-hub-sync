@@ -33,6 +33,7 @@ import type { Child } from '@/types/app';
 import { type NameSuggestion } from '@/lib/normalize';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
+import IronPixelAvatar from '@/components/ui/IronPixelAvatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
@@ -271,11 +272,6 @@ const ChildFlow = ({ onBack }: Props) => {
     toast.success(label);
   };
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(/\s+/);
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase() || 'УЧ';
-  };
 
   // Розрахунок кількості колонок для вкладок (тільки реально активні модулі)
   const tabColumnsCount = useMemo(() => {
@@ -383,13 +379,7 @@ const ChildFlow = ({ onBack }: Props) => {
             {/* Аватар та ім'я */}
             <div className="flex items-center gap-3.5 mb-3.5">
               <div className="relative shrink-0">
-                <div className={`w-13 h-13 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-base sm:text-lg shadow-inner ${
-                  isDark 
-                    ? 'bg-gradient-to-br from-[#182236] to-[#0F1626] border border-white/10 text-white' 
-                    : 'bg-gradient-to-br from-orange-100 to-orange-50 border border-orange-200 text-[#FA5A15]'
-                }`}>
-                  {getInitials(child.full_name)}
-                </div>
+                <IronPixelAvatar name={child.full_name} size={56} className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl" />
                 {child.has_logged_in && (
                   <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#0F1523] flex items-center justify-center shadow">
                     <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
