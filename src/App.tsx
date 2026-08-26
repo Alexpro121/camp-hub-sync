@@ -21,6 +21,7 @@ const App = () => (
           <DynamicIsland />
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/stage-console" element={<StageConsole />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
