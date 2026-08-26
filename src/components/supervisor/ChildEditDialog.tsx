@@ -97,7 +97,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
 
     if (delta !== 0) {
       island.showSuccess(
-        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} Iron Dollars!`,
+        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} A$!`,
         queued ? `${child.full_name} · збережено офлайн` : child.full_name,
       );
     } else {
@@ -116,38 +116,35 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="
-          bg-gradient-card scrollbar-thin overflow-y-auto gpu-accelerated
-          p-0 gap-0 duration-200 ease-[var(--ease-out-expo)]
-          max-sm:!max-w-none max-sm:!w-screen max-sm:!h-[100dvh] max-sm:!max-h-[100dvh]
-          max-sm:!rounded-none max-sm:!border-0 max-sm:!translate-x-0 max-sm:!translate-y-0
-          max-sm:!left-0 max-sm:!top-0 max-sm:sheet-up
-          max-sm:data-[state=open]:!animate-[sheet-up_0.25s_var(--ease-out-expo)]
-          sm:max-w-md sm:max-h-[90vh] sm:rounded-2xl
+          fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+          w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto
+          bg-[#0F1523]/95 border border-white/10 backdrop-blur-2xl
+          rounded-3xl shadow-2xl text-slate-100 p-0 gap-0
         "
       >
         {/* Sticky header */}
-        <DialogHeader className="sticky top-0 z-10 px-5 pt-5 pb-3 bg-gradient-card border-b border-border/40 backdrop-blur-sm">
+        <DialogHeader className="sticky top-0 z-10 px-5 pt-5 pb-3 bg-[#0F1523]/95 border-b border-white/10 backdrop-blur-2xl">
           <button
             type="button"
             onClick={onClose}
             aria-label="Закрити"
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-foreground/10 hover:bg-foreground/20 text-muted-foreground hover:text-foreground flex items-center justify-center cursor-pointer transition active:scale-90 z-20"
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-slate-400 hover:text-slate-100 flex items-center justify-center cursor-pointer transition active:scale-90 z-20"
           >
             <X className="w-5 h-5" strokeWidth={2} />
           </button>
           <DialogTitle className="text-lg sm:text-xl font-black uppercase pr-14 leading-tight">
             {child.full_name}
           </DialogTitle>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-slate-400">
             Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
           </p>
         </DialogHeader>
 
         <Tabs defaultValue="edit" className="w-full">
           <div className="px-5 pt-4">
-            <TabsList className="grid grid-cols-2 w-full h-11">
-              <TabsTrigger value="edit" className="text-xs min-h-[44px]">Дані</TabsTrigger>
-              <TabsTrigger value="history" className="text-xs min-h-[44px]">Історія транзакцій</TabsTrigger>
+            <TabsList className="grid grid-cols-2 w-full h-11 bg-white/5 border border-white/10">
+              <TabsTrigger value="edit" className="text-xs min-h-[44px] data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Дані</TabsTrigger>
+              <TabsTrigger value="history" className="text-xs min-h-[44px] data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Історія транзакцій</TabsTrigger>
             </TabsList>
           </div>
 
@@ -156,87 +153,87 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
           </TabsContent>
 
           <TabsContent value="edit" className="mt-0">
-        <div className="space-y-4 px-5 py-4 pb-32 sm:pb-5">
-          {/* Iron dollars with +/- */}
-          <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
-            <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">
-              <Coins className="w-4 h-4" /> Айрон Долари
-            </Label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => adjustIron(-1)}
-                className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
-                aria-label="Зменшити"
-              >
-                <Minus className="w-6 h-6 text-primary-foreground" />
-              </button>
-              <Input
-                id="iron"
-                type="number"
-                inputMode="numeric"
-                value={iron}
-                onChange={(e) => setIron(e.target.value)}
-                className="h-14 text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
-              />
-              <button
-                type="button"
-                onClick={() => adjustIron(1)}
-                className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
-                aria-label="Додати"
-              >
-                <Plus className="w-6 h-6 text-primary-foreground" />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phone">Номер телефону</Label>
-            <Input id="phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." className="h-12 text-base" />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="tg">Telegram</Label>
-            <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base" />
-          </div>
-
-          <div data-tour="step-4-notes" className="space-y-2">
-            <Label htmlFor="notes">Замітки</Label>
-            <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base" />
-          </div>
-
-          {/* All raw fields from the imported table */}
-          {child.raw_data && typeof child.raw_data === 'object' && Object.keys(child.raw_data).length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-primary/80">Усі поля з таблиці</Label>
-              <div className="rounded-lg border border-border/50 bg-surface-1 divide-y divide-border/40">
-                {Object.entries(child.raw_data).map(([k, v]) => (
-                  <div key={k} className="flex items-start gap-3 p-2.5 text-xs">
-                    <span className="text-muted-foreground min-w-[40%] truncate">
-                      {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
-                    </span>
-                    <span className="font-medium break-words flex-1">{String(v)}</span>
-                  </div>
-                ))}
+            <div className="space-y-4 px-5 py-4 pb-32 sm:pb-5">
+              {/* A$ balance with +/- */}
+              <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
+                <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">
+                  <Coins className="w-4 h-4" /> А$
+                </Label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => adjustIron(-1)}
+                    className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
+                    aria-label="Зменшити"
+                  >
+                    <Minus className="w-6 h-6 text-primary-foreground" />
+                  </button>
+                  <Input
+                    id="iron"
+                    type="number"
+                    inputMode="numeric"
+                    value={iron}
+                    onChange={(e) => setIron(e.target.value)}
+                    className="h-14 text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustIron(1)}
+                    className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
+                    aria-label="Додати"
+                  >
+                    <Plus className="w-6 h-6 text-primary-foreground" />
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
 
-          {child.note_from_table && (
-            <div className="text-xs text-muted-foreground bg-surface-1 p-3 rounded-lg border border-border/50">
-              <span className="font-semibold">З таблиці:</span> {child.note_from_table}
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="text-slate-300">Номер телефону</Label>
+                <Input id="phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tg" className="text-slate-300">Telegram</Label>
+                <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+              </div>
+
+              <div data-tour="step-4-notes" className="space-y-2">
+                <Label htmlFor="notes" className="text-slate-300">Замітки</Label>
+                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+              </div>
+
+              {/* All raw fields from the imported table */}
+              {child.raw_data && typeof child.raw_data === 'object' && Object.keys(child.raw_data).length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-primary/80">Усі поля з таблиці</Label>
+                  <div className="rounded-lg border border-white/10 bg-white/5 divide-y divide-white/10">
+                    {Object.entries(child.raw_data).map(([k, v]) => (
+                      <div key={k} className="flex items-start gap-3 p-2.5 text-xs">
+                        <span className="text-slate-400 min-w-[40%] truncate">
+                          {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
+                        </span>
+                        <span className="font-medium break-words flex-1 text-slate-200">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {child.note_from_table && (
+                <div className="text-xs text-slate-400 bg-white/5 p-3 rounded-lg border border-white/10">
+                  <span className="font-semibold text-slate-300">З таблиці:</span> {child.note_from_table}
+                </div>
+              )}
             </div>
-          )}
-        </div>
           </TabsContent>
         </Tabs>
 
         {/* Sticky save bar (mobile-friendly) */}
-        <div className="sticky bottom-0 left-0 right-0 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-gradient-card border-t border-border/40 backdrop-blur-sm">
+        <div className="sticky bottom-0 left-0 right-0 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-[#0F1523]/95 border-t border-white/10 backdrop-blur-2xl">
           <Button onClick={handleSave} className="w-full h-12 font-bold uppercase" disabled={saving}>
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Зберегти</>}
           </Button>
-          <p className="text-center text-[10px] text-muted-foreground mt-1.5">Зміни зберігаються автоматично</p>
+          <p className="text-center text-[10px] text-slate-400 mt-1.5">Зміни зберігаються автоматично</p>
         </div>
       </DialogContent>
     </Dialog>
