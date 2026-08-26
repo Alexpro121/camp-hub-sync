@@ -4,7 +4,7 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash, CloudOff } from 'lucide-react';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -181,7 +181,14 @@ const TeamsView = ({
 
   return (
     <>
+      {fromSnapshot && (
+        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0F1523]/95 px-3 py-2 text-xs text-amber-300 backdrop-blur-2xl">
+          <CloudOff className="h-4 w-4 shrink-0" />
+          <span className="truncate">Локальні дані · зміни збережуться та підуть у мережу автоматично</span>
+        </div>
+      )}
       {/* Sort selector */}
+
       <div data-tour="step-1-sort" className="flex items-center gap-2 mb-3 px-1">
         <ArrowUpDown className="w-4 h-4 text-muted-foreground shrink-0" />
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
