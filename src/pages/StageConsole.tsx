@@ -1,0 +1,443 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import JSZip from 'jszip';
+import {
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Lock,
+  Music2,
+  Package,
+  Pause,
+  Play,
+  SlidersHorizontal,
+  Video,
+  Volume2,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import type { TalentAttachment, TalentEntry, TalentFileKind } from '@/types/app';
+import {
+  buildStageFileName,
+  buildZipFileName,
+  buildZipFolderName,
+  formatFileSize,
+  getSignedUrl,
+  parseAttachments,
+} from '@/lib/talentMedia';
+
+const SESSION_KEY = 'ironshift:stage-console-access';
+
+const KIND_ICON: Record<TalentFileKind, typeof Music2> = {
+  audio: Music2,
+  image: ImageIcon,
+  video: Video,
+  doc: FileText,
+};
+
+function actsWord(count: number): string {
+  const abs = Math.abs(count) % 100;
+  const rem = abs % 10;
+  if (abs > 10 && abs < 20) return `${count} виступів`;
+  if (rem > 1 && rem < 5) return `${count} виступи`;
+  if (rem === 1) return `${count} виступ`;
+  return `${count} виступів`;
+}
+
+/** Пульт сцени для звукорежисера та світловика (публічний доступ за паролем) */
+const StageConsole = () => {
+  const [params] = useSearchParams();
+  const shiftId = params.get('shift');
+
+  const [unlocked, setUnlocked] = useState(false);
+  const [password, setPassword] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [entries, setEntries] = useState<TalentEntry[]>([]);
+  const [eventTitle, setEventTitle] = useState('Вечір талантів');
+  const [zipping, setZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState(0);
+
+  const [playing, setPlaying] = useState<{ id: string; label: string } | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (sessionStorage.getItem(SESSION_KEY) === (shiftId || 'global')) setUnlocked(true);
+  }, [shiftId]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
+    if (shiftId) q = q.eq('shift_id', shiftId);
+    const { data: evs } = await q;
+    const ev = evs?.[0];
+    if (!ev) { setEntries([]); setLoading(false); return; }
+    setEventTitle(ev.title || 'Вечір талантів');
+    const { data } = await supabase.from('talent_entries').select('*').eq('event_id', ev.id).order('order_index');
+    setEntries((data || []) as unknown as TalentEntry[]);
+    setLoading(false);
+  }, [shiftId]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    load();
+    const ch = supabase
+      .channel('stage-console')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'talent_entries' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [unlocked, load]);
+
+  useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
+
+  const unlock = async () => {
+    if (!password.trim()) return;
+    setChecking(true);
+    const { data, error } = await supabase.rpc('verify_stage_password', {
+      p_shift_id: shiftId,
+      p_password: password.trim(),
+    });
+    setChecking(false);
+    if (error || !data) { toast.error('Невірний пароль сцени'); return; }
+    sessionStorage.setItem(SESSION_KEY, shiftId || 'global');
+    setUnlocked(true);
+  };
+
+  /* ---------------------------- Аудіоплеєр ---------------------------- */
+  const togglePlay = async (att: TalentAttachment) => {
+    if (playing?.id === att.id) {
+      if (audioRef.current?.paused) { audioRef.current.play(); }
+      else { audioRef.current?.pause(); setPlaying(null); }
+      return;
+    }
+    audioRef.current?.pause();
+    const url = (await getSignedUrl(att.storagePath)) || att.fileUrl;
+    if (!url) { toast.error('Файл недоступний'); return; }
+    const audio = new Audio(url);
+    audio.volume = volume;
+    audio.onloadedmetadata = () => setDuration(audio.duration || 0);
+    audio.ontimeupdate = () => setProgress(audio.currentTime);
+    audio.onended = () => { setPlaying(null); setProgress(0); };
+    audioRef.current = audio;
+    setPlaying({ id: att.id, label: att.label });
+    audio.play().catch(() => { setPlaying(null); toast.error('Відтворення недоступне'); });
+  };
+
+  const seek = (v: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = v;
+    setProgress(v);
+  };
+
+  const changeVolume = (v: number) => {
+    setVolume(v);
+    if (audioRef.current) audioRef.current.volume = v;
+  };
+
+  const fmtTime = (s: number) => {
+    if (!Number.isFinite(s)) return '0:00';
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+
+  /* ---------------------- Завантаження файлів ---------------------- */
+  const downloadOne = async (entry: TalentEntry, index: number, att: TalentAttachment) => {
+    const url = (await getSignedUrl(att.storagePath)) || att.fileUrl;
+    if (!url) { toast.error('Файл недоступний'); return; }
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = buildStageFileName(index + 1, entry.team_number, entry.title, att);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      toast.error('Не вдалося завантажити файл');
+    }
+  };
+
+  const programText = useMemo(() => {
+    const lines = [`ПРОГРАМА ВИСТУПІВ — ${eventTitle}`, ''];
+    entries.forEach((e, i) => {
+      const atts = parseAttachments(e.attachments);
+      lines.push(`${String(i + 1).padStart(2, '0')}. Команда №${e.team_number} — ${e.title}`);
+      if (e.description) lines.push(`    Учасники / реквізит: ${e.description}`);
+      if (e.technical_notes) lines.push(`    Технічні побажання: ${e.technical_notes}`);
+      atts.forEach((a, ai) => lines.push(`    Файл ${ai + 1}: ${a.label} (${a.fileExt.toUpperCase()}, ${formatFileSize(a.fileSize)})`));
+      const pause = e.pause_after ?? e.break_needed_after ?? 0;
+      if (pause > 0) lines.push(`    ⏸ ПАУЗА ПІСЛЯ НОМЕРА: ${actsWord(pause)}`);
+      lines.push('');
+    });
+    return lines.join('\n');
+  }, [entries, eventTitle]);
+
+  const downloadZip = async () => {
+    setZipping(true);
+    setZipProgress(0);
+    try {
+      const zip = new JSZip();
+      const root = zip.folder('Вечір_Талантів_Програма')!;
+      root.file('ПРОГРАМА_ВИСТУПІВ.txt', programText);
+
+      const total = entries.reduce((acc, e) => acc + parseAttachments(e.attachments).length, 0);
+      let done = 0;
+
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const atts = parseAttachments(e.attachments);
+        if (!atts.length) continue;
+        const folder = root.folder(buildZipFolderName(i + 1, e.team_number, e.title))!;
+        for (let ai = 0; ai < atts.length; ai++) {
+          const att = atts[ai];
+          const url = (await getSignedUrl(att.storagePath)) || att.fileUrl;
+          if (!url) continue;
+          try {
+            const res = await fetch(url);
+            folder.file(buildZipFileName(ai + 1, att), await res.blob());
+          } catch {
+            /* пропускаємо недоступний файл */
+          }
+          done += 1;
+          setZipProgress(total ? Math.round((done / total) * 100) : 100);
+        }
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Вечір_Талантів_Програма.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
+      toast.success('Архів сформовано');
+    } catch {
+      toast.error('Не вдалося сформувати архів');
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  /* ------------------------------ Екран входу ------------------------------ */
+  if (!unlocked) {
+    return (
+      <main className="min-h-[100dvh] bg-[#07090E] text-slate-100 flex items-center justify-center px-4">
+        <section className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#0F1523]/90 backdrop-blur-2xl p-6 space-y-4 shadow-2xl">
+          <div className="w-12 h-12 rounded-2xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center">
+            <Lock className="w-5 h-5 text-[#FA5A15]" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black uppercase tracking-wide">Пульт сцени</h1>
+            <p className="text-xs text-muted-foreground mt-1">
+              «Вечір талантів» · Всеукраїнський проєкт «Залізна Зміна». Введіть пароль, наданий Адміністратором.
+            </p>
+          </div>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && unlock()}
+            placeholder="напр. сцена.звук"
+            className="h-12 bg-black/30 border-white/10 text-base"
+          />
+          <Button
+            onClick={unlock}
+            disabled={checking || !password.trim()}
+            className="w-full h-12 bg-[#FA5A15] hover:bg-[#FA5A15]/90 text-white font-bold uppercase text-xs tracking-wider"
+          >
+            {checking ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Увійти на пульт'}
+          </Button>
+        </section>
+      </main>
+    );
+  }
+
+  /* ------------------------------ Пульт ------------------------------ */
+  return (
+    <main className="min-h-[100dvh] bg-[#07090E] text-slate-100 px-3 sm:px-5 py-4 pb-40">
+      <header className="max-w-4xl mx-auto space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wide truncate">{eventTitle}</h1>
+            <p className="text-[11px] text-muted-foreground">Пульт звукорежисера та світловика · {actsWord(entries.length)}</p>
+          </div>
+        </div>
+
+        <Button
+          onClick={downloadZip}
+          disabled={zipping || entries.length === 0}
+          className="w-full h-12 bg-[#FA5A15] hover:bg-[#FA5A15]/90 text-white font-bold uppercase text-xs tracking-wider"
+        >
+          {zipping
+            ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Формування архіву… {zipProgress}%</>
+            : <><Package className="w-4 h-4 mr-2" /> Завантажити всі треки та медіа (ZIP)</>}
+        </Button>
+      </header>
+
+      <section className="max-w-4xl mx-auto mt-4 space-y-3">
+        {loading && (
+          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-[#FA5A15]" /></div>
+        )}
+
+        {!loading && entries.length === 0 && (
+          <div className="rounded-3xl border border-white/10 bg-[#0F1523]/80 p-8 text-center text-sm text-muted-foreground">
+            Програма виступів ще не сформована.
+          </div>
+        )}
+
+        {entries.map((entry, i) => {
+          const atts = parseAttachments(entry.attachments);
+          const pause = entry.pause_after ?? entry.break_needed_after ?? 0;
+          return (
+            <div key={entry.id} className="space-y-2">
+              <article className="rounded-3xl border border-white/10 bg-[#0F1523]/85 backdrop-blur-xl p-4 shadow-xl">
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
+                    <span className="text-2xl font-black font-mono text-[#FA5A15] tabular-nums">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold uppercase text-muted-foreground">Команда №{entry.team_number}</p>
+                    <h2 className="text-lg font-black text-slate-50 leading-tight break-words">{entry.title}</h2>
+                    {entry.description && (
+                      <p className="text-xs text-slate-300/80 mt-1 break-words">{entry.description}</p>
+                    )}
+                  </div>
+                </div>
+
+                {entry.technical_notes && (
+                  <div className="mt-3 rounded-2xl border border-[#FA5A15]/30 bg-[#FA5A15]/10 p-3">
+                    <p className="text-[10px] font-bold uppercase text-[#FA5A15] flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5" /> Технічні побажання для звуку / світла
+                    </p>
+                    <p className="text-xs text-slate-100 mt-1 break-words whitespace-pre-wrap">{entry.technical_notes}</p>
+                  </div>
+                )}
+
+                {atts.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {atts.map((att) => {
+                      const Icon = KIND_ICON[att.fileType] ?? FileText;
+                      const isPlaying = playing?.id === att.id;
+                      return (
+                        <div key={att.id} className="rounded-2xl border border-white/10 bg-black/30 p-2.5 flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                            <Icon className="w-4 h-4 text-slate-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{att.label}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono uppercase">
+                              .{att.fileExt} · {formatFileSize(att.fileSize)}
+                            </p>
+                          </div>
+                          {att.fileType === 'audio' && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="w-11 h-11 rounded-xl"
+                              onClick={() => togglePlay(att)}
+                              aria-label={isPlaying ? 'Пауза' : 'Відтворити'}
+                            >
+                              {isPlaying ? <Pause className="w-5 h-5 text-[#FA5A15]" /> : <Play className="w-5 h-5 text-[#FA5A15]" />}
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="w-11 h-11 rounded-xl"
+                            onClick={() => downloadOne(entry, i, att)}
+                            aria-label="Завантажити файл"
+                          >
+                            <Download className="w-5 h-5 text-slate-200" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {atts.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-3">Файли не прикріплені</p>
+                )}
+              </article>
+
+              {pause > 0 && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-center">
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-300">
+                    ⏸️ Пауза: {actsWord(pause)}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
+
+      {/* Нижній плеєр */}
+      {playing && (
+        <div className="fixed bottom-0 inset-x-0 z-50 border-t border-white/10 bg-[#0F1523]/95 backdrop-blur-2xl px-3 sm:px-5 py-3">
+          <div className="max-w-4xl mx-auto space-y-2">
+            <div className="flex items-center gap-3">
+              <Button
+                size="icon"
+                className="w-11 h-11 rounded-xl bg-[#FA5A15] hover:bg-[#FA5A15]/90 text-white shrink-0"
+                onClick={() => {
+                  if (!audioRef.current) return;
+                  if (audioRef.current.paused) audioRef.current.play();
+                  else audioRef.current.pause();
+                  setProgress(audioRef.current.currentTime);
+                }}
+                aria-label="Пуск / пауза"
+              >
+                {audioRef.current?.paused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+              </Button>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold truncate">{playing.label}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-muted-foreground tabular-nums">{fmtTime(progress)}</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 0}
+                    step={0.1}
+                    value={progress}
+                    onChange={(e) => seek(Number(e.target.value))}
+                    className="flex-1 accent-[#FA5A15] h-1.5"
+                    aria-label="Перемотування"
+                  />
+                  <span className="text-[10px] font-mono text-muted-foreground tabular-nums">{fmtTime(duration)}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-muted-foreground shrink-0" />
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => changeVolume(Number(e.target.value))}
+                className="flex-1 accent-[#FA5A15] h-1.5"
+                aria-label="Гучність"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+};
+
+export default StageConsole;
