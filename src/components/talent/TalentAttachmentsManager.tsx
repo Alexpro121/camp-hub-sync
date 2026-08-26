@@ -56,7 +56,7 @@ const TalentAttachmentsManager = ({ teamNumber, attachments, onChange, disabled 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ url: string; label: string } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; label: string; kind: TalentFileKind } | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
@@ -117,7 +117,7 @@ const TalentAttachmentsManager = ({ teamNumber, attachments, onChange, disabled 
   const openPreview = async (att: TalentAttachment) => {
     const url = (await getSignedUrl(att.storagePath)) || att.fileUrl;
     if (!url) { toast.error('Не вдалося відкрити файл'); return; }
-    setPreview({ url, label: att.label });
+    setPreview({ url, label: att.label, kind: att.fileType });
   };
 
   return (
@@ -302,7 +302,7 @@ const TalentAttachmentsManager = ({ teamNumber, attachments, onChange, disabled 
           {preview && (
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase text-slate-100">{preview.label}</p>
-              {/\.(mp4|mov)(\?|$)/i.test(preview.url.split('?')[0]) ? (
+              {preview.kind === 'video' ? (
                 <video src={preview.url} controls className="w-full rounded-2xl" />
               ) : (
                 <img src={preview.url} alt={preview.label} className="w-full rounded-2xl object-contain" />
