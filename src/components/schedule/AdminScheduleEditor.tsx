@@ -47,6 +47,7 @@ const AdminScheduleEditor = () => {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
 
   // Midnight rollover: yesterday → today, live and on app focus.
   useAutoTodayDate(date, setDate);
@@ -181,6 +182,29 @@ const AdminScheduleEditor = () => {
     await load();
     await broadcastScheduleUpdated({ date, action: 'delete' });
     toast.success('Подію видалено');
+  };
+
+  /** One-click wipe of the whole day: deletes all events and soft-deletes
+   *  every schedule batch of this date (recoverable via deleted_at). */
+  const wipeDay = async () => {
+    setBusy(true);
+    try {
+      const ids = schedules.map((s) => s.id);
+      if (ids.length) {
+        const { error } = await supabase.from('schedule_items').delete().in('schedule_id', ids);
+        if (error) throw error;
+        const { error: e2 } = await supabase.from('schedules').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+        if (e2) throw e2;
+      }
+      setConfirmWipe(false);
+      await load();
+      await broadcastScheduleUpdated({ date, action: 'delete' });
+      toast.success('Розклад на весь день видалено');
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка видалення');
+    } finally {
+      setBusy(false);
+    }
   };
 
   /** Shift this event and every later event of the day by ±delta minutes,
