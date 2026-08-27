@@ -26,8 +26,10 @@ import {
   Pencil,
   RefreshCw,
   KeyRound,
+  Bell,
   Check
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -76,8 +78,42 @@ import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
+import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
+
+/** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
+const useUnreadTransfers = () => {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const seen = new Date(getSeenAt() || 0).toISOString();
+      const { count: c } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .in('type', ['transfer', 'swap'])
+        .gt('created_at', seen);
+      if (alive) setCount(c ?? 0);
+    };
+    load();
+    const onSeen = () => setCount(0);
+    window.addEventListener('admin-notifications-seen', onSeen);
+    const ch = supabase
+      .channel('admin-transfers-badge')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => load())
+      .subscribe();
+    return () => {
+      alive = false;
+      window.removeEventListener('admin-notifications-seen', onSeen);
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
+  return count;
+};
 
 interface Props { onBack: () => void; }
+
 
 const SHIFT_LABELS: Record<ShiftType, string> = {
   long: 'Довга (12 днів)',
@@ -108,6 +144,8 @@ export const generateMemorablePassword = (): string => {
 
 const AdminFlow = ({ onBack }: Props) => {
   useEffect(() => { saveSession('admin'); }, []);
+  const unreadTransfers = useUnreadTransfers();
+
 
   const handleExit = async () => {
     clearSavedSession();
@@ -141,7 +179,7 @@ const AdminFlow = ({ onBack }: Props) => {
 
         <Tabs defaultValue="shifts" className="w-full px-3 pt-2">
           <div className="sticky top-[108px] z-20 px-1 py-2 bg-[#07090E]/90 backdrop-blur-md">
-            <TabsList className={`grid ${TRAIN_FEATURE_ENABLED ? 'grid-cols-7' : 'grid-cols-6'} h-[52px] w-full p-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md`}>
+            <TabsList className="grid grid-cols-4 auto-rows-[46px] h-auto w-full p-1 gap-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md">
               <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
                 <Calendar className="w-4 h-4" /> <span>Зміни</span>
               </TabsTrigger>
@@ -150,6 +188,14 @@ const AdminFlow = ({ onBack }: Props) => {
               </TabsTrigger>
               <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
                 <Mic2 className="w-4 h-4" /> <span>Таланти</span>
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="relative flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <Bell className="w-4 h-4" /> <span>Сповіщення</span>
+                {unreadTransfers > 0 && (
+                  <span className="absolute top-1 right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#FA5A15] text-white text-[9px] font-black font-mono tabular-nums flex items-center justify-center">
+                    {unreadTransfers > 99 ? '99+' : unreadTransfers}
+                  </span>
+                )}
               </TabsTrigger>
               {TRAIN_FEATURE_ENABLED && (
                 <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
@@ -171,11 +217,13 @@ const AdminFlow = ({ onBack }: Props) => {
           <TabsContent value="shifts" className="mt-3 animate-fade-in"><ShiftsTab /></TabsContent>
           <TabsContent value="schedule" className="mt-3 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
           <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
+          <TabsContent value="notifications" className="mt-3 animate-fade-in"><AdminNotificationsView /></TabsContent>
           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
           <TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>
           <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
           <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
         </Tabs>
+
       </div>
     </ActiveShiftProvider>
   );
