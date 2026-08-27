@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { useHaptics } from '@/hooks/useHaptics';
+import { TourTouchRipple, TourDemoStage, type TourDemo } from './TourDemoOverlays';
 
 export const tourStorageKey = (team: number) =>
   `helpsuprov:supervisor-tour-completed:team_${team}`;
@@ -34,9 +35,14 @@ interface TourStep {
   text: string;
   icon?: React.ComponentType<{ className?: string }>;
   delay?: number;
+  /** Жива візуальна демонстрація кроку (локальна, без мутацій на сервері) */
+  demo?: TourDemo;
+  /** Показувати віртуальний тач-імпульс на цільовому елементі */
+  ripple?: boolean;
   onEnter?: () => void;
   onLeave?: () => void;
 }
+
 
 interface Props {
   open: boolean;
@@ -95,7 +101,7 @@ const SupervisorTour = ({
     setBankOpen(false);
   }, [setEditChild, setBankOpen]);
 
-  // Розширене навчання супроводу (16+ кроків) з авто-фолбеками даних
+  // Розширене навчання супроводу з живими демонстраціями (демо-стани локальні)
   const steps: TourStep[] = useMemo(() => [
     {
       targetTab: 'teams',
@@ -104,6 +110,7 @@ const SupervisorTour = ({
       title: 'Вітаємо у проєкті! 👋',
       text: 'Це твій робочий простір. Сортуй учасників за номером, балансом А$ (↑/↓), наявністю нотаток або режимом «Присутні спочатку».',
       icon: Users,
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setEditChild(null);
@@ -114,8 +121,9 @@ const SupervisorTour = ({
       targetTab: 'teams',
       selector: '[data-tour="step-2-my-team"]',
       title: 'Твоя команда та бейдж «МОЯ»',
-      text: 'Картка твоєї команди позначена бейджем «МОЯ». Натисни, щоб розгорнути повний список учасників.',
+      text: 'Картка твоєї команди позначена бейджем «МОЯ». Дивись: вона розгортається автоматично та показує повний список учасників.',
       icon: Users,
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -129,6 +137,8 @@ const SupervisorTour = ({
       text: 'Відмічай присутність в 1 дотик. Працює оптимістично навіть у тунелях чи потязі без мережі — дані синхронізуються автоматично.',
       icon: Check,
       delay: 150,
+      demo: 'presence',
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -139,9 +149,11 @@ const SupervisorTour = ({
       selector: '[data-tour="step-4-iron-adjustment"]',
       fallbackSelector: '[data-tour="step-2-my-team"]',
       title: 'Баланс Айрон-доларів (А$)',
-      text: 'Нараховуй та списуй А$ за активності, командні перемоги та челенджі зміни.',
+      text: 'Картка учасника відкривається автоматично. Нараховуй та списуй А$ за активності, командні перемоги та челенджі зміни.',
       icon: Coins,
       delay: 250,
+      demo: 'iron',
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -156,6 +168,7 @@ const SupervisorTour = ({
       text: 'Фіксуй важливі спостереження (здоров\'я, таланти, особливості). Доступ мають ТІЛЬКИ супровід команди та штаб проєкту.',
       icon: ShieldCheck,
       delay: 200,
+      demo: 'notes',
       onEnter: () => setEditChild(activeChild),
       onLeave: () => setEditChild(null),
     },
@@ -167,6 +180,7 @@ const SupervisorTour = ({
       text: 'Контролюй ліміт командного фонду, прогрес використання та журнал усіх нарахувань.',
       icon: Coins,
       delay: 250,
+      demo: 'bank',
       onEnter: () => {
         setEditChild(null);
         setBankOpen(true);
@@ -179,6 +193,7 @@ const SupervisorTour = ({
       title: 'Каса Air Pay (оплата по повітрю)',
       text: '100% безконтактна оплата без QR-кодів і сканерів. Учасник обирає суму в кабінеті — запит миттєво летить на твою касу.',
       icon: ShoppingBag,
+      demo: 'airpay-idle',
       onEnter: () => {
         setBankOpen(false);
         setEditChild(null);
@@ -190,9 +205,11 @@ const SupervisorTour = ({
       selector: '[data-tour="step-fair-request-entry"]',
       fallbackSelector: '[data-tour="step-fair-terminal"]',
       title: 'Прийом пуш-запиту на касі',
-      text: 'Тут з\'являються вхідні запити (наприклад «Остапенко Максим — 50 А$»). Кнопка підтвердження списує кошти через захищену функцію з миттєвим чеком.',
+      text: 'Ось як це виглядає наживо: вхідний запит прилітає на касу, ти підтверджуєш списання — і учасник миттєво отримує цифровий чек.',
       icon: Radio,
       delay: 150,
+      demo: 'airpay-push',
+      ripple: true,
       onEnter: () => onTabChange('fair'),
     },
     {
@@ -201,6 +218,7 @@ const SupervisorTour = ({
       title: 'Розклад дня та таймер подій',
       text: 'Хронологія активностей зміни, прогрес поточної події та зворотний відлік до наступної.',
       icon: Calendar,
+      demo: 'timer',
       onEnter: () => onTabChange('schedule'),
     },
     {
@@ -211,6 +229,7 @@ const SupervisorTour = ({
       text: 'Швидко обирай день зміни та фільтруй події для своєї або всіх команд.',
       icon: Filter,
       delay: 150,
+      ripple: true,
       onEnter: () => onTabChange('schedule'),
     },
     ...(talentAvailable ? [{
@@ -220,6 +239,7 @@ const SupervisorTour = ({
       text: 'Реєструй номери команди, завантажуй мінусовки та фони у захищений медіа-хаб (зберігання 7 діб). Розширення файлів заблоковані — редагується лише назва.',
       icon: Mic2,
       delay: 150,
+      ripple: true,
       onEnter: () => onTabChange('talent'),
     } as TourStep] : []),
     {
@@ -228,6 +248,7 @@ const SupervisorTour = ({
       title: 'Трансфери та обміни',
       text: 'Переводь учасника в іншу команду або роби рівноцінний обмін «учасник на учасника» в пару кліків.',
       icon: Users,
+      demo: 'transfers',
       onEnter: () => onTabChange('transfers'),
     },
     {
@@ -236,21 +257,24 @@ const SupervisorTour = ({
       title: 'Експорт бази та звітність',
       text: 'Вивантажуй зведену відомість команди в Excel для штабу проєкту.',
       icon: Download,
+      demo: 'export',
+      ripple: true,
       onEnter: () => onTabChange('teams'),
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-theme-toggle"]',
       title: 'Теми оформлення (Бета ⚙️)',
-      text: 'Темна тема — оптимізована під мобільні екрани та енергозбереження. Світла тема зручна для презентацій та проектора (наразі функція в стадії Бета-тестування).',
+      text: 'Темна тема — стандарт для смартфонів та енергозбереження. Світла тема зручна для презентацій і проектора (Бета-режим для проектора).',
       icon: Sun,
+      ripple: true,
       onEnter: () => onTabChange('teams'),
     },
     ...(TRAIN_FEATURE_ENABLED ? [{
       targetTab: 'coupes',
       selector: '[data-tour="step-7-coupes-root"]',
       title: 'Купе у потязі УЗ',
-      text: 'Схема розсадження вагону, контроль посадки та нумерація полиць.',
+      text: 'Схема розсадження вагону, контроль посадки та нумерація верхніх і нижніх полиць.',
       icon: Train,
       onEnter: () => onTabChange('coupes'),
     } as TourStep] : []),
@@ -260,9 +284,11 @@ const SupervisorTour = ({
       title: 'Стрічка оголошень штабу',
       text: 'Важливі алерти, таймери та оголошення адміністрації. Тут ти будь-коли можеш перезапустити це навчання. Бажаємо крутої зміни!',
       icon: Bell,
+      demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
   ], [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+
 
   const total = steps.length;
   const step = steps[index];
@@ -417,6 +443,7 @@ const SupervisorTour = ({
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const isMobile = vw < 640;
   const tooltipWidth = Math.min(vw - PADDING * 2, 360);
 
   // Горизонтальне позиціонування
@@ -449,7 +476,33 @@ const SupervisorTour = ({
   const spotX = rect ? rect.left - SPOT_PAD : vw / 2;
   const spotY = rect ? rect.top - SPOT_PAD : vh / 2;
 
+  // Центр цільового елемента для віртуального дотику
+  const rippleX = rect ? rect.left + rect.width / 2 : vw / 2;
+  const rippleY = rect ? rect.top + rect.height / 2 : vh / 2;
+
+  // Mobile-first: картка стає нижнім Glass-доком і не перекриває ціль
+  const cardStyle: React.CSSProperties = isMobile
+    ? {
+        left: PADDING,
+        right: PADDING,
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
+        top: 'auto',
+        opacity: ready || !rect ? 1 : 0.9,
+        maxHeight: '62dvh',
+        overflowY: 'auto',
+        transition: 'opacity 0.2s ease',
+      }
+    : {
+        width: tooltipWidth,
+        transform: `translate3d(${left}px, ${topStyle}px, 0)`,
+        opacity: ready || !rect ? 1 : 0.88,
+        maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
+        overflowY: 'auto',
+        transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease',
+      };
+
   const StepIcon = step.icon || Sparkles;
+
 
   return createPortal(
     <div
@@ -471,6 +524,11 @@ const SupervisorTour = ({
         }}
       />
 
+      {/* Віртуальний тач-індикатор (Ghost Finger) */}
+      {step.ripple && rect && (
+        <TourTouchRipple x={rippleX} y={rippleY} active={ready} />
+      )}
+
       {/* Блокувальник кліків */}
       <div
         className="absolute inset-0"
@@ -478,19 +536,15 @@ const SupervisorTour = ({
         onTouchMove={(e) => e.preventDefault()}
       />
 
-      {/* Картка підказки */}
+      {/* Картка підказки / нижній док на смартфонах */}
       <div
         ref={cardRef}
-        className="tour-card absolute top-0 left-0 rounded-3xl border border-white/15 bg-[#0A0E18]/95 text-slate-100 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] p-4 sm:p-5 transform-gpu will-change-transform"
-        style={{
-          width: tooltipWidth,
-          transform: `translate3d(${left}px, ${topStyle}px, 0)`,
-          opacity: ready || !rect ? 1 : 0.88,
-          maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
-          overflowY: 'auto',
-          transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease',
-        }}
+        className={`tour-card absolute rounded-3xl border border-white/15 bg-[#0A0E18]/95 text-slate-100 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] p-4 sm:p-5 transform-gpu will-change-transform ${
+          isMobile ? '' : 'top-0 left-0'
+        }`}
+        style={cardStyle}
       >
+
         <div key={index} className="space-y-3">
           {/* Заголовок та крок */}
           <div className="flex items-start gap-3">
@@ -520,6 +574,11 @@ const SupervisorTour = ({
             {step.text}
           </p>
 
+          {/* Жива візуальна демонстрація кроку (лише локальні демо-стани) */}
+          {step.demo && (
+            <TourDemoStage demo={step.demo} stepKey={index} teamNumber={myTeam} />
+          )}
+
           {/* Прогрес */}
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
             <div
@@ -528,13 +587,13 @@ const SupervisorTour = ({
             />
           </div>
 
-          {/* Кнопки дій */}
+          {/* Кнопки дій (мін. 48px для великого пальця) */}
           <div className="flex items-center gap-2 pt-1">
             {index > 0 && (
               <Button 
                 variant="ghost" 
                 onClick={prev} 
-                className="h-11 px-3 flex-1 text-xs font-bold rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
+                className="h-12 px-3 flex-1 text-xs font-bold rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 <span>Назад</span>
@@ -542,12 +601,13 @@ const SupervisorTour = ({
             )}
             <Button
               onClick={next}
-              className="h-11 px-4 flex-[1.6] text-xs font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-md active:scale-95 transition-all"
+              className="h-12 px-4 flex-[1.6] text-xs font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-md active:scale-95 transition-all"
             >
-              <span>{isLast ? 'Завершити' : 'Далі'}</span>
+              <span>{isLast ? 'Розпочати роботу!' : 'Далі'}</span>
               {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
             </Button>
           </div>
+
 
           <button
             type="button"
