@@ -547,6 +547,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
               </TabsContent>
             )}
 
+            {FAIR_FEATURE_ENABLED && (
             <TabsContent value="fair" className="mt-2 animate-fade-in">
               <div data-tour="step-fair-terminal">
                 <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
