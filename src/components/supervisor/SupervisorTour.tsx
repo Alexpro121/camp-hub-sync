@@ -101,7 +101,7 @@ const SupervisorTour = ({
     setBankOpen(false);
   }, [setEditChild, setBankOpen]);
 
-  // Розширене навчання супроводу (16+ кроків) з авто-фолбеками даних
+  // Розширене навчання супроводу з живими демонстраціями (демо-стани локальні)
   const steps: TourStep[] = useMemo(() => [
     {
       targetTab: 'teams',
@@ -110,6 +110,7 @@ const SupervisorTour = ({
       title: 'Вітаємо у проєкті! 👋',
       text: 'Це твій робочий простір. Сортуй учасників за номером, балансом А$ (↑/↓), наявністю нотаток або режимом «Присутні спочатку».',
       icon: Users,
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setEditChild(null);
@@ -120,8 +121,9 @@ const SupervisorTour = ({
       targetTab: 'teams',
       selector: '[data-tour="step-2-my-team"]',
       title: 'Твоя команда та бейдж «МОЯ»',
-      text: 'Картка твоєї команди позначена бейджем «МОЯ». Натисни, щоб розгорнути повний список учасників.',
+      text: 'Картка твоєї команди позначена бейджем «МОЯ». Дивись: вона розгортається автоматично та показує повний список учасників.',
       icon: Users,
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -135,6 +137,8 @@ const SupervisorTour = ({
       text: 'Відмічай присутність в 1 дотик. Працює оптимістично навіть у тунелях чи потязі без мережі — дані синхронізуються автоматично.',
       icon: Check,
       delay: 150,
+      demo: 'presence',
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -145,9 +149,11 @@ const SupervisorTour = ({
       selector: '[data-tour="step-4-iron-adjustment"]',
       fallbackSelector: '[data-tour="step-2-my-team"]',
       title: 'Баланс Айрон-доларів (А$)',
-      text: 'Нараховуй та списуй А$ за активності, командні перемоги та челенджі зміни.',
+      text: 'Картка учасника відкривається автоматично. Нараховуй та списуй А$ за активності, командні перемоги та челенджі зміни.',
       icon: Coins,
       delay: 250,
+      demo: 'iron',
+      ripple: true,
       onEnter: () => {
         onTabChange('teams');
         setOpenTeam(myTeam);
@@ -162,6 +168,7 @@ const SupervisorTour = ({
       text: 'Фіксуй важливі спостереження (здоров\'я, таланти, особливості). Доступ мають ТІЛЬКИ супровід команди та штаб проєкту.',
       icon: ShieldCheck,
       delay: 200,
+      demo: 'notes',
       onEnter: () => setEditChild(activeChild),
       onLeave: () => setEditChild(null),
     },
@@ -173,6 +180,7 @@ const SupervisorTour = ({
       text: 'Контролюй ліміт командного фонду, прогрес використання та журнал усіх нарахувань.',
       icon: Coins,
       delay: 250,
+      demo: 'bank',
       onEnter: () => {
         setEditChild(null);
         setBankOpen(true);
@@ -185,6 +193,7 @@ const SupervisorTour = ({
       title: 'Каса Air Pay (оплата по повітрю)',
       text: '100% безконтактна оплата без QR-кодів і сканерів. Учасник обирає суму в кабінеті — запит миттєво летить на твою касу.',
       icon: ShoppingBag,
+      demo: 'airpay-idle',
       onEnter: () => {
         setBankOpen(false);
         setEditChild(null);
@@ -196,9 +205,11 @@ const SupervisorTour = ({
       selector: '[data-tour="step-fair-request-entry"]',
       fallbackSelector: '[data-tour="step-fair-terminal"]',
       title: 'Прийом пуш-запиту на касі',
-      text: 'Тут з\'являються вхідні запити (наприклад «Остапенко Максим — 50 А$»). Кнопка підтвердження списує кошти через захищену функцію з миттєвим чеком.',
+      text: 'Ось як це виглядає наживо: вхідний запит прилітає на касу, ти підтверджуєш списання — і учасник миттєво отримує цифровий чек.',
       icon: Radio,
       delay: 150,
+      demo: 'airpay-push',
+      ripple: true,
       onEnter: () => onTabChange('fair'),
     },
     {
@@ -207,6 +218,7 @@ const SupervisorTour = ({
       title: 'Розклад дня та таймер подій',
       text: 'Хронологія активностей зміни, прогрес поточної події та зворотний відлік до наступної.',
       icon: Calendar,
+      demo: 'timer',
       onEnter: () => onTabChange('schedule'),
     },
     {
@@ -217,6 +229,7 @@ const SupervisorTour = ({
       text: 'Швидко обирай день зміни та фільтруй події для своєї або всіх команд.',
       icon: Filter,
       delay: 150,
+      ripple: true,
       onEnter: () => onTabChange('schedule'),
     },
     ...(talentAvailable ? [{
@@ -226,6 +239,7 @@ const SupervisorTour = ({
       text: 'Реєструй номери команди, завантажуй мінусовки та фони у захищений медіа-хаб (зберігання 7 діб). Розширення файлів заблоковані — редагується лише назва.',
       icon: Mic2,
       delay: 150,
+      ripple: true,
       onEnter: () => onTabChange('talent'),
     } as TourStep] : []),
     {
@@ -234,6 +248,7 @@ const SupervisorTour = ({
       title: 'Трансфери та обміни',
       text: 'Переводь учасника в іншу команду або роби рівноцінний обмін «учасник на учасника» в пару кліків.',
       icon: Users,
+      demo: 'transfers',
       onEnter: () => onTabChange('transfers'),
     },
     {
@@ -242,21 +257,24 @@ const SupervisorTour = ({
       title: 'Експорт бази та звітність',
       text: 'Вивантажуй зведену відомість команди в Excel для штабу проєкту.',
       icon: Download,
+      demo: 'export',
+      ripple: true,
       onEnter: () => onTabChange('teams'),
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-theme-toggle"]',
       title: 'Теми оформлення (Бета ⚙️)',
-      text: 'Темна тема — оптимізована під мобільні екрани та енергозбереження. Світла тема зручна для презентацій та проектора (наразі функція в стадії Бета-тестування).',
+      text: 'Темна тема — стандарт для смартфонів та енергозбереження. Світла тема зручна для презентацій і проектора (Бета-режим для проектора).',
       icon: Sun,
+      ripple: true,
       onEnter: () => onTabChange('teams'),
     },
     ...(TRAIN_FEATURE_ENABLED ? [{
       targetTab: 'coupes',
       selector: '[data-tour="step-7-coupes-root"]',
       title: 'Купе у потязі УЗ',
-      text: 'Схема розсадження вагону, контроль посадки та нумерація полиць.',
+      text: 'Схема розсадження вагону, контроль посадки та нумерація верхніх і нижніх полиць.',
       icon: Train,
       onEnter: () => onTabChange('coupes'),
     } as TourStep] : []),
@@ -266,9 +284,11 @@ const SupervisorTour = ({
       title: 'Стрічка оголошень штабу',
       text: 'Важливі алерти, таймери та оголошення адміністрації. Тут ти будь-коли можеш перезапустити це навчання. Бажаємо крутої зміни!',
       icon: Bell,
+      demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
   ], [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+
 
   const total = steps.length;
   const step = steps[index];
