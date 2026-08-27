@@ -47,6 +47,7 @@ const AdminScheduleEditor = () => {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
 
   // Midnight rollover: yesterday → today, live and on app focus.
   useAutoTodayDate(date, setDate);
@@ -181,6 +182,29 @@ const AdminScheduleEditor = () => {
     await load();
     await broadcastScheduleUpdated({ date, action: 'delete' });
     toast.success('Подію видалено');
+  };
+
+  /** One-click wipe of the whole day: deletes all events and soft-deletes
+   *  every schedule batch of this date (recoverable via deleted_at). */
+  const wipeDay = async () => {
+    setBusy(true);
+    try {
+      const ids = schedules.map((s) => s.id);
+      if (ids.length) {
+        const { error } = await supabase.from('schedule_items').delete().in('schedule_id', ids);
+        if (error) throw error;
+        const { error: e2 } = await supabase.from('schedules').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+        if (e2) throw e2;
+      }
+      setConfirmWipe(false);
+      await load();
+      await broadcastScheduleUpdated({ date, action: 'delete' });
+      toast.success('Розклад на весь день видалено');
+    } catch (e: any) {
+      toast.error(e?.message || 'Помилка видалення');
+    } finally {
+      setBusy(false);
+    }
   };
 
   /** Shift this event and every later event of the day by ±delta minutes,
@@ -319,6 +343,15 @@ const AdminScheduleEditor = () => {
         <Eraser className="w-4 h-4 mr-1.5" /> Очистити дублікати розкладу
       </Button>
 
+      <Button
+        variant="outline"
+        disabled={busy || (!schedules.length && !sorted.length)}
+        onClick={() => setConfirmWipe(true)}
+        className="w-full h-10 text-xs font-bold uppercase border-destructive/40 text-destructive hover:bg-destructive/10"
+      >
+        <Trash2 className="w-4 h-4 mr-1.5" /> Видалити розклад на весь день
+      </Button>
+
       {loading ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : sorted.length === 0 ? (
@@ -373,6 +406,24 @@ const AdminScheduleEditor = () => {
           ))}
         </div>
       )}
+
+      {/* Full-day wipe confirmation */}
+      <Dialog open={confirmWipe} onOpenChange={setConfirmWipe}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Видалити розклад на {humanDate(date)}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Буде видалено всі події цього дня ({sorted.length} шт) та всі пакети розкладу ({schedules.length} шт).
+            Дію можна буде скасувати лише через відновлення чернетки в базі даних.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmWipe(false)} disabled={busy}>Скасувати</Button>
+            <Button variant="destructive" onClick={wipeDay} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Видалити весь день
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
         <DialogContent className="max-w-sm">
