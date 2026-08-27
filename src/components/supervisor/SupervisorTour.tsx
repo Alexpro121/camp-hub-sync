@@ -443,6 +443,7 @@ const SupervisorTour = ({
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const isMobile = vw < 640;
   const tooltipWidth = Math.min(vw - PADDING * 2, 360);
 
   // Горизонтальне позиціонування
@@ -475,7 +476,33 @@ const SupervisorTour = ({
   const spotX = rect ? rect.left - SPOT_PAD : vw / 2;
   const spotY = rect ? rect.top - SPOT_PAD : vh / 2;
 
+  // Центр цільового елемента для віртуального дотику
+  const rippleX = rect ? rect.left + rect.width / 2 : vw / 2;
+  const rippleY = rect ? rect.top + rect.height / 2 : vh / 2;
+
+  // Mobile-first: картка стає нижнім Glass-доком і не перекриває ціль
+  const cardStyle: React.CSSProperties = isMobile
+    ? {
+        left: PADDING,
+        right: PADDING,
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
+        top: 'auto',
+        opacity: ready || !rect ? 1 : 0.9,
+        maxHeight: '62dvh',
+        overflowY: 'auto',
+        transition: 'opacity 0.2s ease',
+      }
+    : {
+        width: tooltipWidth,
+        transform: `translate3d(${left}px, ${topStyle}px, 0)`,
+        opacity: ready || !rect ? 1 : 0.88,
+        maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
+        overflowY: 'auto',
+        transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease',
+      };
+
   const StepIcon = step.icon || Sparkles;
+
 
   return createPortal(
     <div
