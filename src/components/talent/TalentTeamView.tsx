@@ -87,7 +87,7 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
   const mine = entries.filter((e) => e.team_number === myTeam);
 
   return (
-    <div className="space-y-3">
+    <div data-tour="step-talent-section" className="space-y-3">
       <TalentEntryEditDialog entry={editing} open={!!editing} onClose={() => setEditing(null)} onSaved={load} />
       <Card className="p-4 bg-gradient-card space-y-3">
 

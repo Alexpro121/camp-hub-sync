@@ -472,6 +472,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                 <button
                   type="button"
                   onClick={toggleTheme}
+                  data-tour="step-theme-toggle"
                   aria-label="Змінити тему оформлення"
                   className={`p-2 min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-all shadow-sm active:scale-95 ${
                     isDark 
@@ -597,6 +598,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
 
             <Button
               onClick={handleExport}
+              data-tour="step-export-button"
               className={`h-11 w-11 rounded-2xl shadow-xl p-0 border active:scale-90 transition-all ${
                 isDark 
                   ? 'bg-[#0F1523]/90 hover:bg-[#151D2F] border-white/10 text-slate-300 hover:text-white' 
@@ -614,6 +616,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             myTeam={authedTeam}
             activeTab={activeTab}
             firstTeamChild={firstTeamChild}
+            talentAvailable={talent.active}
             onTabChange={setActiveTab}
             setOpenTeam={setOpenTeam}
             setEditChild={setEditChild}

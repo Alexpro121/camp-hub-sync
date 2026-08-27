@@ -341,6 +341,7 @@ const ScheduleView = ({
       {days.length > 1 && (
         <div 
           ref={dateContainerRef}
+          data-tour="step-schedule-filters"
           className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1"
         >
           <div className="flex items-center gap-2 px-1 w-max">
@@ -373,14 +374,14 @@ const ScheduleView = ({
 
       {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ ================= */}
       {lockTeam ? (
-        <div className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
+        <div data-tour="step-schedule-filters-teams" className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
           <p className="text-xs font-semibold text-foreground">
             Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
           </p>
         </div>
       ) : (
-        <div className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
+        <div data-tour="step-schedule-filters-teams" className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
           <div className="flex items-center gap-1.5 px-1 w-max">
             <button
               onClick={() => {

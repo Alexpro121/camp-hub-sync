@@ -189,7 +189,7 @@ const TeamsView = ({
       )}
       {/* Sort selector */}
 
-      <div data-tour="step-1-sort" className="flex items-center gap-2 mb-3 px-1">
+      <div data-tour="step-sort-modes" className="flex items-center gap-2 mb-3 px-1">
         <ArrowUpDown className="w-4 h-4 text-muted-foreground shrink-0" />
         <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
           <SelectTrigger className="h-11 text-sm flex-1 bg-surface-1 border-border/50">
