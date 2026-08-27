@@ -574,6 +574,11 @@ const SupervisorTour = ({
             {step.text}
           </p>
 
+          {/* Жива візуальна демонстрація кроку (лише локальні демо-стани) */}
+          {step.demo && (
+            <TourDemoStage demo={step.demo} stepKey={index} teamNumber={myTeam} />
+          )}
+
           {/* Прогрес */}
           <div className="h-1.5 rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
             <div
@@ -582,13 +587,13 @@ const SupervisorTour = ({
             />
           </div>
 
-          {/* Кнопки дій */}
+          {/* Кнопки дій (мін. 48px для великого пальця) */}
           <div className="flex items-center gap-2 pt-1">
             {index > 0 && (
               <Button 
                 variant="ghost" 
                 onClick={prev} 
-                className="h-11 px-3 flex-1 text-xs font-bold rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
+                className="h-12 px-3 flex-1 text-xs font-bold rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
                 <span>Назад</span>
@@ -596,12 +601,13 @@ const SupervisorTour = ({
             )}
             <Button
               onClick={next}
-              className="h-11 px-4 flex-[1.6] text-xs font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-md active:scale-95 transition-all"
+              className="h-12 px-4 flex-[1.6] text-xs font-bold uppercase rounded-xl bg-[#FA5A15] hover:bg-[#FF7D3B] text-white shadow-md active:scale-95 transition-all"
             >
-              <span>{isLast ? 'Завершити' : 'Далі'}</span>
+              <span>{isLast ? 'Розпочати роботу!' : 'Далі'}</span>
               {!isLast && <ChevronRight className="w-4 h-4 ml-1" />}
             </Button>
           </div>
+
 
           <button
             type="button"
