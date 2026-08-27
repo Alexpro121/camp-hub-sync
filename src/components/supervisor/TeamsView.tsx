@@ -81,7 +81,7 @@ const TeamsView = ({
     const slowTimer = setTimeout(() => {
       if (!mounted) return;
       const snap = outbox.getTeamsSnapshot<Child[]>();
-      if (snap?.data?.length) { setChildren(snap.data); setFromSnapshot(true); }
+      if (snap?.data?.length) { setChildren(snap.data); }
       setLoading(false);
     }, 1500);
 
