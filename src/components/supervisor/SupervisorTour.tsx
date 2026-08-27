@@ -587,8 +587,9 @@ const SupervisorTour = ({
             />
           </div>
 
-          {/* Кнопки дій (мін. 48px для великого пальця) */}
-          <div className="flex items-center gap-2 pt-1">
+          {/* Кнопки дій (мін. 48px, завжди доступні навіть при довгому контенті) */}
+          <div className="sticky bottom-0 -mx-4 sm:-mx-5 px-4 sm:px-5 pt-2 pb-1 bg-[#0A0E18]/95 backdrop-blur-xl flex items-center gap-2">
+
             {index > 0 && (
               <Button 
                 variant="ghost" 
