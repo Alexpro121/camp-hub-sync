@@ -60,6 +60,27 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   const [json, setJson] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const openAiStudio = () => {
+    try {
+      const a = document.createElement("a");
+      a.href = AI_STUDIO_URL;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      try {
+        const win = window.open(AI_STUDIO_URL, "_blank", "noopener,noreferrer");
+        if (!win) throw new Error("popup_blocked");
+      } catch {
+        toast.error("Не вдалося відкрити вкладку", {
+          description: "Дозволь спливаючі вікна або відкрий: aistudio.google.com",
+        });
+      }
+    }
+  };
+
   const copyPrompt = async () => {
     if (!rawText.trim()) {
       toast.error("Спочатку встав текст розкладу");
@@ -181,7 +202,8 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             <Button
               variant="outline"
               className="w-full h-11 text-xs font-bold uppercase"
-              onClick={() => window.open(AI_STUDIO_URL, "_blank", "noopener,noreferrer")}
+              type="button"
+              onClick={openAiStudio}
             >
               <ExternalLink className="w-4 h-4 mr-1.5" /> Перейти в Google AI Studio
             </Button>
