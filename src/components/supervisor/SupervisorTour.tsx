@@ -102,7 +102,7 @@ const SupervisorTour = ({
   }, [setEditChild, setBankOpen]);
 
   // Розширене навчання супроводу з живими демонстраціями (демо-стани локальні)
-  const steps: TourStep[] = useMemo(() => [
+  const steps: TourStep[] = useMemo(() => ([
     {
       targetTab: 'teams',
       selector: '[data-tour="step-sort-modes"]',
@@ -287,7 +287,7 @@ const SupervisorTour = ({
       demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
-  ].filter((s) => s.targetTab !== 'fair'), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ] as TourStep[]).filter((s) => s.targetTab !== 'fair'), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
 
   const total = steps.length;
