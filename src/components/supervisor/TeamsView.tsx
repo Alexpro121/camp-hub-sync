@@ -112,7 +112,7 @@ const TeamsView = ({
       });
 
       outbox.saveTeamsSnapshot(unique);
-      if (mounted) { setChildren(unique as Child[]); setLoading(false); setFromSnapshot(false); }
+      if (mounted) { setChildren(unique as Child[]); setLoading(false); }
     };
     load().catch(() => { if (mounted) setLoading(false); });
 
