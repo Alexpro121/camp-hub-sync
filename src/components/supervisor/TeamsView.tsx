@@ -179,12 +179,6 @@ const TeamsView = ({
 
   return (
     <>
-      {fromSnapshot && (
-        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0F1523]/95 px-3 py-2 text-xs text-amber-300 backdrop-blur-2xl">
-          <CloudOff className="h-4 w-4 shrink-0" />
-          <span className="truncate">Локальні дані · зміни збережуться та підуть у мережу автоматично</span>
-        </div>
-      )}
       {/* Sort selector */}
 
       <div data-tour="step-sort-modes" className="flex items-center gap-2 mb-3 px-1">
