@@ -943,6 +943,10 @@ export type Database = {
           team_number: number
         }[]
       }
+      get_stage_console_data: {
+        Args: { p_password: string; p_shift_id: string }
+        Returns: Json
+      }
       increment_iron_dollars: {
         Args: {
           p_amount: number

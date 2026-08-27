@@ -79,21 +79,40 @@ const StageConsole = () => {
   const [previewMedia, setPreviewMedia] = useState<{ url: string; label: string; kind: TalentFileKind } | null>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem(SESSION_KEY) === (shiftId || 'global')) setUnlocked(true);
+    const saved = sessionStorage.getItem(SESSION_KEY);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as { scope: string; password: string };
+      if (parsed.scope === (shiftId || 'global') && parsed.password) {
+        setPassword(parsed.password);
+        setUnlocked(true);
+      }
+    } catch {
+      sessionStorage.removeItem(SESSION_KEY);
+    }
   }, [shiftId]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (pwd?: string) => {
+    const pass = (pwd ?? password).trim();
+    if (!pass) return;
     setLoading(true);
-    let q = supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
-    if (shiftId) q = q.eq('shift_id', shiftId);
-    const { data: evs } = await q;
-    const ev = evs?.[0];
-    if (!ev) { setEntries([]); setLoading(false); return; }
-    setEventTitle(ev.title || 'Вечір талантів');
-    const { data } = await supabase.from('talent_entries').select('*').eq('event_id', ev.id).order('order_index');
-    setEntries((data || []) as unknown as TalentEntry[]);
+    const { data, error } = await supabase.rpc('get_stage_console_data', {
+      p_shift_id: shiftId,
+      p_password: pass,
+    });
     setLoading(false);
-  }, [shiftId]);
+    const payload = data as { status?: string; event?: { title?: string } | null; entries?: unknown[] } | null;
+    if (error || !payload || payload.status !== 'ok') {
+      if (payload?.status === 'unauthorized') {
+        sessionStorage.removeItem(SESSION_KEY);
+        setUnlocked(false);
+        toast.error('Невірний пароль сцени');
+      }
+      return;
+    }
+    setEventTitle(payload.event?.title || 'Вечір талантів');
+    setEntries((payload.entries || []) as unknown as TalentEntry[]);
+  }, [shiftId, password]);
 
   useEffect(() => {
     if (!unlocked) return;
@@ -108,17 +127,22 @@ const StageConsole = () => {
   useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
 
   const unlock = async () => {
-    if (!password.trim()) return;
+    const pass = password.trim();
+    if (!pass) return;
     setChecking(true);
-    const { data, error } = await supabase.rpc('verify_stage_password', {
+    const { data, error } = await supabase.rpc('get_stage_console_data', {
       p_shift_id: shiftId,
-      p_password: password.trim(),
+      p_password: pass,
     });
     setChecking(false);
-    if (error || !data) { toast.error('Невірний пароль сцени'); return; }
-    sessionStorage.setItem(SESSION_KEY, shiftId || 'global');
+    const payload = data as { status?: string; event?: { title?: string } | null; entries?: unknown[] } | null;
+    if (error || !payload || payload.status !== 'ok') { toast.error('Невірний пароль сцени'); return; }
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ scope: shiftId || 'global', password: pass }));
+    setEventTitle(payload.event?.title || 'Вечір талантів');
+    setEntries((payload.entries || []) as unknown as TalentEntry[]);
     setUnlocked(true);
   };
+
 
   /* ---------------------------- Аудіоплеєр ---------------------------- */
   const togglePlay = async (att: TalentAttachment, actTitle: string) => {
