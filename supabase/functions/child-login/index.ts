@@ -116,9 +116,11 @@ Deno.serve(async (req) => {
       const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
       const teamRaw = String(body?.team ?? '').replace(/[^\d]/g, '');
       const team = teamRaw ? parseInt(teamRaw, 10) : 0;
-      if (!fullName || fullName.length < 6 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
-      // Require at least two name tokens so single fragments cannot be enumerated.
-      if (fullName.split(/\s+/).filter(Boolean).length < 2) return json({ error: 'invalid_name' }, 400);
+      if (!fullName || fullName.length < 2 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
+      // Single-token input (DB row has only a first name) is allowed, but then
+      // only a byte-exact (normalized) match counts — no fuzzy enumeration.
+      const singleToken = fullName.split(/\s+/).filter(Boolean).length < 2;
+
       // Require the team number: narrows the searchable pool and blocks roster-wide scraping.
       if (!team || team < 1 || team > 999) return json({ error: 'invalid_team' }, 400);
 
