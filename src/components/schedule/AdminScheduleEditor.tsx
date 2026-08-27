@@ -504,7 +504,16 @@ const AdminScheduleEditor = () => {
         </DialogContent>
       </Dialog>
 
-      <AdminAiStudioImportModal open={aiOpen} date={date} onOpenChange={setAiOpen} onImported={load} />
+      <AdminAiStudioImportModal
+        open={aiOpen}
+        date={date}
+        onOpenChange={setAiOpen}
+        onImported={(firstDate) => {
+          // Multi-day import: jump to the first imported day so the result is visible at once.
+          if (firstDate && firstDate !== date) setDate(firstDate);
+          else load();
+        }}
+      />
     </Card>
   );
 };

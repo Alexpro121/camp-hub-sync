@@ -98,6 +98,7 @@ const ScheduleView = ({
         .from('schedules')
         .select('*')
         .eq('is_published', true)
+        .is('deleted_at', null)
         .order('date', { ascending: true });
       
       const list = (sch || []) as Schedule[];
