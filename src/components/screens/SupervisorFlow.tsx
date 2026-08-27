@@ -60,6 +60,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   const [showAdminAnim, setShowAdminAnim] = useState(false);
 
   const [activeTab, setActiveTab] = useState('teams');
+
+  // Модуль «Ярмарок» тимчасово вимкнено — не залишаємо користувача на прихованій вкладці
+  useEffect(() => {
+    if (!FAIR_FEATURE_ENABLED && activeTab === 'fair') setActiveTab('teams');
+  }, [activeTab]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
@@ -536,7 +541,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                 <ScheduleView
                   myTeam={authedTeam}
                   isStaff
-                  onFairAction={() => setActiveTab('fair')}
+                  onFairAction={FAIR_FEATURE_ENABLED ? () => setActiveTab('fair') : undefined}
                 />
               </div>
             </TabsContent>
