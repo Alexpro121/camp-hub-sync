@@ -505,3 +505,5 @@ export function toSVG(avatar: IronAvatarData, exportSize = 512): string {
 }
 
 export const getSVGCode = toSVG;
+
+export type AvatarData = IronAvatarData;
