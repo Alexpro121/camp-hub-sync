@@ -195,8 +195,7 @@ const TeamsView = ({
         </Select>
       </div>
 
-
-      <div className="space-y-2 stagger">
+      <div className="space-y-3 stagger">
         {teams.map((tn) => {
           const teamKidsRaw = children.filter((c) => c.team_number === tn);
           const teamKids = sortKids(teamKidsRaw);
