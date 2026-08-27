@@ -553,6 +553,8 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
                 <SupervisorFairView myTeam={authedTeam} isLive={fair.isLiveFairRunning} />
               </div>
             </TabsContent>
+            )}
+
 
             {TRAIN_FEATURE_ENABLED && (
               <TabsContent value="coupes" className="mt-2 animate-fade-in space-y-3">
