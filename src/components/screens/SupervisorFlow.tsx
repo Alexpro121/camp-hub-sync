@@ -616,6 +616,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
             myTeam={authedTeam}
             activeTab={activeTab}
             firstTeamChild={firstTeamChild}
+            talentAvailable={talent.active}
             onTabChange={setActiveTab}
             setOpenTeam={setOpenTeam}
             setEditChild={setEditChild}

@@ -12,7 +12,12 @@ import {
   Train, 
   Bell, 
   ShieldCheck,
-  Check
+  Check,
+  Radio,
+  Filter,
+  Mic2,
+  Download,
+  Sun
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
@@ -43,6 +48,8 @@ interface Props {
   setOpenTeam: (team: number | null) => void;
   setEditChild: (child: any | null) => void;
   setBankOpen: (open: boolean) => void;
+  /** Чи доступна вкладка «Таланти» в поточній зміні */
+  talentAvailable?: boolean;
   onClose: () => void;
 }
 
@@ -58,6 +65,7 @@ const SupervisorTour = ({
   setOpenTeam,
   setEditChild,
   setBankOpen,
+  talentAvailable = false,
   onClose,
 }: Props) => {
   const [index, setIndex] = useState(0);
@@ -458,7 +466,7 @@ const SupervisorTour = ({
           width: spotW,
           height: spotH,
           transform: `translate3d(${spotX}px, ${spotY}px, 0)`,
-          boxShadow: '0 0 0 9999px rgba(5, 7, 13, 0.82), 0 0 0 3px #FA5A15, 0 0 32px rgba(250, 90, 21, 0.45)',
+          boxShadow: '0 0 0 9999px rgba(5, 7, 13, 0.85), 0 0 0 3px #FA5A15, 0 0 32px rgba(250, 90, 21, 0.45)',
           transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), width 0.35s ease, height 0.35s ease',
         }}
       />
