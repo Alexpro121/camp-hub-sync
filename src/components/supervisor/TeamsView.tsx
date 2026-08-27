@@ -44,7 +44,6 @@ const TeamsView = ({
 }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fromSnapshot, setFromSnapshot] = useState(false);
   const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
 
   const [editChildLocal, setEditChildLocal] = useState<Child | null>(null);
