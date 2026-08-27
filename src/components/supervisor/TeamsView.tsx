@@ -4,7 +4,7 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash, CloudOff } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash } from 'lucide-react';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -44,7 +44,6 @@ const TeamsView = ({
 }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fromSnapshot, setFromSnapshot] = useState(false);
   const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
 
   const [editChildLocal, setEditChildLocal] = useState<Child | null>(null);
@@ -73,7 +72,6 @@ const TeamsView = ({
     if (snap?.data?.length) {
       setChildren(snap.data);
       setLoading(false);
-      setFromSnapshot(true);
     }
   }, []);
 
@@ -83,7 +81,7 @@ const TeamsView = ({
     const slowTimer = setTimeout(() => {
       if (!mounted) return;
       const snap = outbox.getTeamsSnapshot<Child[]>();
-      if (snap?.data?.length) { setChildren(snap.data); setFromSnapshot(true); }
+      if (snap?.data?.length) { setChildren(snap.data); }
       setLoading(false);
     }, 1500);
 
@@ -114,7 +112,7 @@ const TeamsView = ({
       });
 
       outbox.saveTeamsSnapshot(unique);
-      if (mounted) { setChildren(unique as Child[]); setLoading(false); setFromSnapshot(false); }
+      if (mounted) { setChildren(unique as Child[]); setLoading(false); }
     };
     load().catch(() => { if (mounted) setLoading(false); });
 
@@ -181,12 +179,6 @@ const TeamsView = ({
 
   return (
     <>
-      {fromSnapshot && (
-        <div className="mb-3 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0F1523]/95 px-3 py-2 text-xs text-amber-300 backdrop-blur-2xl">
-          <CloudOff className="h-4 w-4 shrink-0" />
-          <span className="truncate">Локальні дані · зміни збережуться та підуть у мережу автоматично</span>
-        </div>
-      )}
       {/* Sort selector */}
 
       <div data-tour="step-sort-modes" className="flex items-center gap-2 mb-3 px-1">
@@ -203,8 +195,7 @@ const TeamsView = ({
         </Select>
       </div>
 
-
-      <div className="space-y-2 stagger">
+      <div className="space-y-3 stagger">
         {teams.map((tn) => {
           const teamKidsRaw = children.filter((c) => c.team_number === tn);
           const teamKids = sortKids(teamKidsRaw);
