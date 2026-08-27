@@ -42,6 +42,7 @@ import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
 import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
 import SupervisorTour, { tourStorageKey } from '@/components/supervisor/SupervisorTour';
@@ -97,7 +98,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     { value: 'teams', label: 'Команди', icon: Users },
     { value: 'schedule', label: 'Розклад', icon: CalendarDays },
     ...(talent.active ? [{ value: 'talent', label: 'Таланти', icon: Mic2, isNew: talent.isNew } as DockItem] : []),
-    ...(fair.hasFairAccess
+    ...(FAIR_FEATURE_ENABLED && fair.hasFairAccess
       ? [{
           value: 'fair',
           label: fair.isLiveFairRunning ? 'Каса (Air Pay)' : 'Ярмарок',

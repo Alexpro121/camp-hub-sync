@@ -287,7 +287,7 @@ const SupervisorTour = ({
       demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
-  ], [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ].filter((s) => s.targetTab !== 'fair'), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
 
   const total = steps.length;
