@@ -144,6 +144,8 @@ export const generateMemorablePassword = (): string => {
 
 const AdminFlow = ({ onBack }: Props) => {
   useEffect(() => { saveSession('admin'); }, []);
+  const unreadTransfers = useUnreadTransfers();
+
 
   const handleExit = async () => {
     clearSavedSession();
