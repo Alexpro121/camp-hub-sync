@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
 import type { TalentAttachment, TalentEntry } from '@/types/app';
 import TalentAttachmentsManager from '@/components/talent/TalentAttachmentsManager';
+import { STAGE_MEDIA_FEATURE_ENABLED } from '@/lib/fair';
 import { parseAttachments, persistAttachments } from '@/lib/talentMedia';
 
 interface Props {
@@ -254,14 +255,16 @@ const TalentEntryEditDialog = ({ entry, open, onClose, onSaved }: Props) => {
             </div>
           </div>
 
-          {/* 5. Менеджер аудіо/відео файлів та фонограм */}
-          <div className="pt-2 border-t border-white/10">
-            <TalentAttachmentsManager
-              teamNumber={entry?.team_number ?? 0}
-              attachments={attachments}
-              onChange={handleAttachmentsChange}
-            />
-          </div>
+          {/* 5. Менеджер медіафайлів тимчасово вимкнено (STAGE_MEDIA_FEATURE_ENABLED) */}
+          {STAGE_MEDIA_FEATURE_ENABLED && (
+            <div className="pt-2 border-t border-white/10">
+              <TalentAttachmentsManager
+                teamNumber={entry?.team_number ?? 0}
+                attachments={attachments}
+                onChange={handleAttachmentsChange}
+              />
+            </div>
+          )}
         </div>
 
         {/* Фіксований мобільний футер */}
