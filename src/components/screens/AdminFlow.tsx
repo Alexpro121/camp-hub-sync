@@ -26,8 +26,10 @@ import {
   Pencil,
   RefreshCw,
   KeyRound,
+  Bell,
   Check
 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -76,8 +78,42 @@ import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
+import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
+
+/** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
+const useUnreadTransfers = () => {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const seen = new Date(getSeenAt() || 0).toISOString();
+      const { count: c } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .in('type', ['transfer', 'swap'])
+        .gt('created_at', seen);
+      if (alive) setCount(c ?? 0);
+    };
+    load();
+    const onSeen = () => setCount(0);
+    window.addEventListener('admin-notifications-seen', onSeen);
+    const ch = supabase
+      .channel('admin-transfers-badge')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => load())
+      .subscribe();
+    return () => {
+      alive = false;
+      window.removeEventListener('admin-notifications-seen', onSeen);
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
+  return count;
+};
 
 interface Props { onBack: () => void; }
+
 
 const SHIFT_LABELS: Record<ShiftType, string> = {
   long: 'Довга (12 днів)',
