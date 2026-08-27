@@ -202,7 +202,8 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             <Button
               variant="outline"
               className="w-full h-11 text-xs font-bold uppercase"
-              onClick={() => window.open(AI_STUDIO_URL, "_blank", "noopener,noreferrer")}
+              type="button"
+              onClick={openAiStudio}
             >
               <ExternalLink className="w-4 h-4 mr-1.5" /> Перейти в Google AI Studio
             </Button>
