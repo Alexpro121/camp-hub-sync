@@ -87,134 +87,174 @@ const SupervisorTour = ({
     setBankOpen(false);
   }, [setEditChild, setBankOpen]);
 
-  // 11 вивірених кроків навчання
+  // Розширене навчання супроводу (16+ кроків) з авто-фолбеками даних
   const steps: TourStep[] = useMemo(() => [
     {
       targetTab: 'teams',
-      selector: '[data-tour="step-1-sort"]',
+      selector: '[data-tour="step-sort-modes"]',
+      fallbackSelector: '[data-tour="step-1-sort"]',
       title: 'Вітаємо у проєкті! 👋',
-      text: 'Це твій робочий простір. Тут можна шукати учасників своєї команди, сортувати за присутністю, балансом А$ або наявністю нотаток.',
+      text: 'Це твій робочий простір. Сортуй учасників за номером, балансом А$ (↑/↓), наявністю нотаток або режимом «Присутні спочатку».',
       icon: Users,
-      onEnter: () => { 
-        onTabChange('teams'); 
-        setEditChild(null); 
-        setBankOpen(false); 
+      onEnter: () => {
+        onTabChange('teams');
+        setEditChild(null);
+        setBankOpen(false);
       },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-2-my-team"]',
-      title: 'Твоя команда',
-      text: 'Картка твоєї команди має бейдж «МОЯ». Натисни на неї, щоб розкрити або переглянути повний список учасників.',
+      title: 'Твоя команда та бейдж «МОЯ»',
+      text: 'Картка твоєї команди позначена бейджем «МОЯ». Натисни, щоб розгорнути повний список учасників.',
       icon: Users,
-      onEnter: () => { 
-        onTabChange('teams'); 
-        setOpenTeam(myTeam); 
+      onEnter: () => {
+        onTabChange('teams');
+        setOpenTeam(myTeam);
       },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-3-presence-toggle"]',
       fallbackSelector: '[data-tour="step-2-my-team"]',
-      title: 'Швидка присутність',
-      text: 'Відмічай присутність учасників в 1 дотик. Працює миттєво та оптимістично навіть без стабільного інтернету.',
+      title: 'Швидка присутність (0 мс)',
+      text: 'Відмічай присутність в 1 дотик. Працює оптимістично навіть у тунелях чи потязі без мережі — дані синхронізуються автоматично.',
       icon: Check,
       delay: 150,
-      onEnter: () => { 
-        onTabChange('teams'); 
-        setOpenTeam(myTeam); 
+      onEnter: () => {
+        onTabChange('teams');
+        setOpenTeam(myTeam);
       },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-4-iron-adjustment"]',
       fallbackSelector: '[data-tour="step-2-my-team"]',
-      title: 'Айрон-долари (А$)',
-      text: 'Нараховуй та списуй валюту проєкту А$ за активність, командні перемоги та участь у подіях.',
+      title: 'Баланс Айрон-доларів (А$)',
+      text: 'Нараховуй та списуй А$ за активності, командні перемоги та челенджі зміни.',
       icon: Coins,
       delay: 250,
-      onEnter: () => { 
+      onEnter: () => {
         onTabChange('teams');
-        setOpenTeam(myTeam); 
-        setEditChild(activeChild); 
+        setOpenTeam(myTeam);
+        setEditChild(activeChild);
       },
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-4-notes"]',
       fallbackSelector: '[data-tour="step-4-iron-adjustment"]',
-      title: 'Нотатки супроводу',
-      text: 'Фіксуй важливі спостереження (здоров\'я, таланти, особливості). Нотатки конфіденційні — їх бачить лише супровід та штаб.',
+      title: 'Конфіденційні нотатки',
+      text: 'Фіксуй важливі спостереження (здоров\'я, таланти, особливості). Доступ мають ТІЛЬКИ супровід команди та штаб проєкту.',
       icon: ShieldCheck,
       delay: 200,
-      onEnter: () => { 
-        setEditChild(activeChild); 
-      },
+      onEnter: () => setEditChild(activeChild),
       onLeave: () => setEditChild(null),
     },
     {
       targetTab: 'teams',
       selector: '[data-tour="step-5-bank-balance"]',
       fallbackSelector: '[data-tour="step-5-bank-button"]',
-      title: 'Банк Айрон-доларів',
-      text: 'Твій командний фонд А$. Контролюй ліміт бюджету та переглядай, скільки коштів уже нараховано команді.',
+      title: 'Командний банк фонду А$',
+      text: 'Контролюй ліміт командного фонду, прогрес використання та журнал усіх нарахувань.',
       icon: Coins,
       delay: 250,
-      onEnter: () => { 
-        setEditChild(null); 
-        setBankOpen(true); 
+      onEnter: () => {
+        setEditChild(null);
+        setBankOpen(true);
       },
       onLeave: () => setBankOpen(false),
     },
     {
       targetTab: 'fair',
       selector: '[data-tour="step-fair-terminal"]',
-      title: 'Термінал каси Air Pay',
-      text: '100% безконтактна оплата ярмарку по повітрю! Коли учасник надсилає запит на твою касу — списуй кошти в 1 клік.',
+      title: 'Каса Air Pay (оплата по повітрю)',
+      text: '100% безконтактна оплата без QR-кодів і сканерів. Учасник обирає суму в кабінеті — запит миттєво летить на твою касу.',
       icon: ShoppingBag,
-      onEnter: () => { 
-        setBankOpen(false); 
-        setEditChild(null); 
-        onTabChange('fair'); 
+      onEnter: () => {
+        setBankOpen(false);
+        setEditChild(null);
+        onTabChange('fair');
       },
+    },
+    {
+      targetTab: 'fair',
+      selector: '[data-tour="step-fair-request-entry"]',
+      fallbackSelector: '[data-tour="step-fair-terminal"]',
+      title: 'Прийом пуш-запиту на касі',
+      text: 'Тут з\'являються вхідні запити (наприклад «Остапенко Максим — 50 А$»). Кнопка підтвердження списує кошти через захищену функцію з миттєвим чеком.',
+      icon: Radio,
+      delay: 150,
+      onEnter: () => onTabChange('fair'),
     },
     {
       targetTab: 'schedule',
       selector: '[data-tour="step-schedule-timeline"]',
-      title: 'Розклад подій дня',
-      text: 'Хронологічний розклад зміни, перемикач дат, фільтр команд та таймер зворотного відліку до наступної активності.',
+      title: 'Розклад дня та таймер подій',
+      text: 'Хронологія активностей зміни, прогрес поточної події та зворотний відлік до наступної.',
       icon: Calendar,
-      onEnter: () => { 
-        onTabChange('schedule'); 
-      },
+      onEnter: () => onTabChange('schedule'),
     },
+    {
+      targetTab: 'schedule',
+      selector: '[data-tour="step-schedule-filters"]',
+      fallbackSelector: '[data-tour="step-schedule-filters-teams"]',
+      title: 'Фільтрація дат та команд',
+      text: 'Швидко обирай день зміни та фільтруй події для своєї або всіх команд.',
+      icon: Filter,
+      delay: 150,
+      onEnter: () => onTabChange('schedule'),
+    },
+    ...(talentAvailable ? [{
+      targetTab: 'talent',
+      selector: '[data-tour="step-talent-section"]',
+      title: 'Вечір талантів та Медіа-хаб',
+      text: 'Реєструй номери команди, завантажуй мінусовки та фони у захищений медіа-хаб (зберігання 7 діб). Розширення файлів заблоковані — редагується лише назва.',
+      icon: Mic2,
+      delay: 150,
+      onEnter: () => onTabChange('talent'),
+    } as TourStep] : []),
     {
       targetTab: 'transfers',
       selector: '[data-tour="step-6-transfers-root"]',
-      title: 'Трансфери між командами',
-      text: 'Зручне переведення учасників між командами або рівноцінний обмін «учасник на учасника» без плутанини.',
+      title: 'Трансфери та обміни',
+      text: 'Переводь учасника в іншу команду або роби рівноцінний обмін «учасник на учасника» в пару кліків.',
       icon: Users,
-      onEnter: () => { 
-        onTabChange('transfers'); 
-      },
+      onEnter: () => onTabChange('transfers'),
+    },
+    {
+      targetTab: 'teams',
+      selector: '[data-tour="step-export-button"]',
+      title: 'Експорт бази та звітність',
+      text: 'Вивантажуй зведену відомість команди в Excel для штабу проєкту.',
+      icon: Download,
+      onEnter: () => onTabChange('teams'),
+    },
+    {
+      targetTab: 'teams',
+      selector: '[data-tour="step-theme-toggle"]',
+      title: 'Теми оформлення (Бета ⚙️)',
+      text: 'Темна тема — оптимізована під мобільні екрани та енергозбереження. Світла тема зручна для презентацій та проектора (наразі функція в стадії Бета-тестування).',
+      icon: Sun,
+      onEnter: () => onTabChange('teams'),
     },
     ...(TRAIN_FEATURE_ENABLED ? [{
       targetTab: 'coupes',
       selector: '[data-tour="step-7-coupes-root"]',
-      title: 'Купе в потязі УЗ',
-      text: 'Контролюй розсадження команди у вагоні, перевіряй номери місць та позначай посадку учасників.',
+      title: 'Купе у потязі УЗ',
+      text: 'Схема розсадження вагону, контроль посадки та нумерація полиць.',
       icon: Train,
       onEnter: () => onTabChange('coupes'),
-    }] : []),
+    } as TourStep] : []),
     {
       targetTab: 'notifications',
       selector: '[data-tour="step-8-notifications-root"]',
-      title: 'Стрічка сповіщень',
-      text: 'Усі оголошення штабу проєкту з\'являються тут. За потреби ти завжди можеш пройти це навчання ще раз. Бажаємо крутого проєкту!',
+      title: 'Стрічка оголошень штабу',
+      text: 'Важливі алерти, таймери та оголошення адміністрації. Тут ти будь-коли можеш перезапустити це навчання. Бажаємо крутої зміни!',
       icon: Bell,
       onEnter: () => onTabChange('notifications'),
     },
-  ], [myTeam, activeChild, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ], [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
   const total = steps.length;
   const step = steps[index];
