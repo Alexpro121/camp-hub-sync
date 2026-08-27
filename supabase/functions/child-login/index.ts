@@ -116,9 +116,11 @@ Deno.serve(async (req) => {
       const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
       const teamRaw = String(body?.team ?? '').replace(/[^\d]/g, '');
       const team = teamRaw ? parseInt(teamRaw, 10) : 0;
-      if (!fullName || fullName.length < 6 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
-      // Require at least two name tokens so single fragments cannot be enumerated.
-      if (fullName.split(/\s+/).filter(Boolean).length < 2) return json({ error: 'invalid_name' }, 400);
+      if (!fullName || fullName.length < 2 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
+      // Single-token input (DB row has only a first name) is allowed, but then
+      // only a byte-exact (normalized) match counts — no fuzzy enumeration.
+      const singleToken = fullName.split(/\s+/).filter(Boolean).length < 2;
+
       // Require the team number: narrows the searchable pool and blocks roster-wide scraping.
       if (!team || team < 1 || team > 999) return json({ error: 'invalid_team' }, 400);
 
@@ -139,21 +141,25 @@ Deno.serve(async (req) => {
       // Self-identification only: the caller must already know their own full name.
       // We never return names, teams or partial hints, so the endpoint cannot be
       // used to enumerate the roster.
-      const exact = pool.find((c) => normalizeName(c.full_name) === normalizeName(fullName));
-      if (exact) { resetFailures(rlKey); return json({ exact: { id: exact.id } }); }
+      const exactAll = pool.filter((c) => normalizeName(c.full_name) === normalizeName(fullName));
+      if (exactAll.length === 1) { resetFailures(rlKey); return json({ exact: { id: exactAll[0].id } }); }
+      if (exactAll.length > 1) return json({ error: 'ambiguous_name' }, 409);
 
-      // Allow only a single near-certain match (typo tolerance) and still reveal nothing.
-      const scored = pool
-        .map((item) => ({ item, s: score(fullName, item.full_name), cov: tokenCoverage(fullName, item.full_name) }))
-        .sort((a, b) => b.s - a.s);
+      if (!singleToken) {
+        // Allow only a single near-certain match (typo tolerance) and still reveal nothing.
+        const scored = pool
+          .map((item) => ({ item, s: score(fullName, item.full_name), cov: tokenCoverage(fullName, item.full_name) }))
+          .sort((a, b) => b.s - a.s);
 
-      const strong = scored.filter((x) => x.s >= 0.92);
-      if (strong.length === 1) { resetFailures(rlKey); return json({ exact: { id: strong[0].item.id } }); }
+        const strong = scored.filter((x) => x.s >= 0.92);
+        if (strong.length === 1) { resetFailures(rlKey); return json({ exact: { id: strong[0].item.id } }); }
 
-      // [M-1] Softer, still unique fallback: a partial surname match is enough
-      // when exactly one child in the team is plausible.
-      const soft = scored.filter((x) => x.cov >= 0.65 && x.s >= 0.7);
-      if (soft.length === 1) { resetFailures(rlKey); return json({ exact: { id: soft[0].item.id } }); }
+        // [M-1] Softer, still unique fallback: a partial surname match is enough
+        // when exactly one child in the team is plausible.
+        const soft = scored.filter((x) => x.cov >= 0.65 && x.s >= 0.7);
+        if (soft.length === 1) { resetFailures(rlKey); return json({ exact: { id: soft[0].item.id } }); }
+      }
+
 
       const after = recordFailure(rlKey);
       if (after.blocked) return json({ error: 'too_many_attempts' }, 429);

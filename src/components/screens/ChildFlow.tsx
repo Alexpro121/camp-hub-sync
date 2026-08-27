@@ -245,14 +245,11 @@ const ChildFlow = ({ onBack }: Props) => {
   };
 
   const handleLogin = async () => {
-    if (!fullName.trim()) {
-      toast.error('Введи ПІБ');
+    if (fullName.trim().length < 2) {
+      toast.error('Введи своє імʼя так, як воно є у списку');
       return;
     }
-    if (fullName.trim().split(/\s+/).filter(Boolean).length < 2) {
-      toast.error('Введи повне ПІБ (прізвище та імʼя)');
-      return;
-    }
+
     if (!team.replace(/[^\d]/g, '')) {
       toast.error('Введи номер команди');
       return;
