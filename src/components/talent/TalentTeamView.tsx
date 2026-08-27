@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil, Paperclip } from 'lucide-react';
+import { Mic2, Plus, Trash2, Coffee, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { TalentEntry, TalentEvent } from '@/types/app';
 import { useHaptics } from '@/hooks/useHaptics';
 import TalentEntryEditDialog from '@/components/talent/TalentEntryEditDialog';
-import { parseAttachments } from '@/lib/talentMedia';
 
 interface Props { myTeam?: number | null; }
 
@@ -63,7 +62,7 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
     if (error) { toast.error('Не вдалося додати номер'); return; }
     haptics.notification('success');
     setTitle(''); setBreaks('0');
-    toast.success('Номер додано — прикріпіть фонограму та медіа');
+    toast.success('Номер додано');
     await load();
     if (data) setEditing(data as TalentEntry);
   };
@@ -129,9 +128,6 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
                   {e.break_needed_after > 0 && (
                     <span className="text-[11px] text-warning flex items-center gap-1"><Coffee className="w-3 h-3" /> пауза: {e.break_needed_after} виступ(ів)</span>
                   )}
-                  <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Paperclip className="w-3 h-3" /> {parseAttachments(e.attachments).length} файл(ів)
-                  </span>
                 </div>
               </div>
               {collecting && (

@@ -574,131 +574,7 @@ const TalentAdmin = () => {
 
       </Card>
 
-      {/* =========================================================================
-          🎛️ СУПЕР-БЛОК: ПУЛЬТ СЦЕНИ, ШАРИНГ ТА ПАРОЛЬ
-      ========================================================================= */}
-      <Card className="p-4 sm:p-5 rounded-3xl border border-[#FA5A15]/30 bg-[#0A0E18]/90 backdrop-blur-2xl space-y-3.5 shadow-xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#FA5A15]/20 border border-[#FA5A15]/40 flex items-center justify-center">
-              <Radio className="w-4 h-4 text-[#FA5A15]" />
-            </div>
-            <div>
-              <h2 className="text-xs font-black uppercase tracking-wider text-white">
-                FOH Пульт сцени (Звук / Світло)
-              </h2>
-              <p className="text-[10px] text-slate-400 font-mono">
-                Окремий доступ для звукорежисера
-              </p>
-            </div>
-          </div>
-
-          {stagePassword && (
-            <a
-              href={stageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="h-8 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 transition-all"
-            >
-              <span>Відкрити пульт</span>
-              <ExternalLink className="w-3 h-3 text-[#FA5A15]" />
-            </a>
-          )}
-        </div>
-
-        {stagePassword ? (
-          <div className="space-y-3 pt-1">
-            {/* Плашка з посиланням і паролем */}
-            <div className="rounded-2xl bg-black/50 border border-white/10 p-3.5 space-y-2.5">
-              
-              {/* Посилання */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block">
-                    Посилання на пульт
-                  </span>
-                  <p className="text-xs font-mono text-slate-200 truncate mt-0.5 select-all">
-                    {stageUrl}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => copyToClipboard(stageUrl, 'link', 'Посилання сцени скопійовано')}
-                  className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs shrink-0"
-                >
-                  {copiedType === 'link' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </Button>
-              </div>
-
-              <div className="h-px bg-white/10" />
-
-              {/* Пароль */}
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-[10px] font-mono font-bold uppercase text-slate-400 block">
-                    Пароль доступу (слово.слово)
-                  </span>
-                  <p className="text-base font-black font-mono text-[#FA5A15] tracking-wider mt-0.5">
-                    {stagePassword}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => copyToClipboard(stagePassword, 'pass', 'Пароль сцени скопійовано')}
-                  className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs shrink-0"
-                >
-                  {copiedType === 'pass' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </Button>
-              </div>
-            </div>
-
-            {/* Кнопки шарингу */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Button 
-                onClick={copyFullStageInvite} 
-                className="h-11 text-xs font-bold uppercase tracking-wide bg-[#FA5A15] hover:bg-[#FF7D3B] text-white rounded-xl active:scale-95 transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                {copiedType === 'invite' ? (
-                  <>
-                    <Check className="w-4 h-4 text-white" />
-                    <span>Скопійовано! ✓</span>
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="w-4 h-4" />
-                    <span>Скопіювати для звукача</span>
-                  </>
-                )}
-              </Button>
-
-              <Button 
-                variant="outline" 
-                onClick={createStageLink} 
-                disabled={stageBusy} 
-                className="h-11 text-xs font-bold uppercase rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 active:scale-95 transition-all"
-              >
-                {stageBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><KeyRound className="w-3.5 h-3.5 mr-1.5 text-[#FA5A15]" /> Згенерувати новий пароль</>}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button 
-            onClick={createStageLink} 
-            disabled={stageBusy} 
-            className="w-full h-12 text-xs font-black uppercase tracking-wider bg-[#FA5A15] hover:bg-[#FF7D3B] text-white rounded-xl shadow-lg shadow-[#FA5A15]/20 active:scale-95 transition-all"
-          >
-            {stageBusy ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                <Wand2 className="w-4 h-4 mr-2" /> Створити посилання та пароль для сцени
-              </>
-            )}
-          </Button>
-        )}
-      </Card>
+      {/* Пульт сцени та медіа тимчасово вимкнені (STAGE_MEDIA_FEATURE_ENABLED) */}
 
       {/* Пошук якщо номерів багато */}
       {entries.length > 3 && (
@@ -731,9 +607,6 @@ const TalentAdmin = () => {
         </div>
 
         {filteredEntries.map((e, i) => {
-          const atts = parseAttachments(e.attachments);
-          const hasAudio = atts.some((a) => a.type === 'audio' || a.url?.includes('.mp3'));
-
           return (
             <Card 
               key={e.id} 
@@ -757,10 +630,6 @@ const TalentAdmin = () => {
                 
                 <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-300 mt-1.5">
                   {/* Прикріплені медіафайли */}
-                  <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 bg-black/30 px-2 py-0.5 rounded-md">
-                    {hasAudio ? <Music className="w-3 h-3 text-sky-400" /> : <Paperclip className="w-3 h-3" />}
-                    {atts.length} медіа
-                  </span>
 
                   {/* Пауза вимірюється виключно кількістю виступів */}
                   <span className="inline-flex items-center gap-1.5 bg-amber-500/15 px-2 py-0.5 rounded-lg border border-amber-500/30 text-[11px] text-amber-300 font-semibold">

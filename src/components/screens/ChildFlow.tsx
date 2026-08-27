@@ -45,6 +45,7 @@ import TalentTeamView from '@/components/talent/TalentTeamView';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import ChildFairCard from '@/components/fair/ChildFairCard';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
@@ -152,7 +153,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
   // Якщо ярмарок вимкнули, а дитина була на вкладці "Ярмарок" — плавно повертаємо на "Профіль"
   useEffect(() => {
-    if (!fair.isLiveFairRunning && activeTab === 'fair') {
+    if ((!FAIR_FEATURE_ENABLED || !fair.isLiveFairRunning) && activeTab === 'fair') {
       setActiveTab('profile');
     }
   }, [fair.isLiveFairRunning, activeTab]);
@@ -289,7 +290,7 @@ const ChildFlow = ({ onBack }: Props) => {
   // Розрахунок кількості колонок для вкладок (тільки реально активні модулі)
   const tabColumnsCount = useMemo(() => {
     let count = 2; // Профіль + Розклад
-    if (fair.isLiveFairRunning) count += 1;
+    if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) count += 1;
     if (talent.active) count += 1;
     return count;
   }, [fair.isLiveFairRunning, talent.active]);
@@ -498,7 +499,7 @@ const ChildFlow = ({ onBack }: Props) => {
               </TabsTrigger>
               
               {/* Вкладка ЯРМАРОК — ТІЛЬКИ КОЛИ ВІН ЙДЕ НАЖИВО */}
-              {fair.isLiveFairRunning && (
+              {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (
                 <TabsTrigger 
                   value="fair" 
                   className="text-xs min-h-[36px] font-bold rounded-lg relative gap-1.5 text-[#FA5A15] data-[state=active]:bg-[#FA5A15] data-[state=active]:text-white"
@@ -682,14 +683,14 @@ const ChildFlow = ({ onBack }: Props) => {
                   myTeam={child.team_number}
                   lockTeam
                   onFairAction={() => {
-                    if (fair.isLiveFairRunning) setActiveTab('fair');
+                    if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) setActiveTab('fair');
                   }}
                 />
               )}
             </TabsContent>
 
             {/* ================= ВМІСТ 3: ЯРМАРОК (ТІЛЬКИ НАЖИВО) ================= */}
-            {fair.isLiveFairRunning && (
+            {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (
               <TabsContent value="fair" className="mt-3 space-y-3">
                 <ChildFairCard
                   childId={child.id}
