@@ -506,7 +506,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
           </div>
 
           {pushQueue.length === 0 ? (
-            <div className="py-6 flex flex-col items-center justify-center text-center space-y-2">
+            <div data-tour="step-fair-request-entry" className="py-6 flex flex-col items-center justify-center text-center space-y-2">
               <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                 <Radio className="w-6 h-6 animate-pulse" />
               </div>
@@ -517,9 +517,10 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
             </div>
           ) : (
             <div className="space-y-2.5 pt-1">
-              {pushQueue.map((req) => (
+              {pushQueue.map((req, reqIndex) => (
                 <div
                   key={req.requestId}
+                  data-tour={reqIndex === 0 ? 'step-fair-request-entry' : undefined}
                   className="p-3.5 sm:p-4 border border-[#FA5A15]/50 bg-gradient-to-r from-[#FA5A15]/15 via-card/95 to-card/95 rounded-2xl shadow-lg space-y-3 animate-scale-in"
                 >
                   <div className="flex items-start justify-between gap-2">
