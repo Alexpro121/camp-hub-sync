@@ -407,6 +407,24 @@ const AdminScheduleEditor = () => {
         </div>
       )}
 
+      {/* Full-day wipe confirmation */}
+      <Dialog open={confirmWipe} onOpenChange={setConfirmWipe}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Видалити розклад на {humanDate(date)}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Буде видалено всі події цього дня ({sorted.length} шт) та всі пакети розкладу ({schedules.length} шт).
+            Дію можна буде скасувати лише через відновлення чернетки в базі даних.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmWipe(false)} disabled={busy}>Скасувати</Button>
+            <Button variant="destructive" onClick={wipeDay} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 mr-1.5" />}
+              Видалити весь день
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{form?.id ? 'Редагувати подію' : 'Нова подія'}</DialogTitle></DialogHeader>
