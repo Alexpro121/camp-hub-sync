@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { useHaptics } from '@/hooks/useHaptics';
+import { TourTouchRipple, TourDemoStage, type TourDemo } from './TourDemoOverlays';
 
 export const tourStorageKey = (team: number) =>
   `helpsuprov:supervisor-tour-completed:team_${team}`;
@@ -34,9 +35,14 @@ interface TourStep {
   text: string;
   icon?: React.ComponentType<{ className?: string }>;
   delay?: number;
+  /** Жива візуальна демонстрація кроку (локальна, без мутацій на сервері) */
+  demo?: TourDemo;
+  /** Показувати віртуальний тач-імпульс на цільовому елементі */
+  ripple?: boolean;
   onEnter?: () => void;
   onLeave?: () => void;
 }
+
 
 interface Props {
   open: boolean;
