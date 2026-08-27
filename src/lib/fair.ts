@@ -3,6 +3,12 @@
  * 5-значні PIN-коди та підтримка безконтактних Air Pay запитів.
  */
 
+/** Глобальний прапорець модуля «Ярмарок» (Air Pay). Тимчасово вимкнено. */
+export const FAIR_FEATURE_ENABLED = false;
+
+/** Глобальний прапорець медіа-модуля талантів (пульт сцени + завантаження треків). */
+export const STAGE_MEDIA_FEATURE_ENABLED = false;
+
 export const FAIR_QR_TYPE = 'CAMP_FAIR_PAYMENT';
 /** Згенерований динамічний QR-код дійсний протягом 2 годин */
 export const FAIR_QR_MAX_AGE_MS = 2 * 60 * 60 * 1000;
