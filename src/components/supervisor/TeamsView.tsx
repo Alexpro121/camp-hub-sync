@@ -72,7 +72,6 @@ const TeamsView = ({
     if (snap?.data?.length) {
       setChildren(snap.data);
       setLoading(false);
-      setFromSnapshot(true);
     }
   }, []);
 
