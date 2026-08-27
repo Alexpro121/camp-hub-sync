@@ -341,6 +341,7 @@ const ScheduleView = ({
       {days.length > 1 && (
         <div 
           ref={dateContainerRef}
+          data-tour="step-schedule-filters"
           className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1"
         >
           <div className="flex items-center gap-2 px-1 w-max">
