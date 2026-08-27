@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DynamicIslandProvider } from "@/context/DynamicIslandContext";
 import DynamicIsland from "@/components/ui/DynamicIsland";
 import Index from "./pages/Index.tsx";
-import StageConsole from "./pages/StageConsole.tsx";
+import StageMaintenance from "./pages/StageMaintenance.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -21,7 +21,7 @@ const App = () => (
           <DynamicIsland />
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/stage-console" element={<StageConsole />} />
+            <Route path="/stage-console" element={<StageMaintenance />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

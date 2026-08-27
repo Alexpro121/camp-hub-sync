@@ -607,9 +607,6 @@ const TalentAdmin = () => {
         </div>
 
         {filteredEntries.map((e, i) => {
-          const atts = parseAttachments(e.attachments);
-          const hasAudio = atts.some((a) => a.type === 'audio' || a.url?.includes('.mp3'));
-
           return (
             <Card 
               key={e.id} 
