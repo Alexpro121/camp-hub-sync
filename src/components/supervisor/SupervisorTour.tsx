@@ -524,6 +524,11 @@ const SupervisorTour = ({
         }}
       />
 
+      {/* Віртуальний тач-індикатор (Ghost Finger) */}
+      {step.ripple && rect && (
+        <TourTouchRipple x={rippleX} y={rippleY} active={ready} />
+      )}
+
       {/* Блокувальник кліків */}
       <div
         className="absolute inset-0"
@@ -531,19 +536,15 @@ const SupervisorTour = ({
         onTouchMove={(e) => e.preventDefault()}
       />
 
-      {/* Картка підказки */}
+      {/* Картка підказки / нижній док на смартфонах */}
       <div
         ref={cardRef}
-        className="tour-card absolute top-0 left-0 rounded-3xl border border-white/15 bg-[#0A0E18]/95 text-slate-100 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] p-4 sm:p-5 transform-gpu will-change-transform"
-        style={{
-          width: tooltipWidth,
-          transform: `translate3d(${left}px, ${topStyle}px, 0)`,
-          opacity: ready || !rect ? 1 : 0.88,
-          maxHeight: `calc(100dvh - ${PADDING * 2}px)`,
-          overflowY: 'auto',
-          transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease',
-        }}
+        className={`tour-card absolute rounded-3xl border border-white/15 bg-[#0A0E18]/95 text-slate-100 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] p-4 sm:p-5 transform-gpu will-change-transform ${
+          isMobile ? '' : 'top-0 left-0'
+        }`}
+        style={cardStyle}
       >
+
         <div key={index} className="space-y-3">
           {/* Заголовок та крок */}
           <div className="flex items-start gap-3">
