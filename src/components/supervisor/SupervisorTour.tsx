@@ -72,12 +72,12 @@ const SupervisorTour = ({
   const fallbackChild = useMemo(() => ({
     id: 'tour-mock-child-preview',
     full_name: 'Остапенко Максим',
-    team_number: myTeam,
+    team_number: myTeam || 1,
     iron_dollars: 150,
     is_present: true,
     row_number: 1,
-    team_name: 'Збірна',
-    notes: 'Активний учасник проєкту',
+    team_name: `Команда ${myTeam || 1}`,
+    notes: 'Активний учасник проєкту, має алергію на горіхи',
   }), [myTeam]);
 
   const activeChild = firstTeamChild || fallbackChild;
