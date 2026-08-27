@@ -18,7 +18,7 @@ interface Props {
   open: boolean;
   date: string;
   onOpenChange: (open: boolean) => void;
-  onImported: () => void;
+  onImported: (firstDate?: string) => void;
 }
 
 interface ParsedItem {
@@ -102,9 +102,9 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
 
   /** Schedule row of one date inside the active shift (created on demand as a DRAFT). */
   const ensureSchedule = async (dayDate: string): Promise<string> => {
-    let q = supabase.from("schedules").select("*").eq("date", dayDate);
+    let q = supabase.from("schedules").select("*").eq("date", dayDate).is("deleted_at", null);
     if (shiftId) q = q.eq("shift_id", shiftId);
-    const { data: existing } = await q;
+    const { data: existing } = await q.order("created_at", { ascending: true });
     const row = (existing || [])[0];
     if (row) return row.id;
     const { data, error } = await supabase
@@ -135,36 +135,68 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     setBusy(true);
     try {
       let total = 0;
+      let skipped = 0;
       for (const day of days) {
         const scheduleId = await ensureSchedule(day.date);
-        const rows = day.items
+
+        // Existing events of this date → skip re-imported duplicates (same time + title).
+        const { data: dayScheduleRows } = await supabase
+          .from("schedules")
+          .select("id")
+          .eq("date", day.date)
+          .is("deleted_at", null);
+        const dayIds = (dayScheduleRows || []).map((s) => s.id);
+        const { data: existingItems } = dayIds.length
+          ? await supabase.from("schedule_items").select("title,time_start").in("schedule_id", dayIds)
+          : { data: [] as { title: string; time_start: string | null }[] };
+        const seen = new Set(
+          (existingItems || []).map((i) => `${i.time_start || ""}|${(i.title || "").trim().toLowerCase()}`),
+        );
+        const baseIndex = (existingItems || []).length;
+
+        const rows: any[] = [];
+        day.items
           .filter((i) => (i.title || "").trim())
-          .map((i, idx) => ({
-            schedule_id: scheduleId,
-            title: String(i.title).trim(),
-            description: i.description ? String(i.description).trim() : null,
-            location: i.location ? String(i.location).trim() : null,
-            time_start: normalizeTime(i.time_start || "") || null,
-            time_end: normalizeTime(i.time_end || "") || null,
-            category: i.category || "general",
-            target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []) as unknown as any,
-            order_index: idx,
-            has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
-            sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []) as unknown as any,
-          }));
+          .forEach((i) => {
+            const title = String(i.title).trim();
+            const timeStart = normalizeTime(i.time_start || "") || null;
+            const key = `${timeStart || ""}|${title.toLowerCase()}`;
+            if (seen.has(key)) { skipped += 1; return; }
+            seen.add(key);
+            rows.push({
+              schedule_id: scheduleId,
+              title,
+              description: i.description ? String(i.description).trim() : null,
+              location: i.location ? String(i.location).trim() : null,
+              time_start: timeStart,
+              time_end: normalizeTime(i.time_end || "") || null,
+              category: i.category || "general",
+              target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []) as unknown as any,
+              order_index: baseIndex + rows.length,
+              has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
+              sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []) as unknown as any,
+            });
+          });
         if (!rows.length) continue;
         const { error } = await supabase.from("schedule_items").insert(rows);
         if (error) throw error;
         total += rows.length;
       }
 
-      await broadcastScheduleUpdated({ date, action: "SCHEDULE_MUTATED", source: "ai-studio", count: total });
-      toast.success(`Збережено як чернетку: ${total} подій · ${days.length} дн.`, {
-        description: "Перевір розклад і натисни «Опублікувати розклад» у редакторі дня.",
-      });
+      const firstDate = [...days.map((d) => d.date)].sort()[0];
+      await broadcastScheduleUpdated({ date: firstDate, action: "SCHEDULE_MUTATED", source: "ai-studio", count: total });
+      if (total === 0) {
+        toast.info("Нових подій немає — усі вже є в розкладі");
+      } else {
+        toast.success(`Збережено як чернетку: ${total} подій · ${days.length} дн.`, {
+          description: skipped
+            ? `Пропущено дублікатів: ${skipped}. Перевір розклад і натисни «Опублікувати розклад».`
+            : "Перевір розклад і натисни «Опублікувати розклад» у редакторі дня.",
+        });
+      }
       setJson("");
       onOpenChange(false);
-      onImported();
+      onImported(firstDate);
     } catch (e: any) {
       toast.error(e?.message || "Помилка збереження розкладу");
     } finally {

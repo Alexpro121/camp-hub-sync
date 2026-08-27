@@ -98,6 +98,7 @@ const ScheduleView = ({
         .from('schedules')
         .select('*')
         .eq('is_published', true)
+        .is('deleted_at', null)
         .order('date', { ascending: true });
       
       const list = (sch || []) as Schedule[];
@@ -174,12 +175,14 @@ const ScheduleView = ({
     };
   }, [activeDay, team]);
 
-  // Список доступних дат
+  // Список доступних дат (лише ті, де реально є події)
   const days = useMemo(() => {
     if (lockTeam) return [todayISO()];
-    const dates = [...new Set(schedules.map((s) => s.date))].sort();
+    const withItems = new Set(items.map((i) => i.schedule_id));
+    const dates = [...new Set(schedules.filter((s) => withItems.has(s.id)).map((s) => s.date))].sort();
     return dates.length ? dates : [todayISO()];
-  }, [schedules, lockTeam]);
+  }, [schedules, items, lockTeam]);
+
 
   // Автоматичний вибір дня
   useEffect(() => {
