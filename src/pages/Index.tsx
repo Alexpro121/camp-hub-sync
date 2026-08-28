@@ -5,7 +5,7 @@ import SupervisorFlow from '@/components/screens/SupervisorFlow';
 import AdminFlow from '@/components/screens/AdminFlow';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import { supabase } from '@/integrations/supabase/client';
-import { clearSavedSession, getSavedRole, getSavedChildSession } from '@/lib/session';
+import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 
@@ -46,17 +46,8 @@ const Index = () => {
 
         // 2. Відновлення кабінету УЧАСНИКА (Офлайн-паспорт)
         if (savedRole === 'child') {
-          const childSession = getSavedChildSession();
-          if (childSession && childSession.id) {
-            if (!cancelled) {
-              setScreen('child');
-              setRestoring(false);
-            }
-            return;
-          }
-          clearSavedSession();
           if (!cancelled) {
-            setScreen('role');
+            setScreen('child');
             setRestoring(false);
           }
           return;
@@ -70,7 +61,7 @@ const Index = () => {
           if (!error && data?.session) {
             setScreen(savedRole);
           } else {
-            const localStaffSession = localStorage.getItem('iron_staff_session');
+            const localStaffSession = localStorage.getItem('iron_staff_session') || localStorage.getItem('helpsuprov_staff_team');
             if (localStaffSession) {
               setScreen(savedRole);
             } else {
