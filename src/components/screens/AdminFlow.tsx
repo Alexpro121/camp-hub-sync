@@ -79,6 +79,7 @@ import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
 import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
+import AdminAlumniBroadcast from '@/components/alumni/AdminAlumniBroadcast';
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {
