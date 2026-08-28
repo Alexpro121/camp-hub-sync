@@ -110,7 +110,7 @@ export function buildAlumniPassport(input: BuildPassportInput): AlumniPassportEn
       full_name: input.full_name,
       team_number: Number(input.team_number) || 0,
       iron_dollars: Number(input.iron_dollars) || 0,
-      avatar_id: Number(input.avatar_id ?? Number(fnv1a(input.full_name).slice(0, 4), 16) % 32),
+      avatar_id: Number(input.avatar_id ?? parseInt(fnv1a(input.full_name).slice(0, 4), 16) % 32),
       shift_id: input.shift_id || '',
       shift_name: input.shift_name || 'Зміна проєкту «Залізна Зміна»',
       year: input.year || new Date().getFullYear(),
