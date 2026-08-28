@@ -9,7 +9,7 @@ import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 
-export type Screen = 'role' | 'child' | 'supervisor' | 'admin';
+export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni';
 
 /** Головний роутер ролей проєкту «Залізна Зміна» (Учасник / Супровід / Штаб) */
 const Index = () => {
