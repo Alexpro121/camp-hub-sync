@@ -1,5 +1,5 @@
 import { useRef, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import { ArrowRight, Award, Sparkles } from 'lucide-react';
+import { ArrowRight, Award, Medal, Sparkles } from 'lucide-react';
 import { useHaptics } from '@/hooks/useHaptics';
 import MountainLandscape from '@/components/home/MountainLandscape';
 import type { Screen } from '@/pages/Index';
