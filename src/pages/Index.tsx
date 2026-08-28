@@ -3,6 +3,7 @@ import RoleSelect from '@/components/screens/RoleSelect';
 import ChildFlow from '@/components/screens/ChildFlow';
 import SupervisorFlow from '@/components/screens/SupervisorFlow';
 import AdminFlow from '@/components/screens/AdminFlow';
+import AlumniFlow from '@/components/alumni/AlumniFlow';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole } from '@/lib/session';
@@ -143,6 +144,10 @@ const Index = () => {
 
         {screen === 'admin' && (
           <AdminFlow onBack={goRole} />
+        )}
+
+        {screen === 'alumni' && (
+          <AlumniFlow onBack={() => navigateTo('role')} />
         )}
       </div>
 
