@@ -1,5 +1,5 @@
 import { useRef, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import { ArrowRight, Award, Sparkles } from 'lucide-react';
+import { ArrowRight, Award, Medal, Sparkles } from 'lucide-react';
 import { useHaptics } from '@/hooks/useHaptics';
 import MountainLandscape from '@/components/home/MountainLandscape';
 import type { Screen } from '@/pages/Index';
@@ -180,6 +180,16 @@ const RoleSelect = ({ onSelect }: Props) => {
           </div>
 
         </main>
+
+        {/* Вхід для випускників минулих змін */}
+        <button
+          onClick={() => pick('alumni')}
+          className="mt-3 w-full flex items-center justify-center gap-2 h-11 rounded-2xl border border-[#FFB800]/25 bg-[#0A0E18]/60 backdrop-blur-2xl text-[11px] sm:text-xs font-bold text-[#FFB800] hover:border-[#FFB800]/50 hover:bg-[#0A0E18]/80 transition-all duration-300"
+          aria-label="Вхід для випускника проєкту"
+        >
+          <Medal className="w-4 h-4" strokeWidth={2.2} />
+          Я випускник (Відновити мій паспорт)
+        </button>
       </div>
 
       {/* Лаконічний футер */}

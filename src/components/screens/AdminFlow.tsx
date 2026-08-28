@@ -79,6 +79,7 @@ import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
 import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
+import AdminAlumniBroadcast from '@/components/alumni/AdminAlumniBroadcast';
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {
@@ -217,7 +218,7 @@ const AdminFlow = ({ onBack }: Props) => {
           <TabsContent value="shifts" className="mt-3 animate-fade-in"><ShiftsTab /></TabsContent>
           <TabsContent value="schedule" className="mt-3 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
           <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
-          <TabsContent value="notifications" className="mt-3 animate-fade-in"><AdminNotificationsView /></TabsContent>
+          <TabsContent value="notifications" className="mt-3 space-y-3 animate-fade-in"><AdminAlumniBroadcast /><AdminNotificationsView /></TabsContent>
           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
           <TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>
           <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>

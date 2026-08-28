@@ -3,13 +3,14 @@ import RoleSelect from '@/components/screens/RoleSelect';
 import ChildFlow from '@/components/screens/ChildFlow';
 import SupervisorFlow from '@/components/screens/SupervisorFlow';
 import AdminFlow from '@/components/screens/AdminFlow';
+import AlumniFlow from '@/components/alumni/AlumniFlow';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 
-export type Screen = 'role' | 'child' | 'supervisor' | 'admin';
+export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni';
 
 /** Головний роутер ролей проєкту «Залізна Зміна» (Учасник / Супровід / Штаб) */
 const Index = () => {
@@ -143,6 +144,10 @@ const Index = () => {
 
         {screen === 'admin' && (
           <AdminFlow onBack={goRole} />
+        )}
+
+        {screen === 'alumni' && (
+          <AlumniFlow onBack={() => navigateTo('role')} />
         )}
       </div>
 
