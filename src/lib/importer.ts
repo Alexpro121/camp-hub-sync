@@ -10,6 +10,23 @@ export type StdKey =
   | 'team_name'
   | 'note_from_table';
 
+export interface FieldDefinition {
+  key: StdKey | 'ignore';
+  label: string;
+  required?: boolean;
+}
+
+export const FIELD_DEFINITIONS: FieldDefinition[] = [
+  { key: 'full_name', label: "ПІБ дитини", required: true },
+  { key: 'team_number', label: '№ Команди' },
+  { key: 'phone', label: 'Телефон' },
+  { key: 'is_present', label: 'Присутність' },
+  { key: 'team_name', label: 'Назва команди / Проєкт' },
+  { key: 'note_from_table', label: 'Примітка / Місто' },
+  { key: 'row_number', label: '№ за списком' },
+  { key: 'ignore', label: '— Пропустити колонку —' },
+];
+
 export interface ImportRow {
   is_present: boolean;
   row_number: number | null;
@@ -21,7 +38,6 @@ export interface ImportRow {
   raw_data: Record<string, any>;
   _issues: string[];
   _sourceRow: number;
-  /** Same team + same name, but a conflicting/missing phone — needs a human check. */
   _duplicateWarning?: string;
 }
 
@@ -29,13 +45,12 @@ export interface ImportResult {
   rows: ImportRow[];
   headers: string[];
   headerMap: Record<string, StdKey>;
-  mapSource: 'ai' | 'local';
+  mapSource: 'ai' | 'local' | 'block' | 'manual';
   skipped: number;
-  /** Unique team numbers discovered in the source file — no static assumptions. */
   detectedTeams: number[];
+  matrix?: any[][];
 }
 
-/** Extracts every distinct team number present in the parsed rows. */
 export function detectTeams(rows: ImportRow[]): number[] {
   return [...new Set(rows.map((r) => r.team_number).filter((n): n is number => !!n))].sort(
     (a, b) => a - b
@@ -60,7 +75,7 @@ export function sheetCsvUrl(url: string): string | null {
   return p ? `https://docs.google.com/spreadsheets/d/${p.id}/export?format=csv&gid=${p.gid}` : null;
 }
 
-/* ---------- Local Synonym Dictionary ---------- */
+/* ---------- Synonym Dictionary ---------- */
 
 const SYNONYMS: Record<StdKey, string[]> = {
   is_present: ['навність', 'наявність', 'присутність', 'присутний', 'статус', 'присутствие', 'presence', 'present'],
@@ -93,7 +108,6 @@ export function localHeaderMap(headers: string[]): Record<string, StdKey> {
     return true;
   };
 
-  // Pass 1 — Exact match
   for (const h of headers) {
     const n = norm(h);
     if (!n) continue;
@@ -102,7 +116,6 @@ export function localHeaderMap(headers: string[]): Record<string, StdKey> {
     }
   }
 
-  // Pass 2 — Partial match
   for (const h of headers) {
     const n = norm(h);
     if (!n || map[h]) continue;
@@ -124,7 +137,6 @@ export function extractTeamNumberFromText(text: string): number | null {
   const s = String(text ?? '').trim().toLowerCase();
   if (!s) return null;
 
-  // Patterns like "1 команда", "команда 1", "команда №1", "загін 2", "team 3"
   const m1 = s.match(/^(?:команда|загін|загон|team|група)\s*(?:№|#)?\s*(\d+)/i);
   if (m1) return parseInt(m1[1], 10);
 
@@ -136,7 +148,6 @@ export function extractTeamNumberFromText(text: string): number | null {
     return ROMAN_NUMERALS[mRoman[1].toLowerCase()];
   }
 
-  // Pure digits if short
   if (/^\d{1,2}$/.test(s)) {
     const n = parseInt(s, 10);
     return n >= 1 && n <= 98 ? n : null;
@@ -172,7 +183,6 @@ export function isCounselorOrMentorRow(text: string): boolean {
   ) {
     return true;
   }
-  // Multiple full names separated by + or / (e.g. "Самінін Валерій + Ірина Кравчук + Роні Хасін")
   if ((s.includes('+') || s.includes(' / ')) && s.split(/[+/]/).length >= 2) {
     const parts = s.split(/[+/]/).map((p) => p.trim());
     const validParts = parts.filter((p) => p.split(/\s+/).length >= 2);
@@ -183,12 +193,11 @@ export function isCounselorOrMentorRow(text: string): boolean {
 
 export function cleanPersonName(raw: string): string {
   let s = String(raw ?? '')
-    .replace(/^[\s#№\d.)\-–—]+/, '') // Strip leading list numbers like "1.", "1) ", "№1"
-    .replace(/["'’`]/g, "'") // Normalize apostrophes
+    .replace(/^[\s#№\d.)\-–—]+/, '')
+    .replace(/["'’`]/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Fix capitalization: "стародубець мілана" -> "Стародубець Мілана"
   return s
     .split(' ')
     .map((word) => {
@@ -207,21 +216,16 @@ export function isLikelyPersonName(text: string): boolean {
   if (isStatsRow(s) || isCounselorOrMentorRow(s)) return false;
   if (extractTeamNumberFromText(s) !== null) return false;
 
-  // Header keyword check
   const low = norm(s);
   for (const list of Object.values(SYNONYMS)) {
     if (list.includes(low)) return false;
   }
 
-  // Must have 2 to 4 words (Ukrainian/Cyrillic/Latin name)
   const cleaned = cleanPersonName(s);
   const words = cleaned.split(' ').filter(Boolean);
   if (words.length < 2 || words.length > 4) return false;
-
-  // Must not contain email, url, brackets, digits, math symbols
   if (/[0-9@:/+=_\\*#~<>{}]/.test(s)) return false;
 
-  // Words must look like alphabetical names (Cyrillic or Latin with Ukrainian apostrophe and hyphen)
   const namePattern = /^[A-Za-zА-Яа-яЄєІіЇїҐґ'`\-]+$/;
   return words.every((w) => namePattern.test(w) && w.length >= 2);
 }
@@ -286,11 +290,115 @@ export function detectHeaderIndex(matrix: any[][]): number {
   return bestScore >= 2 ? best : -1;
 }
 
-/* ==========================================================================
-   STRATEGY 1: Block / Section Parser (For lists grouped by Team headers)
-   ========================================================================== */
+/* ---------- Parse with Custom/Manual Column Mapping ---------- */
 
-function parseBlockFormat(matrix: any[][]): { rows: ImportRow[]; skipped: number } | null {
+export function parseWithCustomMapping(
+  matrix: any[][],
+  mapping: Record<number, StdKey | 'ignore'>,
+  startRow: number = 0,
+  defaultTeam: number = 1
+): ImportResult {
+  const rows: ImportRow[] = [];
+  const seen = new Map<string, ImportRow>();
+  let skipped = 0;
+  let currentTeam = defaultTeam;
+
+  for (let i = startRow; i < matrix.length; i++) {
+    const r = matrix[i] || [];
+    if (r.every((c) => c === '' || c == null)) continue;
+
+    let fullName = '';
+    let phone: string | null = null;
+    let presence = false;
+    let teamNumber: number | null = null;
+    let teamName: string | null = null;
+    let note: string | null = null;
+    let rowNumber: number | null = null;
+    const rawData: Record<string, any> = {};
+
+    Object.entries(mapping).forEach(([colStr, key]) => {
+      const colIdx = parseInt(colStr, 10);
+      const val = r[colIdx];
+      if (val === undefined || val === null || val === '') return;
+      rawData[`Col_${colIdx + 1}`] = val;
+
+      if (key === 'full_name') fullName = cleanPersonName(String(val));
+      else if (key === 'team_number') teamNumber = parseIntSafe(val) ?? extractTeamNumberFromText(String(val));
+      else if (key === 'phone') phone = normalizePhone(val);
+      else if (key === 'is_present') presence = normalizePresence(val);
+      else if (key === 'team_name') teamName = String(val).trim();
+      else if (key === 'note_from_table') note = String(val).trim();
+      else if (key === 'row_number') rowNumber = parseIntSafe(val);
+    });
+
+    if (!fullName) {
+      // Check if this row is a team header like "1 команда"
+      const detected = extractTeamNumberFromText(String(r[0] ?? ''));
+      if (detected !== null) currentTeam = detected;
+      continue;
+    }
+
+    if (isStatsRow(fullName) || isCounselorOrMentorRow(fullName)) {
+      skipped++;
+      continue;
+    }
+
+    const finalTeam = teamNumber && isValidTeamNumber(teamNumber) ? teamNumber : currentTeam;
+    const issues: string[] = [];
+    if (!fullName) issues.push("Не вказано ім'я");
+    if (!isValidTeamNumber(finalTeam)) issues.push(`Некоректна команда №${finalTeam}`);
+
+    const key = `${finalTeam}|${normalizeName(fullName)}`;
+    const prev = seen.get(key);
+    if (prev) {
+      skipped++;
+      if ((prev.phone ?? '') !== (phone ?? '')) {
+        prev._duplicateWarning = `Дубль/однофамілець у рядку ${i + 1}: телефон «${phone ?? '—'}» ≠ «${prev.phone ?? '—'}»`;
+        if (!prev._issues.includes('Потребує перевірки')) prev._issues.push('Потребує перевірки');
+      }
+      continue;
+    }
+
+    const row: ImportRow = {
+      is_present: presence,
+      row_number: rowNumber ?? rows.length + 1,
+      team_number: finalTeam,
+      full_name: fullName,
+      phone,
+      team_name: teamName,
+      note_from_table: note,
+      raw_data: rawData,
+      _issues: issues,
+      _sourceRow: i + 1,
+    };
+
+    seen.set(key, row);
+    rows.push(row);
+  }
+
+  const detectedTeams = detectTeams(rows);
+  const headerMap: Record<string, StdKey> = {};
+  Object.entries(mapping).forEach(([colIdx, key]) => {
+    if (key !== 'ignore') {
+      const headerName = String(matrix[Math.max(0, startRow - 1)]?.[parseInt(colIdx, 10)] || `Колонка ${parseInt(colIdx, 10) + 1}`);
+      headerMap[headerName] = key;
+    }
+  });
+
+  return {
+    rows,
+    headers: Object.keys(headerMap),
+    headerMap,
+    mapSource: 'manual',
+    skipped,
+    detectedTeams,
+    matrix,
+  };
+}
+
+/* ---------- Block Parser ---------- */
+
+function parseBlockFormat(matrix: any[][]): ImportResult | null {
   let hasTeamHeaders = false;
   for (let i = 0; i < matrix.length; i++) {
     const r = matrix[i] || [];
@@ -319,7 +427,6 @@ function parseBlockFormat(matrix: any[][]): { rows: ImportRow[]; skipped: number
     const cell0 = cells[0] || '';
     const teamNum = extractTeamNumberFromText(cell0);
 
-    // 1. Detect Team Header: "1 команда", "2 команда", etc.
     if (teamNum !== null) {
       currentTeamNumber = teamNum;
       currentTeamName = null;
@@ -328,27 +435,16 @@ function parseBlockFormat(matrix: any[][]): { rows: ImportRow[]; skipped: number
     }
 
     if (currentTeamNumber === null) continue;
+    if (cells.some(isStatsRow)) continue;
+    if (cells.some(isCounselorOrMentorRow)) continue;
 
-    // 2. Ignore Stats row: "26 дітей (7 хл. 19 дів.)"
-    if (cells.some(isStatsRow)) {
-      continue;
-    }
-
-    // 3. Detect Counselors row: "Самінін Валерій + Ірина Кравчук + Роні Хасін (каченя)"
-    if (cells.some(isCounselorOrMentorRow)) {
-      continue;
-    }
-
-    // 4. Detect Team Project / Name row: "МАН + Сайт", "Бахмач + Сайт"
     if (!currentTeamName && cell0 && !isLikelyPersonName(cell0)) {
-      // Short project/sub-team name
       if (cell0.length < 60 && !/^\d+$/.test(cell0)) {
         currentTeamName = cell0;
         continue;
       }
     }
 
-    // 5. Look for child name in columns 0..2
     let nameIdx = -1;
     for (let c = 0; c < Math.min(3, cells.length); c++) {
       if (isLikelyPersonName(cells[c])) {
@@ -362,7 +458,6 @@ function parseBlockFormat(matrix: any[][]): { rows: ImportRow[]; skipped: number
       const fullName = cleanPersonName(rawName);
       rowNumberInTeam++;
 
-      // Check for phone or notes in adjacent columns
       let phone: string | null = null;
       let presence = false;
       let note: string | null = null;
@@ -420,84 +515,25 @@ function parseBlockFormat(matrix: any[][]): { rows: ImportRow[]; skipped: number
     }
   }
 
-  return rows.length > 0 ? { rows, skipped } : null;
+  if (rows.length === 0) return null;
+
+  return {
+    rows,
+    headers: ['ПІБ', 'Команда', 'Телефон', 'Присутність'],
+    headerMap: {
+      'ПІБ': 'full_name',
+      'Команда': 'team_number',
+      'Телефон': 'phone',
+      'Присутність': 'is_present',
+    },
+    mapSource: 'block',
+    skipped,
+    detectedTeams: detectTeams(rows),
+    matrix,
+  };
 }
 
-/* ==========================================================================
-   STRATEGY 2: Side-by-Side Teams Parser (Col A = Team 1, Col B = Team 2...)
-   ========================================================================== */
-
-function parseSideBySideTeams(matrix: any[][]): { rows: ImportRow[]; skipped: number } | null {
-  if (matrix.length < 2) return null;
-
-  // Search first 3 rows for team headers across multiple columns
-  let headerRowIdx = -1;
-  const colTeams: Record<number, number> = {};
-
-  for (let r = 0; r < Math.min(4, matrix.length); r++) {
-    const row = matrix[r] || [];
-    let count = 0;
-    row.forEach((cell: any, c: number) => {
-      const num = extractTeamNumberFromText(String(cell ?? ''));
-      if (num !== null) {
-        colTeams[c] = num;
-        count++;
-      }
-    });
-    if (count >= 2) {
-      headerRowIdx = r;
-      break;
-    }
-  }
-
-  if (headerRowIdx === -1 || Object.keys(colTeams).length < 2) return null;
-
-  const rows: ImportRow[] = [];
-  const seen = new Map<string, ImportRow>();
-  let skipped = 0;
-
-  for (const [colStr, teamNum] of Object.entries(colTeams)) {
-    const colIdx = parseInt(colStr, 10);
-    let rowNum = 1;
-
-    for (let r = headerRowIdx + 1; r < matrix.length; r++) {
-      const cell = String(matrix[r]?.[colIdx] ?? '').trim();
-      if (!cell || isStatsRow(cell) || isCounselorOrMentorRow(cell)) continue;
-
-      if (isLikelyPersonName(cell)) {
-        const fullName = cleanPersonName(cell);
-        const key = `${teamNum}|${normalizeName(fullName)}`;
-
-        if (seen.has(key)) {
-          skipped++;
-          continue;
-        }
-
-        const row: ImportRow = {
-          is_present: false,
-          row_number: rowNum++,
-          team_number: teamNum,
-          full_name: fullName,
-          phone: null,
-          team_name: null,
-          note_from_table: null,
-          raw_data: { raw: cell, col: colIdx + 1, row: r + 1 },
-          _issues: [],
-          _sourceRow: r + 1,
-        };
-
-        seen.set(key, row);
-        rows.push(row);
-      }
-    }
-  }
-
-  return rows.length > 0 ? { rows, skipped } : null;
-}
-
-/* ==========================================================================
-   STRATEGY 3: Classic Multi-Column Table Parser
-   ========================================================================== */
+/* ---------- Classic Table Parser ---------- */
 
 function parseClassicTable(
   matrix: any[][],
@@ -529,7 +565,6 @@ function parseClassicTable(
 
     let fullName = String(colOf.full_name !== undefined ? r[colOf.full_name] ?? '' : '').trim();
     if (!fullName) {
-      // Check first 3 columns for a person name if not mapped
       for (let c = 0; c < Math.min(3, r.length); c++) {
         if (isLikelyPersonName(String(r[c] ?? ''))) {
           fullName = String(r[c]);
@@ -538,13 +573,10 @@ function parseClassicTable(
       }
     }
 
-    if (fullName) {
-      fullName = cleanPersonName(fullName);
-    }
+    if (fullName) fullName = cleanPersonName(fullName);
 
     let teamNum = colOf.team_number !== undefined ? (parseIntSafe(r[colOf.team_number]) ?? 0) : 0;
     if (!teamNum) {
-      // Check if row has "1 команда" style text in any cell
       for (const cell of r) {
         const extracted = extractTeamNumberFromText(String(cell ?? ''));
         if (extracted !== null) {
@@ -609,9 +641,7 @@ function parseClassicTable(
   return { rows, skipped };
 }
 
-/* ==========================================================================
-   MAIN UNIVERSAL BUILDER (Auto-detects format)
-   ========================================================================== */
+/* ---------- Main Universal Parser Entry Point ---------- */
 
 export function buildRows(
   matrix: any[][],
@@ -620,19 +650,11 @@ export function buildRows(
 ): { rows: ImportRow[]; skipped: number } {
   if (!matrix || matrix.length === 0) return { rows: [], skipped: 0 };
 
-  // 1. Try Block/Section layout (Exact layout of the attached screenshot!)
   const blockResult = parseBlockFormat(matrix);
   if (blockResult && blockResult.rows.length >= 3) {
     return blockResult;
   }
 
-  // 2. Try Side-by-Side column layout
-  const sideBySideResult = parseSideBySideTeams(matrix);
-  if (sideBySideResult && sideBySideResult.rows.length >= 3) {
-    return sideBySideResult;
-  }
-
-  // 3. Fallback to Classic Tabular layout
   const effectiveHeaderIdx = headerIdx >= 0 ? headerIdx : detectHeaderIndex(matrix);
   const effectiveMap = Object.keys(headerMap).length > 0
     ? headerMap
