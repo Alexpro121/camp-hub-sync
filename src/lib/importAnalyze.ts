@@ -3,21 +3,23 @@ import {
   buildRows,
   detectHeaderIndex,
   detectTeams,
+  extractTeamNumberFromText,
   localHeaderMap,
   matrixFromCsv,
   matrixFromFile,
+  matrixFromPdf,
+  matrixFromRawText,
   sheetCsvUrl,
   type ImportResult,
   type StdKey,
 } from '@/lib/importer';
 
 /**
- * Clean up leading/trailing empty rows and normalize matrix cells
+ * Очищення порожніх рядків та нормалізація клітинок матриці
  */
 function cleanMatrix(raw: any[][]): any[][] {
   if (!raw || !Array.isArray(raw)) return [];
 
-  // Filter out completely empty rows
   const nonEmptyRows = raw.filter((row) =>
     Array.isArray(row) && row.some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== '')
   );
@@ -28,13 +30,59 @@ function cleanMatrix(raw: any[][]): any[][] {
 }
 
 /**
- * Ask Groq/AI to map messy headers; silently falls back to null on failure.
+ * Розпізнає та розгортає багатоколонкові таблиці (Side-by-Side),
+ * наприклад, коли Команда 1 у стовпчиках A-C, а Команда 2 у стовпчиках D-F.
+ */
+function unrollSideBySideTeams(matrix: any[][]): any[][] | null {
+  if (!matrix || matrix.length < 2) return null;
+
+  const firstRow = (matrix[0] || []).map((c) => String(c ?? '').trim());
+  const teamPositions: { colIndex: number; teamNum: number }[] = [];
+
+  firstRow.forEach((cell, idx) => {
+    const num = extractTeamNumberFromText(cell);
+    if (num !== null) {
+      teamPositions.push({ colIndex: idx, teamNum: num });
+    }
+  });
+
+  // Якщо знайдено дві або більше команди в одному рядку заголовка
+  if (teamPositions.length >= 2) {
+    const unrolled: any[][] = [];
+
+    for (let i = 0; i < teamPositions.length; i++) {
+      const startCol = teamPositions[i].colIndex;
+      const endCol = i + 1 < teamPositions.length ? teamPositions[i + 1].colIndex : firstRow.length;
+      const teamNum = teamPositions[i].teamNum;
+
+      unrolled.push([`${teamNum} команда`]);
+
+      for (let r = 1; r < matrix.length; r++) {
+        const rowSlice = matrix[r].slice(startCol, endCol);
+        if (rowSlice.some((c) => String(c ?? '').trim() !== '')) {
+          unrolled.push(rowSlice);
+        }
+      }
+    }
+
+    return unrolled.length > 0 ? unrolled : null;
+  }
+
+  return null;
+}
+
+/**
+ * Запит до AI (Groq / Supabase Edge Function) для мапінгу нестандартних заголовків
  */
 async function aiHeaderMap(headers: string[], samples: any[][]): Promise<Record<string, StdKey> | null> {
   if (!headers.length) return null;
   try {
+    const cleanSamples = samples.map((row) =>
+      row.map((cell) => String(cell ?? '').slice(0, 100))
+    );
+
     const { data, error } = await supabase.functions.invoke('import-table', {
-      body: { action: 'map_headers', headers, samples },
+      body: { action: 'map_headers', headers, samples: cleanSamples },
     });
 
     if (error) {
@@ -52,12 +100,13 @@ async function aiHeaderMap(headers: string[], samples: any[][]): Promise<Record<
 }
 
 /**
- * Master analyzer that inspects any 2D matrix, selects the optimal strategy
- * (Block List, Side-by-Side Teams, or Classic Multi-Column Table),
- * and performs AI fuzzy matching when needed.
+ * Головний аналізатор матриці:
+ * 1. Перевіряє структуру Side-by-Side (команди в паралельних колонках).
+ * 2. Перевіряє блоковий / PDF формат (списки за командами).
+ * 3. Перевіряє класичну табличну структуру (із застосуванням AI у разі складних колонок).
  */
 export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
-  const matrix = cleanMatrix(rawMatrix);
+  let matrix = cleanMatrix(rawMatrix);
 
   if (!matrix.length) {
     return {
@@ -71,29 +120,28 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
     };
   }
 
-  // 1. First Attempt: Run the universal parser
-  // This immediately checks if the file is a Block List (e.g., "1 команда", "2 команда"...)
-  // or a Side-by-Side column structure.
+  // 0. Спроба розгорнути Side-by-Side колонки, якщо вони є
+  const unrolled = unrollSideBySideTeams(matrix);
+  if (unrolled) {
+    matrix = cleanMatrix(unrolled);
+  }
+
+  // 1. Спроба розпарсити через універсальний блоковий / PDF парсер
   const firstPass = buildRows(matrix, -1, {});
 
-  // If Block parser or Side-by-Side parser matched successfully (found kids & teams)
-  if (firstPass.rows.length >= 3 && firstPass.rows.every((r) => r.full_name && r.team_number > 0)) {
-    const detected = (firstPass as any).detectedTeams || detectTeams(firstPass.rows);
+  if (firstPass.rows.length >= 1 && firstPass.mapSource === 'block') {
     return {
       rows: firstPass.rows,
-      headers: (firstPass as any).headers || ['ПІБ', 'Команда', 'Телефон', 'Присутність'],
-      headerMap: (firstPass as any).headerMap || {
-        'ПІБ': 'full_name',
-        'Команда': 'team_number',
-      },
-      mapSource: (firstPass as any).mapSource || 'block',
+      headers: firstPass.headers,
+      headerMap: firstPass.headerMap,
+      mapSource: firstPass.mapSource,
       skipped: firstPass.skipped,
-      detectedTeams: detected,
+      detectedTeams: firstPass.detectedTeams.length > 0 ? firstPass.detectedTeams : detectTeams(firstPass.rows),
       matrix,
     };
   }
 
-  // 2. If not a block list, treat as Classic Multi-Column Table
+  // 2. Якщо це не блоковий формат — парсимо як класичну таблицю
   const detectedHeaderIdx = detectHeaderIndex(matrix);
   const effectiveHeaderIdx = detectedHeaderIdx >= 0 ? detectedHeaderIdx : 0;
   const headers = (matrix[effectiveHeaderIdx] || [])
@@ -103,7 +151,7 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
   let headerMap = localHeaderMap(headers);
   let mapSource: 'ai' | 'local' = 'local';
 
-  // 3. AI Fuzzy Mapping: Trigger only if local dictionary missed crucial columns ('full_name' or 'team_number')
+  // 3. AI Fuzzy Mapping: викликається лише якщо локальний словник не знайшов обов'язкових колонок
   const hasFullName = Object.values(headerMap).includes('full_name');
   const hasTeam = Object.values(headerMap).includes('team_number');
 
@@ -126,23 +174,23 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
     }
   }
 
-  // 4. Build final rows using determined headers and column mapping
+  // 4. Побудова фінальних рядків за визначеними заголовками
   const finalResult = buildRows(matrix, effectiveHeaderIdx, headerMap);
   const detectedTeams = detectTeams(finalResult.rows);
 
   return {
     rows: finalResult.rows,
     headers: headers.length > 0 ? headers : Object.keys(headerMap),
-    headerMap: Object.keys(headerMap).length > 0 ? headerMap : (finalResult as any).headerMap || {},
-    mapSource: (finalResult as any).mapSource || mapSource,
+    headerMap: Object.keys(headerMap).length > 0 ? headerMap : finalResult.headerMap,
+    mapSource: finalResult.mapSource || mapSource,
     skipped: finalResult.skipped,
-    detectedTeams: detectedTeams.length > 0 ? detectedTeams : (finalResult as any).detectedTeams || [],
+    detectedTeams: detectedTeams.length > 0 ? detectedTeams : finalResult.detectedTeams,
     matrix,
   };
 }
 
 /**
- * Analyzes an uploaded Excel / CSV file
+ * Аналізує завантажений файл будь-якого формату (Excel, CSV або PDF)
  */
 export async function analyzeFile(file: File): Promise<ImportResult> {
   const matrix = await matrixFromFile(file);
@@ -150,7 +198,23 @@ export async function analyzeFile(file: File): Promise<ImportResult> {
 }
 
 /**
- * Analyzes a Google Sheets URL with fallback resilience
+ * Аналізує сирий скопійований текст або вміст з буфера обміну
+ */
+export async function analyzeRawText(text: string): Promise<ImportResult> {
+  const matrix = matrixFromRawText(text);
+  return analyzeMatrix(matrix);
+}
+
+/**
+ * Аналізує PDF-файл з ArrayBuffer
+ */
+export async function analyzePdfBuffer(buffer: ArrayBuffer): Promise<ImportResult> {
+  const matrix = await matrixFromPdf(buffer);
+  return analyzeMatrix(matrix);
+}
+
+/**
+ * Аналізує Google Sheets за посиланням з багаторівневим fallback
  */
 export async function analyzeSheetUrl(url: string): Promise<ImportResult> {
   const cleanUrl = (url || '').trim();
@@ -158,7 +222,7 @@ export async function analyzeSheetUrl(url: string): Promise<ImportResult> {
     throw new Error('Будь ласка, вкажіть посилання на Google Таблицю');
   }
 
-  // Attempt 1: Via Supabase Edge Function
+  // Спроба 1: Через Supabase Edge Function
   try {
     const { data, error } = await supabase.functions.invoke('import-table', {
       body: { action: 'fetch_sheet', url: cleanUrl },
@@ -174,17 +238,20 @@ export async function analyzeSheetUrl(url: string): Promise<ImportResult> {
       }
     }
   } catch (err) {
-    console.warn('Edge Function fetch_sheet failed, trying direct public CSV export...', err);
+    console.warn('Edge Function fetch_sheet failed, trying direct CSV export...', err);
   }
 
-  // Attempt 2: Fallback to direct public CSV export URL
+  // Спроба 2: Прямий експорт через публічний CSV URL
   const directCsvUrl = sheetCsvUrl(cleanUrl);
   if (directCsvUrl) {
     try {
       const resp = await fetch(directCsvUrl);
       if (resp.ok) {
         const csvText = await resp.text();
-        return analyzeMatrix(matrixFromCsv(csvText));
+        // Перевіряємо, чи Google не повернув HTML сторінку авторизації
+        if (!csvText.trim().toLowerCase().startsWith('<!doctype html') && !csvText.trim().toLowerCase().startsWith('<html')) {
+          return analyzeMatrix(matrixFromCsv(csvText));
+        }
       }
     } catch (err) {
       console.warn('Direct CSV fetch failed:', err);
@@ -192,6 +259,6 @@ export async function analyzeSheetUrl(url: string): Promise<ImportResult> {
   }
 
   throw new Error(
-    'Не вдалося зчитати Google Таблицю. Переконайтеся, що посилання правильне та в налаштуваннях доступу вибрано «Усі, хто має посилання — переглядач».'
+    'Не вдалося зчитати Google Таблицю. Переконайтеся, що таблиця відкрита для перегляду («Усі, хто має посилання — переглядач») та спробуйте знову.'
   );
 }
