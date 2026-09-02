@@ -1,26 +1,27 @@
 /**
- * IRON ALUMNI BRIDGE — ефемерне безпечне перенесення офлайн-паспорта на новий пристрій.
+ * IRON ALUMNI BRIDGE — ефемерне перенесення офлайн-паспорта без зайвих паролів.
  *
- * Працює виключно через Realtime Broadcast: жодного збереження в базі даних,
- * жодного сліду на сервері. Кімната живе максимум 3 хвилини з двостороннім підтвердженням (ACK).
+ * Уся ініціатива походить з НОВОГО пристрою (pull-модель):
+ * Новий пристрій запитує дані, а старий пристрій автоматично віддає свій паспорт
+ * без вимоги вводити паролі.
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { AlumniPassportEnvelope } from '@/lib/alumniPassport';
 
-export const BRIDGE_TTL_MS = 3 * 60 * 1000; // 3 хвилини
+export const BRIDGE_TTL_MS = 3 * 60 * 1000; // 3 хвилини життя сесії
 export const ALUMNI_BROADCAST_CHANNEL = 'iron-alumni-broadcast';
 
-const EVENT_REQUEST = 'passport_request';
-const EVENT_TRANSFER = 'passport_transfer';
-const EVENT_ACK = 'passport_ack';
+const EVENT_PULL_REQUEST = 'passport_pull_request';
+const EVENT_PULL_RESPONSE = 'passport_pull_response';
+const EVENT_ACK = 'passport_pull_ack';
 
-/** Очищує введення від пробілів, тире та зайвих символів */
-export function cleanBridgePin(raw: string): string {
-  return String(raw ?? '').replace(/\D/g, '').slice(0, 6);
+/** Очищення від пробілів та спецсимволів */
+export function cleanBridgeIdentifier(raw: string): string {
+  return String(raw ?? '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
 
-/** Генерує криптостійкий 6-значний PIN */
+/** Генерує швидкий одноразовий 6-значний код сесії */
 export function generateBridgePin(): string {
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
@@ -34,9 +35,12 @@ export function generateBridgePin(): string {
   return String(100000 + Math.floor(Math.random() * 900000));
 }
 
-const roomName = (pin: string) => `alumni-bridge-${cleanBridgePin(pin)}`;
+/** Формує назву кімнати на основі ID паспорта або коду */
+export function getBridgeRoomName(identifier: string): string {
+  return `alumni-bridge-${cleanBridgeIdentifier(identifier)}`;
+}
 
-/** Перевіряє цілісність структури паспорта перед збереженням */
+/** Перевірка валідності структури паспорта */
 function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
   if (!obj || typeof obj !== 'object') return false;
   if (!obj.passport || typeof obj.passport !== 'object') return false;
@@ -45,38 +49,39 @@ function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
   return true;
 }
 
-export interface BridgeHostCallbacks {
-  /** Паспорт успішно надіслано */
-  onSent?: () => void;
-  /** Новий пристрій підтвердив успішне отримання (ACK) */
-  onClaimed?: () => void;
-  /** Час життя кімнати вичерпано */
+/* =========================================================================
+   1. СТАРИЙ ПРИСТРІЙ (Донор) — Пасивно віддає паспорт БЕЗ запиту паролів
+========================================================================= */
+
+export interface PassportProviderCallbacks {
+  /** Викликається, коли паспорт успішно передано новому пристрою */
+  onTransferred?: () => void;
+  /** Викликається при завершенні часу очікування */
   onExpired?: () => void;
-  /** Власний PIN (опціонально) */
-  pin?: string;
 }
 
-export interface BridgeHostHandle {
-  pin: string;
-  expiresAt: number;
+export interface PassportProviderHandle {
+  channelId: string;
   close: () => void;
 }
 
 /**
- * СТАРИЙ ПРИСТРІЙ (Хост):
- * Відкриває зашифровану за PIN кімнату, очікує запит від нового телефону,
- * віддає паспорт і чекає підтвердження отримання (ACK).
+ * СТАРИЙ ПРИСТРІЙ:
+ * Відкриває фоновий канал роздачі паспорта (за ID паспорта або спільним кодом).
+ * Жодних паролів від старого пристрою не вимагається.
  */
-export function hostPassportBridge(
+export function providePassportForPull(
   passport: AlumniPassportEnvelope,
-  callbacks: BridgeHostCallbacks = {},
-): BridgeHostHandle {
-  const pin = cleanBridgePin(callbacks.pin || generateBridgePin());
-  const channel = supabase.channel(roomName(pin), {
+  customIdentifier?: string,
+  callbacks: PassportProviderCallbacks = {},
+): PassportProviderHandle {
+  const channelId = cleanBridgeIdentifier(customIdentifier || passport.passport.id);
+  const room = getBridgeRoomName(channelId);
+
+  const channel = supabase.channel(room, {
     config: { broadcast: { self: false } },
   });
 
-  const expiresAt = Date.now() + BRIDGE_TTL_MS;
   let closed = false;
 
   const close = () => {
@@ -93,45 +98,66 @@ export function hostPassportBridge(
   }, BRIDGE_TTL_MS);
 
   channel
-    // 1. Отримано запит від нового пристрою -> надсилаємо паспорт
-    .on('broadcast', { event: EVENT_REQUEST }, () => {
+    // 1. Отримано команду "Віддай дані" від нового пристрою
+    .on('broadcast', { event: EVENT_PULL_REQUEST }, () => {
       if (closed) return;
       channel.send({
         type: 'broadcast',
-        event: EVENT_TRANSFER,
+        event: EVENT_PULL_RESPONSE,
         payload: { passport, sentAt: Date.now() },
       });
-      callbacks.onSent?.();
     })
-    // 2. Новий пристрій успішно розпарсив та зберіг паспорт (ACK)
+    // 2. Новий пристрій підтвердив успішний прийом даних
     .on('broadcast', { event: EVENT_ACK }, () => {
       if (closed) return;
-      callbacks.onClaimed?.();
-      // Закриваємо кімнату через 1.5 секунди після успішного підтвердження
-      window.setTimeout(close, 1500);
+      callbacks.onTransferred?.();
+      window.setTimeout(close, 1000);
     })
     .subscribe();
 
-  return { pin, expiresAt, close };
+  return { channelId, close };
 }
 
-export interface BridgeClaimResult {
+/** Аліас для сумісності з існуючим кодом */
+export const hostPassportBridge = (
+  passport: AlumniPassportEnvelope,
+  callbacks: { onSent?: () => void; onExpired?: () => void; pin?: string } = {},
+) => {
+  const pin = callbacks.pin || passport.passport.id || generateBridgePin();
+  const handle = providePassportForPull(passport, pin, {
+    onTransferred: callbacks.onSent,
+    onExpired: callbacks.onExpired,
+  });
+  return {
+    pin,
+    expiresAt: Date.now() + BRIDGE_TTL_MS,
+    close: handle.close,
+  };
+};
+
+/* =========================================================================
+   2. НОВИЙ ПРИСТРІЙ (Отримувач) — Ініціює та тягне дані
+========================================================================= */
+
+export interface PassportPullResult {
   status: 'ok' | 'timeout' | 'invalid_payload' | 'cancelled';
   passport?: AlumniPassportEnvelope;
   error?: string;
 }
 
 /**
- * НОВИЙ ПРИСТРІЙ (Клієнт):
- * Підключається до кімнати за PIN, періодично запитує паспорт (із захистом від обривів на 2G),
- * перевіряє цілісність отриманого конверта та відправляє підтвердження (ACK).
+ * НОВИЙ ПРИСТРІЙ:
+ * Створює запит на витягування паспорта зі старого пристрою за ID або кодом сесії.
+ * Автоматично повторює запити (корисно в потягах з 2G зв'язком).
  */
-export function claimPassportBridge(
-  rawPin: string,
+export function requestPassportPull(
+  identifier: string,
   timeoutMs = 45000,
-): { promise: Promise<BridgeClaimResult>; cancel: () => void } {
-  const pin = cleanBridgePin(rawPin);
-  const channel = supabase.channel(roomName(pin), {
+): { promise: Promise<PassportPullResult>; cancel: () => void } {
+  const cleanId = cleanBridgeIdentifier(identifier);
+  const room = getBridgeRoomName(cleanId);
+
+  const channel = supabase.channel(room, {
     config: { broadcast: { self: false } },
   });
 
@@ -146,8 +172,8 @@ export function claimPassportBridge(
     supabase.removeChannel(channel);
   };
 
-  const promise = new Promise<BridgeClaimResult>((resolve) => {
-    const finish = (result: BridgeClaimResult) => {
+  const promise = new Promise<PassportPullResult>((resolve) => {
+    const finish = (result: PassportPullResult) => {
       if (settled) return;
       settled = true;
       cleanup();
@@ -155,16 +181,19 @@ export function claimPassportBridge(
     };
 
     timeoutTimer = window.setTimeout(() => {
-      finish({ status: 'timeout', error: 'Час очікування вичерпано. Перевірте PIN або зв’язок на старому пристрої.' });
+      finish({
+        status: 'timeout',
+        error: 'Старий пристрій не відповів. Переконайтеся, що на старому пристрої відкрито додаток «Залізна Зміна».',
+      });
     }, timeoutMs);
 
-    // Слухаємо відповідь з паспортом від старого пристрою
+    // Слухаємо відповідь із паспортом від старого пристрою
     channel
-      .on('broadcast', { event: EVENT_TRANSFER }, ({ payload }) => {
+      .on('broadcast', { event: EVENT_PULL_RESPONSE }, ({ payload }) => {
         const envelope = (payload as { passport?: AlumniPassportEnvelope } | undefined)?.passport;
 
         if (envelope && isValidPassportEnvelope(envelope)) {
-          // Надсилаємо підтвердження успішного отримання (ACK)
+          // Відправляємо старому пристрою підтвердження (ACK), що дані успішно отримано
           channel.send({
             type: 'broadcast',
             event: EVENT_ACK,
@@ -175,26 +204,26 @@ export function claimPassportBridge(
         } else {
           finish({
             status: 'invalid_payload',
-            error: 'Отримано некоректні або пошкоджені дані паспорта.',
+            error: 'Отримано некоректну структуру паспорта.',
           });
         }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Перший запит
+          // Надсилаємо перший запит "Віддай дані"
           channel.send({
             type: 'broadcast',
-            event: EVENT_REQUEST,
-            payload: { at: Date.now() },
+            event: EVENT_PULL_REQUEST,
+            payload: { requestedAt: Date.now() },
           });
 
-          // Адаптивний ретрай-луп кожні 2 секунди (критично для 2G в потягах)
+          // Адаптивний ретрай-луп кожні 2 секунди
           retryInterval = window.setInterval(() => {
             if (!settled) {
               channel.send({
                 type: 'broadcast',
-                event: EVENT_REQUEST,
-                payload: { at: Date.now() },
+                event: EVENT_PULL_REQUEST,
+                payload: { requestedAt: Date.now() },
               });
             }
           }, 2000);
@@ -208,13 +237,19 @@ export function claimPassportBridge(
       if (!settled) {
         settled = true;
         cleanup();
+        resolve({ status: 'cancelled', error: 'Перенесення скасовано користувачем' });
       }
     },
   };
 }
 
+/** Аліас для сумісності з існуючим кодом */
+export const claimPassportBridge = (pin: string, timeoutMs = 45000) => {
+  return requestPassportPull(pin, timeoutMs);
+};
+
 /* =========================================================================
-   ГЛОБАЛЬНИЙ ЕФЕМЕРНИЙ КАНАЛ ШТАБУ ДЛЯ ВИПУСКНИКІВ
+   3. ГЛОБАЛЬНІ ЕФЕМЕРНІ СПОВІЩЕННЯ ДЛЯ ВИПУСКНИКІВ
 ========================================================================= */
 
 export type AlumniBroadcastKind = 'alumni_raffle' | 'alumni_announcement';
@@ -226,9 +261,7 @@ export interface AlumniBroadcastPayload {
   sent_at: number;
 }
 
-/**
- * Штаб: надійне надсилання ефемерної події всім випускникам онлайн
- */
+/** Штаб: відправка сповіщення випускникам онлайн */
 export async function sendAlumniBroadcast(
   kind: AlumniBroadcastKind,
   payload: Omit<AlumniBroadcastPayload, 'sent_at'>,
@@ -244,7 +277,7 @@ export async function sendAlumniBroadcast(
         resolve();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         window.clearTimeout(timer);
-        reject(new Error(`Не вдалося підключитися до каналу трансляції: ${status}`));
+        reject(new Error(`Помилка підключення до каналу сповіщень: ${status}`));
       }
     });
   });
@@ -261,9 +294,7 @@ export async function sendAlumniBroadcast(
   }, 1000);
 }
 
-/**
- * Випускник: прослуховування ефемерних розіграшів та оголошень Штабу
- */
+/** Випускник: прослуховування оголошень та розіграшів Штабу */
 export function subscribeAlumniBroadcast(
   handler: (kind: AlumniBroadcastKind, payload: AlumniBroadcastPayload) => void,
 ): () => void {
