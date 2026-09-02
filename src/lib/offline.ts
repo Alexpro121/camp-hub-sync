@@ -1,21 +1,16 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
-import { networkPulse } from '@/lib/networkPulse';
+import { networkPulse } from '@/lib/networkEngine';
 
 export interface QueuedAction {
   id: string;
   table: 'children' | 'iron_dollar_transactions' | 'talent_entries' | 'broadcasts' | string;
-  /** `rpc` виконує атомарну ідемпотентну функцію на сервері */
   op: 'update' | 'insert' | 'rpc';
   matchId?: string;
   values: Record<string, any>;
-  /** Назва збереженої функції для `op: 'rpc'` */
   fn?: 'increment_iron_dollars' | string;
-  /** Забезпечує захист від повторного нарахування */
   idempotencyKey?: string;
-  /** [L-1] Optimistic lock: дата модифікації запису клієнтом */
   clientUpdatedAt?: string;
-  /** Текстові поля, які об'єднуються замість перезапису */
   mergeFields?: string[];
   label: string;
   created_at: number;
@@ -26,17 +21,14 @@ export interface QueuedAction {
 const KEY = 'helpsuprov:offline-queue';
 const IDB_KEY = 'queue';
 const store = createStore('helpsuprov', 'offline');
-
 const MAX_RETRY_ATTEMPTS = 5;
 
 type QueueListener = (queue: QueuedAction[], syncing: boolean) => void;
 const listeners = new Set<QueueListener>();
 let syncing = false;
 
-/** In-memory дзеркало для синхронного доступу */
 let cache: QueuedAction[] = [];
 
-/** Безпечна генерація UUID */
 function safeUUID(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -48,7 +40,6 @@ function safeUUID(): string {
   });
 }
 
-/** Ініціалізація з IndexedDB та міграція зі старого localStorage */
 export const ready: Promise<void> = (async () => {
   try {
     const stored = (await idbGet<QueuedAction[]>(IDB_KEY, store)) ?? [];
@@ -60,7 +51,7 @@ export const ready: Promise<void> = (async () => {
         localStorage.removeItem(KEY);
       }
     } catch {
-      /* ігноруємо пошкоджені дані legacy */
+      /* ignore */
     }
 
     cache = [...stored, ...legacy];
@@ -83,19 +74,15 @@ export function readQueue(): QueuedAction[] {
 
 function writeQueue(q: QueuedAction[]) {
   cache = [...q];
-  void idbSet(IDB_KEY, cache, store).catch(() => {
-    /* помилка сховища IndexedDB */
-  });
+  void idbSet(IDB_KEY, cache, store).catch(() => {});
   notifyListeners();
 }
 
-/** Видаляє одну конкретну дію за ID (унеможливлює Race Condition) */
 function removeActionFromQueue(id: string) {
   const next = cache.filter((item) => item.id !== id);
   writeQueue(next);
 }
 
-/** Оновлює статус/помилку дії в черзі */
 function updateActionInQueue(id: string, patch: Partial<QueuedAction>) {
   const next = cache.map((item) => (item.id === id ? { ...item, ...patch } : item));
   writeQueue(next);
@@ -110,7 +97,6 @@ export function onQueueChange(fn: QueueListener) {
 function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
   const q = [...cache];
 
-  // Об'єднуємо повторні оновлення того самого запису (крім RPC-операцій)
   const idx = q.findIndex(
     (a) =>
       a.op === 'update' &&
@@ -124,7 +110,7 @@ function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
       ...q[idx],
       values: { ...q[idx].values, ...action.values },
       label: action.label,
-      attempts: 0, // скидаємо лічильник для свіжих даних
+      attempts: 0,
     };
   } else {
     q.push({
@@ -138,7 +124,6 @@ function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
   writeQueue(q);
 }
 
-/** Форматування об'єднання коментарів, щоб нотатки колег не затиралися */
 export function mergeNotes(serverText: string | null, clientText: string | null, at = new Date()): string {
   const server = (serverText ?? '').trim();
   const client = (clientText ?? '').trim();
@@ -148,7 +133,6 @@ export function mergeNotes(serverText: string | null, clientText: string | null,
   return `${server}\n— офлайн-нотатка (${stamp}) —\n${client}`;
 }
 
-/** Оптимістичне блокування та об'єднання конфліктів */
 async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
   if (!a.clientUpdatedAt || !a.mergeFields?.length || !a.matchId) return a.values;
   try {
@@ -172,7 +156,6 @@ async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
   }
 }
 
-/** Виконання однієї операції на сервері */
 async function run(a: QueuedAction) {
   if (a.op === 'rpc' && a.fn) {
     const { error } = await supabase.rpc(a.fn as any, {
@@ -197,15 +180,11 @@ export function isPermanentError(error: unknown): boolean {
   return PERMANENT_REGEX.test(String((error as any)?.message ?? error ?? ''));
 }
 
-/**
- * Запис дії: виконується миттєво при живому зв'язку або додається в чергу
- */
 export async function queuedWrite(
   action: Omit<QueuedAction, 'id' | 'created_at'>
 ): Promise<{ queued: boolean; error?: unknown }> {
   await ready;
 
-  // Якщо зв'язку немає або йде Captive Portal — одразу в чергу
   if (!networkPulse.isOnline()) {
     enqueue(action);
     return { queued: true };
@@ -223,9 +202,6 @@ export async function queuedWrite(
   }
 }
 
-/**
- * Ідемпотентна транзакція Залізних Доларів з унікальним ключем
- */
 export async function queuedIronDollarChange(opts: {
   childId: string;
   amount: number;
@@ -248,9 +224,6 @@ export async function queuedIronDollarChange(opts: {
   });
 }
 
-/**
- * Синхронізація черги з сервером із захистом від обривів на 2G
- */
 export async function flushQueue(): Promise<{ done: number; failed: number }> {
   await ready;
 
@@ -269,7 +242,6 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
   const itemsToProcess = [...cache];
 
   for (const action of itemsToProcess) {
-    // Якщо зв'язок пропав під час обробки черги — зупиняємось без зайвих помилок
     if (!networkPulse.isOnline()) {
       break;
     }
@@ -300,14 +272,11 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
   return { done, failed: cache.length };
 }
 
-/* ---------- Автоматичний запуск синхронізації при появі зв'язку ---------- */
-
 let autoFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
 networkPulse.subscribe((state) => {
   if (state.quality !== 'OFFLINE' && !syncing && cache.length > 0) {
     if (autoFlushTimer) clearTimeout(autoFlushTimer);
-    // Невелика затримка 800ms для стабілізації каналу
     autoFlushTimer = setTimeout(() => {
       void flushQueue();
     }, 800);
