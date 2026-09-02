@@ -1,6 +1,6 @@
 /**
  * Детектор реальної якості зв'язку для проєкту «Залізна Зміна».
- * Оптимізований для автономної роботи в потягах УЗ, карпатських перевалах і тунелях.
+ * Оптимізований для безперервної фонової роботи (в кишені, при заблокованому екрані, у тунелях та потягах УЗ).
  */
 
 export type NetQuality = 'ONLINE_FAST' | 'ONLINE_SLOW' | 'OFFLINE';
@@ -9,24 +9,32 @@ export interface NetPulseState {
   quality: NetQuality;
   latency: number | null;
   checkedAt: number;
-  isCaptivePortal?: boolean;
+  isCaptivePortal: boolean;
+  effectiveType?: '4g' | '3g' | '2g' | 'slow-2g';
+  saveData?: boolean;
 }
 
 type Listener = (state: NetPulseState) => void;
 
-// Конфігурація для умов екстремального 2G/потяга
-const PULSE_TIMEOUT_MS = 2800;          // Жорсткий таймаут (довше чекати на 2G немає сенсу)
-const SLOW_THRESHOLD_MS = 1100;         // Поріг повільного інтернету (EDGE / гори)
-const INTERVAL_FAST_MS = 25000;         // Інтервал при ідеальному 4G
-const INTERVAL_SLOW_MS = 10000;         // Інтервал при нестабільному 2G
-const BASE_OFFLINE_INTERVAL_MS = 6000;  // Базовий інтервал пошуку мережі в офлайні
-const MAX_OFFLINE_INTERVAL_MS = 30000;  // Максимальний інтервал (експоненційний відкат)
+// Інтервали активного режиму (екран увімкнено)
+const PULSE_TIMEOUT_MS = 2500;          // Швидкий таймаут для 2G
+const SLOW_THRESHOLD_MS = 900;          // Поріг 2G / перевантаженого Starlink
+const INTERVAL_FAST_MS = 30000;         // Стабільний 4G (активний)
+const INTERVAL_SLOW_MS = 12000;         // 2G / EDGE (активний)
+const BASE_OFFLINE_INTERVAL_MS = 5000;  // Пошук мережі у тунелі (активний)
+const MAX_OFFLINE_INTERVAL_MS = 25000;  // Максимальний відкат
+
+// Інтервали фонового режиму (екран вимкнено / телефон у кишені)
+const INTERVAL_BG_ONLINE_MS = 45000;    // Фонова перевірка при наявності зв'язку
+const INTERVAL_BG_OFFLINE_MS = 20000;   // Фоновий пошук мережі після виїзду з тунелю
 
 export class NetworkPulse {
   private listeners = new Set<Listener>();
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private inFlight = false;
+  private worker: Worker | null = null;
+  private inFlightCtrl: AbortController | null = null;
   private consecutiveFailures = 0;
+  private consecutiveSuccesses = 0;
   private isDocumentVisible = true;
 
   state: NetPulseState = {
@@ -40,38 +48,45 @@ export class NetworkPulse {
     if (typeof window === 'undefined') return;
 
     this.isDocumentVisible = document.visibilityState === 'visible';
+    this.readNetworkApiInfo();
+    this.initBackgroundWorker();
 
-    // 1. Нативні події браузера
+    // 1. Миттєва реакція на апаратні зміни мережі
     window.addEventListener('online', () => {
       this.consecutiveFailures = 0;
       void this.checkRealConnection(true);
     });
 
     window.addEventListener('offline', () => {
-      this.consecutiveFailures = 1;
+      this.consecutiveFailures = 2;
+      this.consecutiveSuccesses = 0;
       this.emit({
+        ...this.state,
         quality: 'OFFLINE',
         latency: null,
         checkedAt: Date.now(),
         isCaptivePortal: false,
       });
+      this.scheduleNextProbe();
     });
 
-    // 2. Економія батареї: зупинка у фоні, миттєвий пульс при розблокуванні
+    // 2. Зміна видимості: адаптуємо інтервали, НЕ зупиняючи пульс у фоні
     document.addEventListener('visibilitychange', () => {
       this.isDocumentVisible = document.visibilityState === 'visible';
       if (this.isDocumentVisible) {
-        // Телефон розблокували — перевіряємо негайно
+        // Телефон розблокували — робимо негайну швидку перевірку
         void this.checkRealConnection(true);
       } else {
-        this.clearTimer();
+        // У фоні переплановуємо на енергоефективні фонові таймінги
+        this.scheduleNextProbe();
       }
     });
 
-    // 3. Network Information API (швидке визначення 2G/EDGE на смартфонах)
-    const conn = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    // 3. Network Information API (моніторинг типу підключення)
+    const conn = this.getConnectionObj();
     if (conn) {
       conn.addEventListener('change', () => {
+        this.readNetworkApiInfo();
         if (conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g') {
           if (this.state.quality === 'ONLINE_FAST') {
             this.emit({
@@ -85,21 +100,75 @@ export class NetworkPulse {
     }
 
     // Перший запуск
-    this.schedule(100);
+    this.schedule(150);
   }
 
   /**
-   * Активний Micro-Ping із захистом від кешу, редиректів та таймаутів.
-   * @param force - ігнорувати поточні затримки і виконати запит негайно
+   * Створює автономний Inline Web Worker, таймери якого не блокуються
+   * мобільними браузерами при згортанні вкладки чи блокуванні екрана.
+   */
+  private initBackgroundWorker() {
+    try {
+      const workerBlob = new Blob(
+        [
+          `
+          var bgTimer = null;
+          self.onmessage = function(e) {
+            if (e.data.type === 'schedule') {
+              if (bgTimer) clearTimeout(bgTimer);
+              bgTimer = setTimeout(function() {
+                self.postMessage({ type: 'tick' });
+              }, e.data.delay);
+            } else if (e.data.type === 'clear') {
+              if (bgTimer) clearTimeout(bgTimer);
+              bgTimer = null;
+            }
+          };
+          `,
+        ],
+        { type: 'application/javascript' }
+      );
+
+      const blobUrl = URL.createObjectURL(workerBlob);
+      this.worker = new Worker(blobUrl);
+
+      this.worker.onmessage = (e) => {
+        if (e.data?.type === 'tick') {
+          void this.checkRealConnection();
+        }
+      };
+    } catch {
+      // Fallback до звичайних таймерів, якщо Worker заблоковано CSP
+      this.worker = null;
+    }
+  }
+
+  private getConnectionObj(): any {
+    if (typeof navigator === 'undefined') return null;
+    return (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+  }
+
+  private readNetworkApiInfo() {
+    const conn = this.getConnectionObj();
+    if (conn) {
+      this.state.effectiveType = conn.effectiveType;
+      this.state.saveData = !!conn.saveData;
+    }
+  }
+
+  /**
+   * Активний Micro-Ping із нульовим споживанням трафіку (HEAD),
+   * що працює як на передньому плані, так і у фоновому режимі.
    */
   async checkRealConnection(force = false): Promise<NetPulseState> {
-    if (this.inFlight) return this.state;
-    if (!this.isDocumentVisible && !force) return this.state;
+    if (this.inFlightCtrl && !force) return this.state;
 
-    // Швидка апаратна перевірка
+    // Апаратний офлайн
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      this.consecutiveFailures++;
+      this.consecutiveFailures = Math.max(2, this.consecutiveFailures + 1);
+      this.consecutiveSuccesses = 0;
       return this.emit({
+        ...this.state,
         quality: 'OFFLINE',
         latency: null,
         checkedAt: Date.now(),
@@ -107,27 +176,37 @@ export class NetworkPulse {
       });
     }
 
-    this.inFlight = true;
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), PULSE_TIMEOUT_MS);
+    if (this.inFlightCtrl) {
+      this.inFlightCtrl.abort();
+    }
+
+    this.inFlightCtrl = new AbortController();
+    const ctrl = this.inFlightCtrl;
+    const timeoutId = setTimeout(() => ctrl.abort(), PULSE_TIMEOUT_MS);
     const started = performance.now();
 
     try {
-      // 1-байтний запит до favicon з унікальним таймстемпом проти кешування
-      const res = await fetch(`/favicon.ico?_pulse=${Date.now()}`, {
+      const res = await fetch(`/favicon.ico?_p=${Date.now()}`, {
         method: 'HEAD',
         cache: 'no-store',
-        redirect: 'manual', // Запобігає тихому редиректу на сторінки авторизації Wi-Fi
+        redirect: 'manual',
+        headers: { Accept: '*/*' },
         signal: ctrl.signal,
       });
 
-      clearTimeout(to);
+      clearTimeout(timeoutId);
       const latency = Math.round(performance.now() - started);
 
-      // Якщо сервер відповів редиректом (301/302/0) — це Captive Portal (інтернету немає)
-      if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+      // Детекція Captive Portal (фейковий інтернет на Wi-Fi потяга)
+      const isRedirect = res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
+      const contentType = res.headers.get('content-type') || '';
+      const isHtmlResponse = contentType.toLowerCase().includes('text/html');
+
+      if (isRedirect || isHtmlResponse) {
         this.consecutiveFailures++;
+        this.consecutiveSuccesses = 0;
         return this.emit({
+          ...this.state,
           quality: 'OFFLINE',
           latency: null,
           checkedAt: Date.now(),
@@ -135,10 +214,18 @@ export class NetworkPulse {
         });
       }
 
+      // Успішний зв'язок
       if (res.ok || res.status === 304 || res.status === 204) {
+        this.consecutiveSuccesses++;
         this.consecutiveFailures = 0;
-        const quality: NetQuality = latency > SLOW_THRESHOLD_MS ? 'ONLINE_SLOW' : 'ONLINE_FAST';
+
+        const quality: NetQuality =
+          latency > SLOW_THRESHOLD_MS || this.state.effectiveType === '2g' || this.state.effectiveType === 'slow-2g'
+            ? 'ONLINE_SLOW'
+            : 'ONLINE_FAST';
+
         return this.emit({
+          ...this.state,
           quality,
           latency,
           checkedAt: Date.now(),
@@ -148,45 +235,76 @@ export class NetworkPulse {
 
       throw new Error(`HTTP_${res.status}`);
     } catch {
-      clearTimeout(to);
+      clearTimeout(timeoutId);
       this.consecutiveFailures++;
+      this.consecutiveSuccesses = 0;
+
+      const nextQuality: NetQuality = this.consecutiveFailures >= 2 ? 'OFFLINE' : 'ONLINE_SLOW';
+
       return this.emit({
-        quality: 'OFFLINE',
+        ...this.state,
+        quality: nextQuality,
         latency: null,
         checkedAt: Date.now(),
         isCaptivePortal: false,
       });
     } finally {
-      this.inFlight = false;
+      this.inFlightCtrl = null;
       this.scheduleNextProbe();
     }
   }
 
-  /** Розрахунок інтервалу наступного пульсу з експоненційним відкатом */
+  /**
+   * Розрахунок інтервалу для активного та фонового режимів
+   */
   private scheduleNextProbe() {
-    if (!this.isDocumentVisible) return;
+    let delay: number;
 
-    let delay = INTERVAL_FAST_MS;
-
-    if (this.state.quality === 'ONLINE_SLOW') {
-      delay = INTERVAL_SLOW_MS;
-    } else if (this.state.quality === 'OFFLINE') {
-      // Експоненційний відкат у тунелях: 6s -> 12s -> 24s -> 30s max
-      const backoff = BASE_OFFLINE_INTERVAL_MS * Math.pow(1.5, Math.min(this.consecutiveFailures, 4));
-      delay = Math.min(backoff, MAX_OFFLINE_INTERVAL_MS);
+    if (!this.isDocumentVisible) {
+      // ФОНОВИЙ РЕЖИМ (екран згасло або вкладку згорнуто)
+      if (this.state.quality === 'OFFLINE') {
+        delay = INTERVAL_BG_OFFLINE_MS; // Кожні 20 секунд перевіряємо, чи вийшов потяг з тунелю
+      } else {
+        delay = INTERVAL_BG_ONLINE_MS;  // Кожні 45 секунд підтримуємо актуальний стан
+      }
+    } else {
+      // АКТИВНИЙ РЕЖИМ (екран увімкнено)
+      if (this.state.quality === 'ONLINE_SLOW') {
+        delay = INTERVAL_SLOW_MS;
+      } else if (this.state.quality === 'OFFLINE') {
+        const backoff = BASE_OFFLINE_INTERVAL_MS * Math.pow(1.4, Math.min(this.consecutiveFailures, 4));
+        delay = Math.min(backoff, MAX_OFFLINE_INTERVAL_MS);
+      } else {
+        delay = INTERVAL_FAST_MS;
+      }
     }
 
-    this.schedule(delay);
+    if (this.state.saveData) {
+      delay = Math.round(delay * 1.5);
+    }
+
+    // Рандомізований джиттер (±15%) для запобігання пікових сплесків
+    const jitter = delay * 0.15 * (Math.random() * 2 - 1);
+    this.schedule(Math.round(delay + jitter));
   }
 
   private schedule(delay: number) {
     this.clearTimer();
-    this.timer = setTimeout(() => {
-      void this.checkRealConnection();
-    }, delay);
+
+    // Якщо доступний фоновий Worker — плануємо через нього (не засинає у фоні)
+    if (this.worker) {
+      this.worker.postMessage({ type: 'schedule', delay });
+    } else {
+      this.timer = setTimeout(() => {
+        void this.checkRealConnection();
+      }, delay);
+    }
   }
 
   private clearTimer() {
+    if (this.worker) {
+      this.worker.postMessage({ type: 'clear' });
+    }
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -196,23 +314,45 @@ export class NetworkPulse {
   private emit(next: NetPulseState): NetPulseState {
     const qualityChanged = next.quality !== this.state.quality;
     const portalChanged = next.isCaptivePortal !== this.state.isCaptivePortal;
-    
+    const latencyChanged = next.latency !== this.state.latency;
+
     this.state = next;
 
-    if (qualityChanged || portalChanged) {
+    if (qualityChanged || portalChanged || (this.state.quality !== 'OFFLINE' && latencyChanged)) {
       this.listeners.forEach((l) => l(next));
     }
     return next;
   }
 
-  /** Чи є хоча б мінімальний зв'язок */
   isOnline(): boolean {
     return this.state.quality !== 'OFFLINE';
   }
 
-  /** Чи працює мережа в режимі 2G/EDGE (потяг або гори) */
   isSlow(): boolean {
     return this.state.quality === 'ONLINE_SLOW';
+  }
+
+  /**
+   * Асинхронне очікування появи інтернету (працює навіть у фоновому режимі)
+   */
+  async waitForOnline(timeoutMs = 60000): Promise<boolean> {
+    if (this.isOnline()) return true;
+
+    return new Promise<boolean>((resolve) => {
+      let cleanup: () => void;
+      const timeoutTimer = setTimeout(() => {
+        cleanup();
+        resolve(this.isOnline());
+      }, timeoutMs);
+
+      cleanup = this.subscribe((state) => {
+        if (state.quality !== 'OFFLINE') {
+          clearTimeout(timeoutTimer);
+          cleanup();
+          resolve(true);
+        }
+      });
+    });
   }
 
   subscribe(listener: Listener): () => void {
@@ -221,6 +361,19 @@ export class NetworkPulse {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  destroy() {
+    this.clearTimer();
+    if (this.inFlightCtrl) {
+      this.inFlightCtrl.abort();
+      this.inFlightCtrl = null;
+    }
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this.listeners.clear();
   }
 }
 
