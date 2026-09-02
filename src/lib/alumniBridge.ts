@@ -43,9 +43,10 @@ export function getBridgeRoomName(identifier: string): string {
 /** Перевірка валідності структури паспорта */
 function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
   if (!obj || typeof obj !== 'object') return false;
-  if (!obj.passport || typeof obj.passport !== 'object') return false;
-  if (typeof obj.signature !== 'string' || !obj.signature.trim()) return false;
-  if (!obj.passport.id || !obj.passport.full_name) return false;
+  if (typeof obj.passport_id !== 'string' || !obj.passport_id.trim()) return false;
+  if (typeof obj.checksum !== 'string' || !obj.checksum.trim()) return false;
+  if (!obj.child_profile || typeof obj.child_profile !== 'object') return false;
+  if (!obj.child_profile.full_name) return false;
   return true;
 }
 
@@ -75,7 +76,7 @@ export function providePassportForPull(
   customIdentifier?: string,
   callbacks: PassportProviderCallbacks = {},
 ): PassportProviderHandle {
-  const channelId = cleanBridgeIdentifier(customIdentifier || passport.passport.id);
+  const channelId = cleanBridgeIdentifier(customIdentifier || passport.passport_id);
   const room = getBridgeRoomName(channelId);
 
   const channel = supabase.channel(room, {
@@ -118,12 +119,18 @@ export function providePassportForPull(
   return { channelId, close };
 }
 
+export interface BridgeHostHandle {
+  pin: string;
+  expiresAt: number;
+  close: () => void;
+}
+
 /** Аліас для сумісності з існуючим кодом */
 export const hostPassportBridge = (
   passport: AlumniPassportEnvelope,
   callbacks: { onSent?: () => void; onExpired?: () => void; pin?: string } = {},
-) => {
-  const pin = callbacks.pin || passport.passport.id || generateBridgePin();
+): BridgeHostHandle => {
+  const pin = callbacks.pin || passport.passport_id || generateBridgePin();
   const handle = providePassportForPull(passport, pin, {
     onTransferred: callbacks.onSent,
     onExpired: callbacks.onExpired,
@@ -164,6 +171,7 @@ export function requestPassportPull(
   let settled = false;
   let timeoutTimer = 0;
   let retryInterval = 0;
+  let resolveOuter: ((r: PassportPullResult) => void) | null = null;
 
   const cleanup = () => {
     window.clearTimeout(timeoutTimer);
@@ -173,6 +181,7 @@ export function requestPassportPull(
   };
 
   const promise = new Promise<PassportPullResult>((resolve) => {
+    resolveOuter = resolve;
     const finish = (result: PassportPullResult) => {
       if (settled) return;
       settled = true;
@@ -237,7 +246,7 @@ export function requestPassportPull(
       if (!settled) {
         settled = true;
         cleanup();
-        resolve({ status: 'cancelled', error: 'Перенесення скасовано користувачем' });
+        resolveOuter?.({ status: 'cancelled', error: 'Перенесення скасовано користувачем' });
       }
     },
   };
