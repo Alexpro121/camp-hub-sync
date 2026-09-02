@@ -1,39 +1,54 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
+import { networkPulse } from '@/lib/networkPulse';
 
 export interface QueuedAction {
   id: string;
-  table: 'children' | 'iron_dollar_transactions' | 'talent_entries' | 'broadcasts';
-  /** `rpc` runs an atomic, idempotent server function instead of a plain write. */
+  table: 'children' | 'iron_dollar_transactions' | 'talent_entries' | 'broadcasts' | string;
+  /** `rpc` виконує атомарну ідемпотентну функцію на сервері */
   op: 'update' | 'insert' | 'rpc';
   matchId?: string;
   values: Record<string, any>;
-  /** Server function name for `op: 'rpc'`. */
-  fn?: 'increment_iron_dollars';
-  /** Guarantees a replayed action is applied exactly once. */
+  /** Назва збереженої функції для `op: 'rpc'` */
+  fn?: 'increment_iron_dollars' | string;
+  /** Забезпечує захист від повторного нарахування */
   idempotencyKey?: string;
-  /** [L-1] Optimistic lock: when the server row is newer, text fields are merged. */
+  /** [L-1] Optimistic lock: дата модифікації запису клієнтом */
   clientUpdatedAt?: string;
-  /** Text columns that must be merged (appended) instead of overwritten. */
+  /** Текстові поля, які об'єднуються замість перезапису */
   mergeFields?: string[];
   label: string;
   created_at: number;
+  attempts?: number;
+  lastError?: string;
 }
 
-
 const KEY = 'helpsuprov:offline-queue';
-/** IndexedDB store — no 5 MB localStorage ceiling. */
-const store = createStore('helpsuprov', 'offline');
 const IDB_KEY = 'queue';
+const store = createStore('helpsuprov', 'offline');
+
+const MAX_RETRY_ATTEMPTS = 5;
 
 type QueueListener = (queue: QueuedAction[], syncing: boolean) => void;
 const listeners = new Set<QueueListener>();
 let syncing = false;
 
-/** In-memory mirror so callers stay synchronous while IndexedDB is async. */
+/** In-memory дзеркало для синхронного доступу */
 let cache: QueuedAction[] = [];
 
-/** Hydrate from IndexedDB once, migrating any legacy localStorage queue. */
+/** Безпечна генерація UUID */
+function safeUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/** Ініціалізація з IndexedDB та міграція зі старого localStorage */
 export const ready: Promise<void> = (async () => {
   try {
     const stored = (await idbGet<QueuedAction[]>(IDB_KEY, store)) ?? [];
@@ -44,23 +59,46 @@ export const ready: Promise<void> = (async () => {
         legacy = JSON.parse(raw) as QueuedAction[];
         localStorage.removeItem(KEY);
       }
-    } catch { /* ignore malformed legacy payload */ }
+    } catch {
+      /* ігноруємо пошкоджені дані legacy */
+    }
+
     cache = [...stored, ...legacy];
-    if (legacy.length) await idbSet(IDB_KEY, cache, store);
+    if (legacy.length) {
+      await idbSet(IDB_KEY, cache, store);
+    }
   } catch {
     cache = [];
   }
-  listeners.forEach((l) => l(cache, syncing));
+  notifyListeners();
 })();
 
+function notifyListeners() {
+  listeners.forEach((l) => l([...cache], syncing));
+}
+
 export function readQueue(): QueuedAction[] {
-  return cache;
+  return [...cache];
 }
 
 function writeQueue(q: QueuedAction[]) {
-  cache = q;
-  void idbSet(IDB_KEY, q, store).catch(() => { /* storage unavailable */ });
-  listeners.forEach((l) => l(q, syncing));
+  cache = [...q];
+  void idbSet(IDB_KEY, cache, store).catch(() => {
+    /* помилка сховища IndexedDB */
+  });
+  notifyListeners();
+}
+
+/** Видаляє одну конкретну дію за ID (унеможливлює Race Condition) */
+function removeActionFromQueue(id: string) {
+  const next = cache.filter((item) => item.id !== id);
+  writeQueue(next);
+}
+
+/** Оновлює статус/помилку дії в черзі */
+function updateActionInQueue(id: string, patch: Partial<QueuedAction>) {
+  const next = cache.map((item) => (item.id === id ? { ...item, ...patch } : item));
+  writeQueue(next);
 }
 
 export function onQueueChange(fn: QueueListener) {
@@ -70,21 +108,37 @@ export function onQueueChange(fn: QueueListener) {
 }
 
 function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
-  const q = readQueue();
-  // Collapse repeated updates to the same row+fields. Never collapse `rpc`
-  // deltas — each one is a distinct, idempotency-keyed operation.
+  const q = [...cache];
+
+  // Об'єднуємо повторні оновлення того самого запису (крім RPC-операцій)
   const idx = q.findIndex(
-    (a) => a.op === 'update' && action.op === 'update' && a.table === action.table && a.matchId === action.matchId,
+    (a) =>
+      a.op === 'update' &&
+      action.op === 'update' &&
+      a.table === action.table &&
+      a.matchId === action.matchId
   );
+
   if (idx >= 0) {
-    q[idx] = { ...q[idx], values: { ...q[idx].values, ...action.values }, label: action.label };
+    q[idx] = {
+      ...q[idx],
+      values: { ...q[idx].values, ...action.values },
+      label: action.label,
+      attempts: 0, // скидаємо лічильник для свіжих даних
+    };
   } else {
-    q.push({ ...action, id: crypto.randomUUID(), created_at: Date.now() });
+    q.push({
+      ...action,
+      id: safeUUID(),
+      created_at: Date.now(),
+      attempts: 0,
+    });
   }
+
   writeQueue(q);
 }
 
-/** Formats a merge marker so a colleague's note is never silently overwritten. */
+/** Форматування об'єднання коментарів, щоб нотатки колег не затиралися */
 export function mergeNotes(serverText: string | null, clientText: string | null, at = new Date()): string {
   const server = (serverText ?? '').trim();
   const client = (clientText ?? '').trim();
@@ -94,10 +148,7 @@ export function mergeNotes(serverText: string | null, clientText: string | null,
   return `${server}\n— офлайн-нотатка (${stamp}) —\n${client}`;
 }
 
-/**
- * [L-1] Optimistic locking. If the server row changed after the client edit was
- * captured, merge the configured text columns instead of clobbering them.
- */
+/** Оптимістичне блокування та об'єднання конфліктів */
 async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
   if (!a.clientUpdatedAt || !a.mergeFields?.length || !a.matchId) return a.values;
   try {
@@ -106,9 +157,11 @@ async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
       .select(['updated_at', ...a.mergeFields].join(', '))
       .eq('id', a.matchId)
       .maybeSingle();
+
     const server = data as Record<string, any> | null;
     if (!server?.updated_at) return a.values;
     if (new Date(server.updated_at).getTime() <= new Date(a.clientUpdatedAt).getTime()) return a.values;
+
     const merged = { ...a.values };
     for (const f of a.mergeFields) {
       merged[f] = mergeNotes(server[f] ?? null, a.values[f] ?? null, new Date(a.created_at));
@@ -119,10 +172,10 @@ async function resolveConflicts(a: QueuedAction): Promise<Record<string, any>> {
   }
 }
 
+/** Виконання однієї операції на сервері */
 async function run(a: QueuedAction) {
-
   if (a.op === 'rpc' && a.fn) {
-    const { error } = await supabase.rpc(a.fn, {
+    const { error } = await supabase.rpc(a.fn as any, {
       ...(a.values as any),
       p_idempotency_key: a.idempotencyKey ?? null,
     });
@@ -131,45 +184,47 @@ async function run(a: QueuedAction) {
     const values = await resolveConflicts(a);
     const { error } = await supabase.from(a.table as any).update(values).eq('id', a.matchId);
     if (error) throw error;
-
   } else {
     const { error } = await supabase.from(a.table as any).insert(a.values);
     if (error) throw error;
   }
 }
 
-/** Perform a write immediately when online, otherwise store it in the offline queue. */
+const PERMANENT_REGEX =
+  /insufficient_funds|forbidden|not_authenticated|fair_closed|child_not_found|invalid_amount|awaiting_target_consent|violates row-level security|violates foreign key|duplicate key/i;
+
+export function isPermanentError(error: unknown): boolean {
+  return PERMANENT_REGEX.test(String((error as any)?.message ?? error ?? ''));
+}
+
+/**
+ * Запис дії: виконується миттєво при живому зв'язку або додається в чергу
+ */
 export async function queuedWrite(
-  action: Omit<QueuedAction, 'id' | 'created_at'>,
+  action: Omit<QueuedAction, 'id' | 'created_at'>
 ): Promise<{ queued: boolean; error?: unknown }> {
   await ready;
-  if (!navigator.onLine) {
+
+  // Якщо зв'язку немає або йде Captive Portal — одразу в чергу
+  if (!networkPulse.isOnline()) {
     enqueue(action);
     return { queued: true };
   }
+
   try {
     await run({ ...action, id: 'live', created_at: Date.now() });
     return { queued: false };
   } catch (error) {
-    // Business rejections (rule violations) are final — retrying them forever
-    // would poison the queue, so they are surfaced to the caller instead.
-    if (isPermanentError(error)) return { queued: false, error };
+    if (isPermanentError(error)) {
+      return { queued: false, error };
+    }
     enqueue(action);
     return { queued: true, error };
   }
 }
 
-const PERMANENT = /insufficient_funds|forbidden|not_authenticated|fair_closed|child_not_found|invalid_amount|awaiting_target_consent|violates row-level security/i;
-
-export function isPermanentError(error: unknown): boolean {
-  return PERMANENT.test(String((error as any)?.message ?? error ?? ''));
-}
-
-
 /**
- * Atomic, replay-safe Iron Dollar change. Online it hits the server function
- * directly; offline it is queued with a stable idempotency key so a retry after
- * reconnect can never credit the same coins twice.
+ * Ідемпотентна транзакція Залізних Доларів з унікальним ключем
  */
 export async function queuedIronDollarChange(opts: {
   childId: string;
@@ -182,7 +237,7 @@ export async function queuedIronDollarChange(opts: {
     table: 'iron_dollar_transactions',
     op: 'rpc',
     fn: 'increment_iron_dollars',
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: safeUUID(),
     label: opts.label,
     values: {
       p_child_id: opts.childId,
@@ -193,27 +248,68 @@ export async function queuedIronDollarChange(opts: {
   });
 }
 
+/**
+ * Синхронізація черги з сервером із захистом від обривів на 2G
+ */
 export async function flushQueue(): Promise<{ done: number; failed: number }> {
   await ready;
-  if (syncing || !navigator.onLine) return { done: 0, failed: 0 };
-  const q = readQueue();
-  if (!q.length) return { done: 0, failed: 0 };
-  syncing = true;
-  listeners.forEach((l) => l(q, true));
 
-  const rest: QueuedAction[] = [];
+  if (syncing || !networkPulse.isOnline()) {
+    return { done: 0, failed: cache.length };
+  }
+
+  if (!cache.length) {
+    return { done: 0, failed: 0 };
+  }
+
+  syncing = true;
+  notifyListeners();
+
   let done = 0;
-  for (const a of q) {
-    try {
-      await run(a);
-      done++;
-    } catch (e) {
-      // Permanently rejected actions are dropped instead of blocking the queue.
-      if (!isPermanentError(e)) rest.push(a);
+  const itemsToProcess = [...cache];
+
+  for (const action of itemsToProcess) {
+    // Якщо зв'язок пропав під час обробки черги — зупиняємось без зайвих помилок
+    if (!networkPulse.isOnline()) {
+      break;
     }
 
+    try {
+      await run(action);
+      removeActionFromQueue(action.id);
+      done++;
+    } catch (e: any) {
+      const isFatal = isPermanentError(e);
+      const attempts = (action.attempts || 0) + 1;
+
+      if (isFatal || attempts >= MAX_RETRY_ATTEMPTS) {
+        console.warn(`[OfflineQueue] Dropping action ${action.id} (${action.label}):`, e);
+        removeActionFromQueue(action.id);
+      } else {
+        updateActionInQueue(action.id, {
+          attempts,
+          lastError: String(e?.message || e || 'Network error'),
+        });
+      }
+    }
   }
+
   syncing = false;
-  writeQueue(rest);
-  return { done, failed: rest.length };
+  notifyListeners();
+
+  return { done, failed: cache.length };
 }
+
+/* ---------- Автоматичний запуск синхронізації при появі зв'язку ---------- */
+
+let autoFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+networkPulse.subscribe((state) => {
+  if (state.quality !== 'OFFLINE' && !syncing && cache.length > 0) {
+    if (autoFlushTimer) clearTimeout(autoFlushTimer);
+    // Невелика затримка 800ms для стабілізації каналу
+    autoFlushTimer = setTimeout(() => {
+      void flushQueue();
+    }, 800);
+  }
+});
