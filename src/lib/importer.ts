@@ -17,7 +17,7 @@ export interface FieldDefinition {
 }
 
 export const FIELD_DEFINITIONS: FieldDefinition[] = [
-  { key: 'full_name', label: "ПІБ дитини", required: true },
+  { key: 'full_name', label: 'ПІБ дитини', required: true },
   { key: 'team_number', label: '№ Команди' },
   { key: 'phone', label: 'Телефон' },
   { key: 'is_present', label: 'Присутність' },
@@ -45,7 +45,7 @@ export interface ImportResult {
   rows: ImportRow[];
   headers: string[];
   headerMap: Record<string, StdKey>;
-  mapSource: 'ai' | 'local' | 'block' | 'manual';
+  mapSource: 'ai' | 'local' | 'block' | 'manual' | 'pdf';
   skipped: number;
   detectedTeams: number[];
   matrix?: any[][];
@@ -57,7 +57,7 @@ export function detectTeams(rows: ImportRow[]): number[] {
   );
 }
 
-/* ---------- Google Sheets URL Helpers ---------- */
+/* ---------- Google Sheets Helpers ---------- */
 
 export function parseSheetUrl(url: string): { id: string; gid: string } | null {
   const clean = (url || '').trim();
@@ -84,17 +84,17 @@ const SYNONYMS: Record<StdKey, string[]> = {
   full_name: [
     'піп дитини', 'піб дитини', 'піп', 'піб', 'фио', 'фіо',
     "імʼя та прізвище", "ім'я та прізвище", "ім'я", 'імя', 'прізвище',
-    'name', 'full name', 'дитина', 'учень', 'учасник'
+    'name', 'full name', 'дитина', 'учень', 'учасник', 'прізвище імʼя'
   ],
   phone: ['номер телефону дитини', 'телефон дитини', 'номер телефону', 'телефон', 'мобільний', 'моб', 'phone', 'тел'],
-  team_name: ['команда', 'назва команди', 'team name', 'назва загону', 'проєкт', 'проект'],
-  note_from_table: ['примітка', 'примітки', 'нотатка', 'примечание', 'місто', 'коментар', 'note', 'notes', 'інфо'],
+  team_name: ['команда', 'назва команди', 'team name', 'назва загону', 'проєкт', 'проект', 'напрям'],
+  note_from_table: ['примітка', 'примітки', 'нотатка', 'примечание', 'місто', 'коментар', 'note', 'notes', 'інфо', 'готель', 'пільга'],
 };
 
 const norm = (s: string) =>
   String(s ?? '')
     .toLowerCase()
-    .replace(/["'’`]/g, '')
+    .replace(/["'’`ʼʻ]/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -126,7 +126,7 @@ export function localHeaderMap(headers: string[]): Record<string, StdKey> {
   return map;
 }
 
-/* ---------- Text & Name Normalization ---------- */
+/* ---------- Text & Name Normalization Helpers ---------- */
 
 const ROMAN_NUMERALS: Record<string, number> = {
   i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10,
@@ -163,7 +163,7 @@ export function isStatsRow(text: string): boolean {
     /\d+\s*дітей/i.test(s) ||
     /\(\s*\d+\s*хл/i.test(s) ||
     /\d+\s*дів/i.test(s) ||
-    /^(?:всього|разом|ітого|статистика|кількість|всего):/i.test(s) ||
+    /^(?:всього|разом|ітого|статистика|кількість|всего):?/i.test(s) ||
     /^(?:дівчат|хлопців|мальчиков|девочек)\b/i.test(s)
   );
 }
@@ -191,13 +191,46 @@ export function isCounselorOrMentorRow(text: string): boolean {
   return false;
 }
 
+/**
+ * Розділяє рядок на: Номер у списку, ПІБ дитини, Примітку (напр. "- ГОТЕЛЬ")
+ */
+export function extractLineDetails(raw: string): {
+  rowNumber: number | null;
+  cleanName: string;
+  note: string | null;
+} {
+  let s = String(raw ?? '').trim();
+  if (!s) return { rowNumber: null, cleanName: '', note: null };
+
+  let rowNumber: number | null = null;
+  let note: string | null = null;
+
+  // 1. Витягуємо номер на початку: "1.", "1 ", "14.Ковалевська", "26) "
+  const numMatch = s.match(/^(\d+)[\.\)\-:\s]+\s*(.*)$/);
+  if (numMatch) {
+    rowNumber = parseInt(numMatch[1], 10);
+    s = numMatch[2].trim();
+  }
+
+  // 2. Витягуємо примітку в кінці: " - ГОТЕЛЬ", "(ГОТЕЛЬ)", "[Київ]"
+  const noteMatch = s.match(/[\s\t]+[-–—]\s+([^\-]+)$/) || s.match(/[\s\t]*\(([^\)]+)\)$/) || s.match(/[\s\t]*\[([^\]]+)\]$/);
+  if (noteMatch && noteMatch[1]) {
+    note = noteMatch[1].trim();
+    s = s.slice(0, s.lastIndexOf(noteMatch[0])).trim();
+  }
+
+  const cleanName = cleanPersonName(s);
+  return { rowNumber, cleanName, note };
+}
+
 export function cleanPersonName(raw: string): string {
   let s = String(raw ?? '')
     .replace(/^[\s#№\d.)\-–—]+/, '')
-    .replace(/["'’`]/g, "'")
+    .replace(/[`’ʼʻ]/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Правильне капіталізування кожного слова (враховує 'мілана віталіївна' та дефіси 'Жан-Люк')
   return s
     .split(' ')
     .map((word) => {
@@ -212,21 +245,23 @@ export function cleanPersonName(raw: string): string {
 
 export function isLikelyPersonName(text: string): boolean {
   const s = String(text ?? '').trim();
-  if (!s || s.length < 4 || s.length > 70) return false;
+  if (!s || s.length < 3 || s.length > 80) return false;
   if (isStatsRow(s) || isCounselorOrMentorRow(s)) return false;
   if (extractTeamNumberFromText(s) !== null) return false;
 
-  const low = norm(s);
+  const { cleanName } = extractLineDetails(s);
+  if (!cleanName || cleanName.length < 3) return false;
+
+  const low = norm(cleanName);
   for (const list of Object.values(SYNONYMS)) {
     if (list.includes(low)) return false;
   }
 
-  const cleaned = cleanPersonName(s);
-  const words = cleaned.split(' ').filter(Boolean);
-  if (words.length < 2 || words.length > 4) return false;
-  if (/[0-9@:/+=_\\*#~<>{}]/.test(s)) return false;
+  const words = cleanName.split(' ').filter(Boolean);
+  // Дозволяємо від 1 до 5 слів (наприклад, "Авраменко Серафім", "Христина Степанівна Скалич")
+  if (words.length < 1 || words.length > 5) return false;
 
-  const namePattern = /^[A-Za-zА-Яа-яЄєІіЇїҐґ'`\-]+$/;
+  const namePattern = /^[A-Za-zА-Яа-яЄєІіЇїҐґ'`ʼ\-]+$/;
   return words.every((w) => namePattern.test(w) && w.length >= 2);
 }
 
@@ -259,7 +294,7 @@ export function parseIntSafe(v: any): number | null {
   return s ? parseInt(s, 10) : null;
 }
 
-/* ---------- Sheet → Matrix Conversion ---------- */
+/* ---------- Text & PDF Matrix Builders ---------- */
 
 export function matrixFromCsv(csv: string): any[][] {
   const wb = XLSX.read(csv, { type: 'string', raw: true });
@@ -268,10 +303,104 @@ export function matrixFromCsv(csv: string): any[][] {
 }
 
 export async function matrixFromFile(file: File): Promise<any[][]> {
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  if (isPdf) {
+    return matrixFromPdf(file);
+  }
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+}
+
+export function matrixFromRawText(text: string): any[][] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      if (line.includes('\t')) return line.split('\t').map((c) => c.trim());
+      if (line.includes(';') && !line.includes(',')) return line.split(';').map((c) => c.trim());
+      return [line];
+    });
+}
+
+/**
+ * Парсер PDF: читає через pdfjs-dist у браузері або Node середовищі
+ */
+export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Array): Promise<any[][]> {
+  try {
+    let pdfjsLib: any = (window as any).pdfjsLib;
+
+    if (!pdfjsLib) {
+      // Динамічний імпорт або CDN fallback
+      try {
+        pdfjsLib = await import('pdfjs-dist');
+      } catch {
+        if (typeof window !== 'undefined') {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = () => resolve();
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+          pdfjsLib = (window as any).pdfjsLib;
+        }
+      }
+    }
+
+    if (!pdfjsLib) {
+      throw new Error('PDF.js library not available.');
+    }
+
+    if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    let arrayBuffer: ArrayBuffer;
+    if (fileOrBuffer instanceof File) {
+      arrayBuffer = await fileOrBuffer.arrayBuffer();
+    } else if (fileOrBuffer instanceof Uint8Array) {
+      arrayBuffer = fileOrBuffer.buffer;
+    } else {
+      arrayBuffer = fileOrBuffer;
+    }
+
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const allLines: any[][] = [];
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Групуємо текст за координатою Y (рядки)
+      const items = textContent.items as Array<{ str: string; transform: number[] }>;
+      const linesMap = new Map<number, string[]>();
+
+      for (const item of items) {
+        if (!item.str || !item.str.trim()) continue;
+        const y = Math.round(item.transform[5]); // координата Y
+        if (!linesMap.has(y)) linesMap.set(y, []);
+        linesMap.get(y)!.push(item.str);
+      }
+
+      // Сортуємо рядки зверху вниз (Y спадає)
+      const sortedY = [...linesMap.keys()].sort((a, b) => b - a);
+      for (const y of sortedY) {
+        const rowText = linesMap.get(y)!.join(' ').replace(/\s+/g, ' ').trim();
+        if (rowText) {
+          allLines.push([rowText]);
+        }
+      }
+    }
+
+    return allLines;
+  } catch (err) {
+    console.error('PDF parsing error, falling back to text extractor:', err);
+    return [];
+  }
 }
 
 export function detectHeaderIndex(matrix: any[][]): number {
@@ -290,7 +419,7 @@ export function detectHeaderIndex(matrix: any[][]): number {
   return bestScore >= 2 ? best : -1;
 }
 
-/* ---------- Parse with Custom/Manual Column Mapping ---------- */
+/* ---------- Custom/Manual Mapping Parser ---------- */
 
 export function parseWithCustomMapping(
   matrix: any[][],
@@ -322,17 +451,27 @@ export function parseWithCustomMapping(
       if (val === undefined || val === null || val === '') return;
       rawData[`Col_${colIdx + 1}`] = val;
 
-      if (key === 'full_name') fullName = cleanPersonName(String(val));
-      else if (key === 'team_number') teamNumber = parseIntSafe(val) ?? extractTeamNumberFromText(String(val));
-      else if (key === 'phone') phone = normalizePhone(val);
-      else if (key === 'is_present') presence = normalizePresence(val);
-      else if (key === 'team_name') teamName = String(val).trim();
-      else if (key === 'note_from_table') note = String(val).trim();
-      else if (key === 'row_number') rowNumber = parseIntSafe(val);
+      if (key === 'full_name') {
+        const details = extractLineDetails(String(val));
+        fullName = details.cleanName;
+        if (details.note && !note) note = details.note;
+        if (details.rowNumber && !rowNumber) rowNumber = details.rowNumber;
+      } else if (key === 'team_number') {
+        teamNumber = parseIntSafe(val) ?? extractTeamNumberFromText(String(val));
+      } else if (key === 'phone') {
+        phone = normalizePhone(val);
+      } else if (key === 'is_present') {
+        presence = normalizePresence(val);
+      } else if (key === 'team_name') {
+        teamName = String(val).trim();
+      } else if (key === 'note_from_table') {
+        note = String(val).trim();
+      } else if (key === 'row_number') {
+        rowNumber = parseIntSafe(val);
+      }
     });
 
     if (!fullName) {
-      // Check if this row is a team header like "1 команда"
       const detected = extractTeamNumberFromText(String(r[0] ?? ''));
       if (detected !== null) currentTeam = detected;
       continue;
@@ -396,7 +535,7 @@ export function parseWithCustomMapping(
   };
 }
 
-/* ---------- Block Parser ---------- */
+/* ---------- Intelligent Block / PDF Parser ---------- */
 
 function parseBlockFormat(matrix: any[][]): ImportResult | null {
   let hasTeamHeaders = false;
@@ -427,6 +566,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     const cell0 = cells[0] || '';
     const teamNum = extractTeamNumberFromText(cell0);
 
+    // Зміна команди (напр. "1 команда", "2 команда")
     if (teamNum !== null) {
       currentTeamNumber = teamNum;
       currentTeamName = null;
@@ -438,13 +578,15 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     if (cells.some(isStatsRow)) continue;
     if (cells.some(isCounselorOrMentorRow)) continue;
 
+    // Якщо це рядок заголовка/проєкту команди (напр. "МАН + Сайт", "КПДЮ + Сайт")
     if (!currentTeamName && cell0 && !isLikelyPersonName(cell0)) {
-      if (cell0.length < 60 && !/^\d+$/.test(cell0)) {
+      if (cell0.length < 80 && !/^\d+$/.test(cell0)) {
         currentTeamName = cell0;
         continue;
       }
     }
 
+    // Шукаємо клітинку з ПІБ
     let nameIdx = -1;
     for (let c = 0; c < Math.min(3, cells.length); c++) {
       if (isLikelyPersonName(cells[c])) {
@@ -454,13 +596,14 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     }
 
     if (nameIdx !== -1) {
-      const rawName = cells[nameIdx];
-      const fullName = cleanPersonName(rawName);
-      rowNumberInTeam++;
+      const rawText = cells[nameIdx];
+      const { rowNumber: extractedRowNum, cleanName: fullName, note: inlineNote } = extractLineDetails(rawText);
+
+      rowNumberInTeam = extractedRowNum ?? (rowNumberInTeam + 1);
 
       let phone: string | null = null;
       let presence = false;
-      let note: string | null = null;
+      let note: string | null = inlineNote;
 
       for (let c = 0; c < cells.length; c++) {
         if (c === nameIdx) continue;
@@ -471,7 +614,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
           phone = normalizePhone(val);
         } else if (TRUES.includes(norm(val)) || FALSES.includes(norm(val))) {
           presence = normalizePresence(val);
-        } else if (!note && val.length > 2 && val !== String(rowNumberInTeam)) {
+        } else if (!note && val.length > 1 && val !== String(rowNumberInTeam)) {
           note = val;
         }
       }
@@ -519,12 +662,14 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
 
   return {
     rows,
-    headers: ['ПІБ', 'Команда', 'Телефон', 'Присутність'],
+    headers: ['ПІБ', 'Команда', 'Телефон', 'Присутність', 'Проєкт', 'Примітка'],
     headerMap: {
       'ПІБ': 'full_name',
       'Команда': 'team_number',
       'Телефон': 'phone',
       'Присутність': 'is_present',
+      'Проєкт': 'team_name',
+      'Примітка': 'note_from_table',
     },
     mapSource: 'block',
     skipped,
@@ -563,17 +708,17 @@ function parseClassicTable(
       raw_data[h] = v;
     });
 
-    let fullName = String(colOf.full_name !== undefined ? r[colOf.full_name] ?? '' : '').trim();
-    if (!fullName) {
+    let rawName = String(colOf.full_name !== undefined ? r[colOf.full_name] ?? '' : '').trim();
+    if (!rawName) {
       for (let c = 0; c < Math.min(3, r.length); c++) {
         if (isLikelyPersonName(String(r[c] ?? ''))) {
-          fullName = String(r[c]);
+          rawName = String(r[c]);
           break;
         }
       }
     }
 
-    if (fullName) fullName = cleanPersonName(fullName);
+    const { rowNumber: extractedRowNum, cleanName: fullName, note: inlineNote } = extractLineDetails(rawName);
 
     let teamNum = colOf.team_number !== undefined ? (parseIntSafe(r[colOf.team_number]) ?? 0) : 0;
     if (!teamNum) {
@@ -610,6 +755,9 @@ function parseClassicTable(
     }
 
     const phone = colOf.phone !== undefined ? normalizePhone(r[colOf.phone]) : null;
+    const note = colOf.note_from_table !== undefined ? String(r[colOf.note_from_table] ?? '').trim() || inlineNote : inlineNote;
+    const rowNumber = colOf.row_number !== undefined ? parseIntSafe(r[colOf.row_number]) ?? extractedRowNum : extractedRowNum;
+
     const key = `${teamNum}|${normalizeName(fullName)}`;
     const prev = fullName ? seen.get(key) : undefined;
     if (prev) {
@@ -623,12 +771,12 @@ function parseClassicTable(
 
     const row: ImportRow = {
       is_present: colOf.is_present !== undefined ? normalizePresence(r[colOf.is_present]) : false,
-      row_number: colOf.row_number !== undefined ? parseIntSafe(r[colOf.row_number]) : null,
+      row_number: rowNumber ?? rows.length + 1,
       team_number: teamNum,
       full_name: fullName,
       phone,
       team_name: colOf.team_name !== undefined ? String(r[colOf.team_name] ?? '').trim() || null : null,
-      note_from_table: colOf.note_from_table !== undefined ? String(r[colOf.note_from_table] ?? '').trim() || null : null,
+      note_from_table: note,
       raw_data,
       _issues: issues,
       _sourceRow: i + 1,
@@ -641,26 +789,49 @@ function parseClassicTable(
   return { rows, skipped };
 }
 
-/* ---------- Main Universal Parser Entry Point ---------- */
+/* ---------- Головна функція парсингу ---------- */
 
 export function buildRows(
   matrix: any[][],
-  headerIdx: number,
-  headerMap: Record<string, StdKey>
-): { rows: ImportRow[]; skipped: number } {
-  if (!matrix || matrix.length === 0) return { rows: [], skipped: 0 };
+  headerIdx: number = -1,
+  headerMap: Record<string, StdKey> = {}
+): ImportResult {
+  if (!matrix || matrix.length === 0) {
+    return {
+      rows: [],
+      headers: [],
+      headerMap: {},
+      mapSource: 'manual',
+      skipped: 0,
+      detectedTeams: [],
+      matrix: [],
+    };
+  }
 
+  // 1. Спроба розпарсити як блоковий / PDF список (як у вашому прикладі)
   const blockResult = parseBlockFormat(matrix);
-  if (blockResult && blockResult.rows.length >= 3) {
+  if (blockResult && blockResult.rows.length >= 1) {
     return blockResult;
   }
 
+  // 2. Класична таблиця
   const effectiveHeaderIdx = headerIdx >= 0 ? headerIdx : detectHeaderIndex(matrix);
-  const effectiveMap = Object.keys(headerMap).length > 0
-    ? headerMap
-    : localHeaderMap((matrix[effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0] || []).map(String));
+  const effectiveMap =
+    Object.keys(headerMap).length > 0
+      ? headerMap
+      : localHeaderMap((matrix[effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0] || []).map(String));
 
-  return parseClassicTable(matrix, effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0, effectiveMap);
+  const { rows, skipped } = parseClassicTable(matrix, effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0, effectiveMap);
+
+  return {
+    rows,
+    headers: Object.keys(effectiveMap),
+    headerMap: effectiveMap,
+    mapSource: effectiveHeaderIdx >= 0 ? 'local' : 'manual',
+    skipped,
+    detectedTeams: detectTeams(rows),
+    matrix,
+  };
 }
 
 export function toDbRow(r: ImportRow, shiftId: string) {
