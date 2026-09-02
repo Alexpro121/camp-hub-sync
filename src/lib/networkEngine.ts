@@ -16,17 +16,15 @@ export interface NetPulseState {
 
 type Listener = (state: NetPulseState) => void;
 
-// Інтервали активного режиму (екран увімкнено)
-const PULSE_TIMEOUT_MS = 2500;          // Швидкий таймаут для 2G
-const SLOW_THRESHOLD_MS = 900;          // Поріг 2G / перевантаженого Starlink
-const INTERVAL_FAST_MS = 30000;         // Стабільний 4G (активний)
-const INTERVAL_SLOW_MS = 12000;         // 2G / EDGE (активний)
-const BASE_OFFLINE_INTERVAL_MS = 5000;  // Пошук мережі у тунелі (активний)
-const MAX_OFFLINE_INTERVAL_MS = 25000;  // Максимальний відкат
+const PULSE_TIMEOUT_MS = 2500;
+const SLOW_THRESHOLD_MS = 900;
+const INTERVAL_FAST_MS = 30000;
+const INTERVAL_SLOW_MS = 12000;
+const BASE_OFFLINE_INTERVAL_MS = 5000;
+const MAX_OFFLINE_INTERVAL_MS = 25000;
 
-// Інтервали фонового режиму (екран вимкнено / телефон у кишені)
-const INTERVAL_BG_ONLINE_MS = 45000;    // Фонова перевірка при наявності зв'язку
-const INTERVAL_BG_OFFLINE_MS = 20000;   // Фоновий пошук мережі після виїзду з тунелю
+const INTERVAL_BG_ONLINE_MS = 45000;
+const INTERVAL_BG_OFFLINE_MS = 20000;
 
 export class NetworkPulse {
   private listeners = new Set<Listener>();
@@ -51,7 +49,6 @@ export class NetworkPulse {
     this.readNetworkApiInfo();
     this.initBackgroundWorker();
 
-    // 1. Миттєва реакція на апаратні зміни мережі
     window.addEventListener('online', () => {
       this.consecutiveFailures = 0;
       void this.checkRealConnection(true);
@@ -70,19 +67,15 @@ export class NetworkPulse {
       this.scheduleNextProbe();
     });
 
-    // 2. Зміна видимості: адаптуємо інтервали, НЕ зупиняючи пульс у фоні
     document.addEventListener('visibilitychange', () => {
       this.isDocumentVisible = document.visibilityState === 'visible';
       if (this.isDocumentVisible) {
-        // Телефон розблокували — робимо негайну швидку перевірку
         void this.checkRealConnection(true);
       } else {
-        // У фоні переплановуємо на енергоефективні фонові таймінги
         this.scheduleNextProbe();
       }
     });
 
-    // 3. Network Information API (моніторинг типу підключення)
     const conn = this.getConnectionObj();
     if (conn) {
       conn.addEventListener('change', () => {
@@ -99,14 +92,9 @@ export class NetworkPulse {
       });
     }
 
-    // Перший запуск
     this.schedule(150);
   }
 
-  /**
-   * Створює автономний Inline Web Worker, таймери якого не блокуються
-   * мобільними браузерами при згортанні вкладки чи блокуванні екрана.
-   */
   private initBackgroundWorker() {
     try {
       const workerBlob = new Blob(
@@ -138,7 +126,6 @@ export class NetworkPulse {
         }
       };
     } catch {
-      // Fallback до звичайних таймерів, якщо Worker заблоковано CSP
       this.worker = null;
     }
   }
@@ -156,14 +143,9 @@ export class NetworkPulse {
     }
   }
 
-  /**
-   * Активний Micro-Ping із нульовим споживанням трафіку (HEAD),
-   * що працює як на передньому плані, так і у фоновому режимі.
-   */
   async checkRealConnection(force = false): Promise<NetPulseState> {
     if (this.inFlightCtrl && !force) return this.state;
 
-    // Апаратний офлайн
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       this.consecutiveFailures = Math.max(2, this.consecutiveFailures + 1);
       this.consecutiveSuccesses = 0;
@@ -197,7 +179,6 @@ export class NetworkPulse {
       clearTimeout(timeoutId);
       const latency = Math.round(performance.now() - started);
 
-      // Детекція Captive Portal (фейковий інтернет на Wi-Fi потяга)
       const isRedirect = res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400);
       const contentType = res.headers.get('content-type') || '';
       const isHtmlResponse = contentType.toLowerCase().includes('text/html');
@@ -214,7 +195,6 @@ export class NetworkPulse {
         });
       }
 
-      // Успішний зв'язок
       if (res.ok || res.status === 304 || res.status === 204) {
         this.consecutiveSuccesses++;
         this.consecutiveFailures = 0;
@@ -254,21 +234,16 @@ export class NetworkPulse {
     }
   }
 
-  /**
-   * Розрахунок інтервалу для активного та фонового режимів
-   */
   private scheduleNextProbe() {
     let delay: number;
 
     if (!this.isDocumentVisible) {
-      // ФОНОВИЙ РЕЖИМ (екран згасло або вкладку згорнуто)
       if (this.state.quality === 'OFFLINE') {
-        delay = INTERVAL_BG_OFFLINE_MS; // Кожні 20 секунд перевіряємо, чи вийшов потяг з тунелю
+        delay = INTERVAL_BG_OFFLINE_MS;
       } else {
-        delay = INTERVAL_BG_ONLINE_MS;  // Кожні 45 секунд підтримуємо актуальний стан
+        delay = INTERVAL_BG_ONLINE_MS;
       }
     } else {
-      // АКТИВНИЙ РЕЖИМ (екран увімкнено)
       if (this.state.quality === 'ONLINE_SLOW') {
         delay = INTERVAL_SLOW_MS;
       } else if (this.state.quality === 'OFFLINE') {
@@ -283,7 +258,6 @@ export class NetworkPulse {
       delay = Math.round(delay * 1.5);
     }
 
-    // Рандомізований джиттер (±15%) для запобігання пікових сплесків
     const jitter = delay * 0.15 * (Math.random() * 2 - 1);
     this.schedule(Math.round(delay + jitter));
   }
@@ -291,7 +265,6 @@ export class NetworkPulse {
   private schedule(delay: number) {
     this.clearTimer();
 
-    // Якщо доступний фоновий Worker — плануємо через нього (не засинає у фоні)
     if (this.worker) {
       this.worker.postMessage({ type: 'schedule', delay });
     } else {
@@ -332,9 +305,6 @@ export class NetworkPulse {
     return this.state.quality === 'ONLINE_SLOW';
   }
 
-  /**
-   * Асинхронне очікування появи інтернету (працює навіть у фоновому режимі)
-   */
   async waitForOnline(timeoutMs = 60000): Promise<boolean> {
     if (this.isOnline()) return true;
 
@@ -378,3 +348,4 @@ export class NetworkPulse {
 }
 
 export const networkPulse = new NetworkPulse();
+export const networkEngine = networkPulse;
