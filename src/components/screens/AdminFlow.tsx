@@ -46,6 +46,7 @@ import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
 import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
+import MultiFileShiftModal from '@/components/admin/MultiFileShiftModal';
 import { shiftStatus } from '@/lib/shift';
 import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import TeamTagInput from '@/components/admin/TeamTagInput';
@@ -246,6 +247,7 @@ const ShiftsTab = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [multiOpen, setMultiOpen] = useState(false);
   const [sourceLabel, setSourceLabel] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const island = useDynamicIsland();
