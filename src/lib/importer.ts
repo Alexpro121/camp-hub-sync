@@ -372,7 +372,7 @@ export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Arra
   if (fileOrBuffer instanceof File) {
     arrayBuffer = await fileOrBuffer.arrayBuffer();
   } else if (fileOrBuffer instanceof Uint8Array) {
-    arrayBuffer = fileOrBuffer.buffer;
+    arrayBuffer = fileOrBuffer.buffer as ArrayBuffer;
   } else {
     arrayBuffer = fileOrBuffer;
   }
