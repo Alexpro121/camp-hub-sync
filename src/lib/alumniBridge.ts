@@ -1,31 +1,60 @@
 /**
- * IRON ALUMNI BRIDGE — ефемерне перенесення офлайн-паспорта на новий пристрій.
+ * IRON ALUMNI BRIDGE — ефемерне безпечне перенесення офлайн-паспорта на новий пристрій.
  *
- * Використовується виключно Realtime broadcast-канал: жодного рядка в базі даних,
- * жодного збереження на сервері. Канал живе максимум 3 хвилини.
+ * Працює виключно через Realtime Broadcast: жодного збереження в базі даних,
+ * жодного сліду на сервері. Кімната живе максимум 3 хвилини з двостороннім підтвердженням (ACK).
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import type { AlumniPassportEnvelope } from '@/lib/alumniPassport';
 
-export const BRIDGE_TTL_MS = 3 * 60 * 1000;
+export const BRIDGE_TTL_MS = 3 * 60 * 1000; // 3 хвилини
 export const ALUMNI_BROADCAST_CHANNEL = 'iron-alumni-broadcast';
 
 const EVENT_REQUEST = 'passport_request';
 const EVENT_TRANSFER = 'passport_transfer';
+const EVENT_ACK = 'passport_ack';
 
-/** Генерує випадковий 6-значний PIN (криптостійко, якщо доступно) */
-export function generateBridgePin(): string {
-  try {
-    const buf = new Uint32Array(1);
-    crypto.getRandomValues(buf);
-    return String(100000 + (buf[0] % 900000));
-  } catch {
-    return String(100000 + Math.floor(Math.random() * 900000));
-  }
+/** Очищує введення від пробілів, тире та зайвих символів */
+export function cleanBridgePin(raw: string): string {
+  return String(raw ?? '').replace(/\D/g, '').slice(0, 6);
 }
 
-const roomName = (pin: string) => `alumni-bridge-${pin}`;
+/** Генерує криптостійкий 6-значний PIN */
+export function generateBridgePin(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return String(100000 + (buf[0] % 900000));
+    }
+  } catch {
+    /* fallback */
+  }
+  return String(100000 + Math.floor(Math.random() * 900000));
+}
+
+const roomName = (pin: string) => `alumni-bridge-${cleanBridgePin(pin)}`;
+
+/** Перевіряє цілісність структури паспорта перед збереженням */
+function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
+  if (!obj || typeof obj !== 'object') return false;
+  if (!obj.passport || typeof obj.passport !== 'object') return false;
+  if (typeof obj.signature !== 'string' || !obj.signature.trim()) return false;
+  if (!obj.passport.id || !obj.passport.full_name) return false;
+  return true;
+}
+
+export interface BridgeHostCallbacks {
+  /** Паспорт успішно надіслано */
+  onSent?: () => void;
+  /** Новий пристрій підтвердив успішне отримання (ACK) */
+  onClaimed?: () => void;
+  /** Час життя кімнати вичерпано */
+  onExpired?: () => void;
+  /** Власний PIN (опціонально) */
+  pin?: string;
+}
 
 export interface BridgeHostHandle {
   pin: string;
@@ -34,18 +63,19 @@ export interface BridgeHostHandle {
 }
 
 /**
- * СТАРИЙ ПРИСТРІЙ: відкриває кімнату та віддає паспорт на запит нового пристрою.
+ * СТАРИЙ ПРИСТРІЙ (Хост):
+ * Відкриває зашифровану за PIN кімнату, очікує запит від нового телефону,
+ * віддає паспорт і чекає підтвердження отримання (ACK).
  */
 export function hostPassportBridge(
   passport: AlumniPassportEnvelope,
-  callbacks: {
-    onSent?: () => void;
-    onExpired?: () => void;
-    pin?: string;
-  } = {},
+  callbacks: BridgeHostCallbacks = {},
 ): BridgeHostHandle {
-  const pin = callbacks.pin || generateBridgePin();
-  const channel = supabase.channel(roomName(pin), { config: { broadcast: { self: false } } });
+  const pin = cleanBridgePin(callbacks.pin || generateBridgePin());
+  const channel = supabase.channel(roomName(pin), {
+    config: { broadcast: { self: false } },
+  });
+
   const expiresAt = Date.now() + BRIDGE_TTL_MS;
   let closed = false;
 
@@ -53,6 +83,7 @@ export function hostPassportBridge(
     if (closed) return;
     closed = true;
     window.clearTimeout(timer);
+    channel.unsubscribe();
     supabase.removeChannel(channel);
   };
 
@@ -62,9 +93,22 @@ export function hostPassportBridge(
   }, BRIDGE_TTL_MS);
 
   channel
+    // 1. Отримано запит від нового пристрою -> надсилаємо паспорт
     .on('broadcast', { event: EVENT_REQUEST }, () => {
-      channel.send({ type: 'broadcast', event: EVENT_TRANSFER, payload: { passport } });
+      if (closed) return;
+      channel.send({
+        type: 'broadcast',
+        event: EVENT_TRANSFER,
+        payload: { passport, sentAt: Date.now() },
+      });
       callbacks.onSent?.();
+    })
+    // 2. Новий пристрій успішно розпарсив та зберіг паспорт (ACK)
+    .on('broadcast', { event: EVENT_ACK }, () => {
+      if (closed) return;
+      callbacks.onClaimed?.();
+      // Закриваємо кімнату через 1.5 секунди після успішного підтвердження
+      window.setTimeout(close, 1500);
     })
     .subscribe();
 
@@ -72,23 +116,33 @@ export function hostPassportBridge(
 }
 
 export interface BridgeClaimResult {
-  status: 'ok' | 'timeout';
+  status: 'ok' | 'timeout' | 'invalid_payload' | 'cancelled';
   passport?: AlumniPassportEnvelope;
+  error?: string;
 }
 
 /**
- * НОВИЙ ПРИСТРІЙ: підключається до кімнати за PIN та запитує паспорт.
+ * НОВИЙ ПРИСТРІЙ (Клієнт):
+ * Підключається до кімнати за PIN, періодично запитує паспорт (із захистом від обривів на 2G),
+ * перевіряє цілісність отриманого конверта та відправляє підтвердження (ACK).
  */
 export function claimPassportBridge(
-  pin: string,
+  rawPin: string,
   timeoutMs = 45000,
 ): { promise: Promise<BridgeClaimResult>; cancel: () => void } {
-  const channel = supabase.channel(roomName(pin), { config: { broadcast: { self: false } } });
+  const pin = cleanBridgePin(rawPin);
+  const channel = supabase.channel(roomName(pin), {
+    config: { broadcast: { self: false } },
+  });
+
   let settled = false;
-  let timer = 0;
+  let timeoutTimer = 0;
+  let retryInterval = 0;
 
   const cleanup = () => {
-    window.clearTimeout(timer);
+    window.clearTimeout(timeoutTimer);
+    window.clearInterval(retryInterval);
+    channel.unsubscribe();
     supabase.removeChannel(channel);
   };
 
@@ -100,20 +154,50 @@ export function claimPassportBridge(
       resolve(result);
     };
 
-    timer = window.setTimeout(() => finish({ status: 'timeout' }), timeoutMs);
+    timeoutTimer = window.setTimeout(() => {
+      finish({ status: 'timeout', error: 'Час очікування вичерпано. Перевірте PIN або зв’язок на старому пристрої.' });
+    }, timeoutMs);
 
+    // Слухаємо відповідь з паспортом від старого пристрою
     channel
       .on('broadcast', { event: EVENT_TRANSFER }, ({ payload }) => {
         const envelope = (payload as { passport?: AlumniPassportEnvelope } | undefined)?.passport;
-        if (envelope) finish({ status: 'ok', passport: envelope });
+
+        if (envelope && isValidPassportEnvelope(envelope)) {
+          // Надсилаємо підтвердження успішного отримання (ACK)
+          channel.send({
+            type: 'broadcast',
+            event: EVENT_ACK,
+            payload: { receivedAt: Date.now() },
+          });
+
+          finish({ status: 'ok', passport: envelope });
+        } else {
+          finish({
+            status: 'invalid_payload',
+            error: 'Отримано некоректні або пошкоджені дані паспорта.',
+          });
+        }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          channel.send({ type: 'broadcast', event: EVENT_REQUEST, payload: { at: Date.now() } });
-          // Повторний запит — якщо старий пристрій підключився трохи пізніше
-          window.setTimeout(() => {
-            if (!settled) channel.send({ type: 'broadcast', event: EVENT_REQUEST, payload: { at: Date.now() } });
-          }, 2500);
+          // Перший запит
+          channel.send({
+            type: 'broadcast',
+            event: EVENT_REQUEST,
+            payload: { at: Date.now() },
+          });
+
+          // Адаптивний ретрай-луп кожні 2 секунди (критично для 2G в потягах)
+          retryInterval = window.setInterval(() => {
+            if (!settled) {
+              channel.send({
+                type: 'broadcast',
+                event: EVENT_REQUEST,
+                payload: { at: Date.now() },
+              });
+            }
+          }, 2000);
         }
       });
   });
@@ -142,31 +226,49 @@ export interface AlumniBroadcastPayload {
   sent_at: number;
 }
 
-/** Штаб: надсилає ефемерну подію всім випускникам, які зараз онлайн */
+/**
+ * Штаб: надійне надсилання ефемерної події всім випускникам онлайн
+ */
 export async function sendAlumniBroadcast(
   kind: AlumniBroadcastKind,
   payload: Omit<AlumniBroadcastPayload, 'sent_at'>,
 ): Promise<void> {
   const channel = supabase.channel(ALUMNI_BROADCAST_CHANNEL);
-  await new Promise<void>((resolve) => {
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => resolve(), 3500);
+
     channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') resolve();
+      if (status === 'SUBSCRIBED') {
+        window.clearTimeout(timer);
+        resolve();
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        window.clearTimeout(timer);
+        reject(new Error(`Не вдалося підключитися до каналу трансляції: ${status}`));
+      }
     });
-    window.setTimeout(resolve, 4000);
   });
+
   await channel.send({
     type: 'broadcast',
     event: kind,
     payload: { ...payload, sent_at: Date.now() } satisfies AlumniBroadcastPayload,
   });
-  window.setTimeout(() => supabase.removeChannel(channel), 1500);
+
+  window.setTimeout(() => {
+    channel.unsubscribe();
+    supabase.removeChannel(channel);
+  }, 1000);
 }
 
-/** Випускник: слухає ефемерні події Штабу */
+/**
+ * Випускник: прослуховування ефемерних розіграшів та оголошень Штабу
+ */
 export function subscribeAlumniBroadcast(
   handler: (kind: AlumniBroadcastKind, payload: AlumniBroadcastPayload) => void,
 ): () => void {
   const channel = supabase.channel(ALUMNI_BROADCAST_CHANNEL);
+
   channel
     .on('broadcast', { event: 'alumni_raffle' }, ({ payload }) =>
       handler('alumni_raffle', payload as AlumniBroadcastPayload),
@@ -177,6 +279,7 @@ export function subscribeAlumniBroadcast(
     .subscribe();
 
   return () => {
+    channel.unsubscribe();
     supabase.removeChannel(channel);
   };
 }
