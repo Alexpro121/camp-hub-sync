@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { Child } from '@/types/app';
-import { normalizeName } from '@/lib/normalize';
+import { buildRows, extractLineDetails, normalizePhone, type ImportRow } from '@/lib/importer';
 
 export interface ParsedRow {
   is_present: boolean;
@@ -13,95 +13,65 @@ export interface ParsedRow {
   raw_data: Record<string, any>;
 }
 
-const HEADER_MAP: Record<string, keyof ParsedRow> = {
-  'наявність': 'is_present',
-  'присутність': 'is_present',
-  '№': 'row_number',
-  'номер': 'row_number',
-  '№ команди': 'team_number',
-  'команди': 'team_number',
-  'номер команди': 'team_number',
-  'піб': 'full_name',
-  'піб дитини': 'full_name',
-  'фио': 'full_name',
-  'номер телефону': 'phone',
-  'номер телефону дитини': 'phone',
-  'телефон': 'phone',
-  'команда': 'team_name',
-  'примітка': 'note_from_table',
-  'примечание': 'note_from_table',
-};
+/**
+ * Універсальний парсер Excel/CSV-файлу.
+ * Автоматично розпізнає класичні таблиці, списки за командами (блоковий формат)
+ * та нестандартне розташування колонок.
+ */
+export async function parseExcelFile(file: File | ArrayBuffer): Promise<ParsedRow[]> {
+  let arrayBuffer: ArrayBuffer;
 
-function normalizePhone(v: any): string | null {
-  const s = String(v ?? '').replace(/[^\d+]/g, '').trim();
-  return s || null;
+  if (file instanceof File) {
+    arrayBuffer = await file.arrayBuffer();
+  } else {
+    arrayBuffer = file;
+  }
+
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  if (!wb.SheetNames.length) return [];
+
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+  if (matrix.length === 0) return [];
+
+  // Використовуємо універсальний інтелектуальний парсер
+  const parsedResult = buildRows(matrix);
+
+  if (!parsedResult.rows || parsedResult.rows.length === 0) {
+    return [];
+  }
+
+  // Конвертуємо результат у формат ParsedRow
+  return parsedResult.rows.map((r: ImportRow): ParsedRow => {
+    const { cleanName, note } = extractLineDetails(r.full_name);
+
+    return {
+      is_present: r.is_present ?? false,
+      row_number: r.row_number ?? null,
+      team_number: r.team_number,
+      full_name: cleanName || r.full_name,
+      phone: r.phone ? normalizePhone(r.phone) : null,
+      team_name: r.team_name ?? null,
+      note_from_table: r.note_from_table || note || null,
+      raw_data: r.raw_data ?? {},
+    };
+  });
 }
 
-export async function parseExcelFile(file: File): Promise<ParsedRow[]> {
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-  if (rows.length < 2) return [];
-
-  // Detect header row (first row with at least 3 string headers)
-  let headerIdx = 0;
-  for (let i = 0; i < Math.min(5, rows.length); i++) {
-    const stringCount = rows[i].filter((c) => typeof c === 'string' && c.trim()).length;
-    if (stringCount >= 3) { headerIdx = i; break; }
-  }
-  const rawHeaders = rows[headerIdx].map((h: any) => String(h ?? '').trim());
-  const headers = rawHeaders.map((h) => h.toLowerCase());
-
-  const colIdx: Partial<Record<keyof ParsedRow, number>> = {};
-  headers.forEach((h, i) => {
-    const key = HEADER_MAP[h];
-    if (key && colIdx[key] === undefined) colIdx[key] = i;
+/**
+ * Експорт бази дітей у гарно сформатований Excel-файл з автошириною колонок
+ */
+export function exportToExcel(children: Child[]) {
+  // Сортуємо список перед експортом: спочатку за номером команди, потім за порядковим номером
+  const sorted = [...children].sort((a, b) => {
+    if (a.team_number !== b.team_number) {
+      return a.team_number - b.team_number;
+    }
+    return (a.row_number ?? 0) - (b.row_number ?? 0);
   });
 
-  const result: ParsedRow[] = [];
-  const seen = new Set<string>();
-
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const r = rows[i];
-    if (!r || r.every((c) => c === '' || c == null)) continue;
-    const fullName = String(r[colIdx.full_name ?? 3] ?? '').trim();
-    if (!fullName) continue;
-    const teamRaw = r[colIdx.team_number ?? 2];
-    const teamNum = parseInt(String(teamRaw).replace(/[^\d]/g, ''), 10);
-    if (!teamNum) continue;
-
-    const phone = normalizePhone(r[colIdx.phone ?? 4]);
-    const dupKey = `${normalizeName(fullName)}|${phone ?? ''}|${teamNum}`;
-    if (seen.has(dupKey)) continue;
-    seen.add(dupKey);
-
-    // Build raw_data with ALL non-empty columns, preserving original headers
-    const raw_data: Record<string, any> = {};
-    rawHeaders.forEach((h, idx) => {
-      if (!h) return;
-      const v = r[idx];
-      if (v === '' || v == null) return;
-      raw_data[h] = v;
-    });
-
-    result.push({
-      // Default everyone to NOT present on import — supervisors mark presence manually each shift
-      is_present: false,
-      row_number: parseInt(String(r[colIdx.row_number ?? 1]).replace(/[^\d]/g, ''), 10) || null,
-      team_number: teamNum,
-      full_name: fullName,
-      phone,
-      team_name: String(r[colIdx.team_name ?? 5] ?? '').trim() || null,
-      note_from_table: String(r[colIdx.note_from_table ?? 6] ?? '').trim() || null,
-      raw_data,
-    });
-  }
-  return result;
-}
-
-export function exportToExcel(children: Child[]) {
-  const data = children.map((c) => ({
+  const data = sorted.map((c) => ({
     'Наявність': c.is_present ? '✓' : '',
     '№': c.row_number ?? '',
     '№ Команди': c.team_number,
@@ -109,14 +79,32 @@ export function exportToExcel(children: Child[]) {
     'Номер телефону дитини': c.phone ?? '',
     'Команда': c.team_name ?? '',
     'Примітка': c.note_from_table ?? '',
-    'Айрон Долари': c.iron_dollars,
+    'Айрон Долари': c.iron_dollars ?? 0,
     'Telegram': c.telegram_username ?? '',
     'Замітки супроводу': c.supervisor_notes ?? '',
     'Увійшов в систему': c.has_logged_in ? '✓' : '',
   }));
+
   const ws = XLSX.utils.json_to_sheet(data);
+
+  // Налаштування оптимальної ширини колонок для друку та перегляду
+  ws['!cols'] = [
+    { wch: 11 }, // Наявність
+    { wch: 6 },  // №
+    { wch: 12 }, // № Команди
+    { wch: 34 }, // ПІБ дитини
+    { wch: 22 }, // Номер телефону дитини
+    { wch: 18 }, // Команда
+    { wch: 24 }, // Примітка
+    { wch: 14 }, // Айрон Долари
+    { wch: 18 }, // Telegram
+    { wch: 35 }, // Замітки супроводу
+    { wch: 18 }, // Увійшов в систему
+  ];
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'База');
+
   const date = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `Help_Суправід_${date}.xlsx`);
+  XLSX.writeFile(wb, `Залізна_Зміна_База_${date}.xlsx`);
 }
