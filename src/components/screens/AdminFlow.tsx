@@ -456,10 +456,23 @@ const ShiftsTab = () => {
         busy={creating}
         onConfirm={confirmImport}
       />
+      <MultiFileShiftModal open={multiOpen} onOpenChange={setMultiOpen} onCreated={load} />
       <Card className="p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-3xl space-y-3 shadow-xl">
-        <h3 className="font-bold uppercase text-xs tracking-wider text-[#FA5A15]">
-          Створити зміну та імпортувати учасників
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-bold uppercase text-xs tracking-wider text-[#FA5A15]">
+            Створити зміну та імпортувати учасників
+          </h3>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setMultiOpen(true)}
+            className="h-8 shrink-0 rounded-xl border-white/15 text-[10px] font-bold uppercase tracking-wider"
+          >
+            <Copy className="mr-1 h-3.5 w-3.5" /> Мульти-імпорт
+          </Button>
+        </div>
+
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label className="text-xs text-slate-300">Назва зміни</Label>
