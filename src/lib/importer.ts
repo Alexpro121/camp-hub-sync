@@ -57,7 +57,7 @@ export function detectTeams(rows: ImportRow[]): number[] {
   );
 }
 
-/* ---------- Google Sheets Helpers ---------- */
+/* ---------- Google Sheets URL Helpers ---------- */
 
 export function parseSheetUrl(url: string): { id: string; gid: string } | null {
   const clean = (url || '').trim();
@@ -75,7 +75,7 @@ export function sheetCsvUrl(url: string): string | null {
   return p ? `https://docs.google.com/spreadsheets/d/${p.id}/export?format=csv&gid=${p.gid}` : null;
 }
 
-/* ---------- Synonym Dictionary ---------- */
+/* ---------- Словник синонімів ---------- */
 
 const SYNONYMS: Record<StdKey, string[]> = {
   is_present: ['навність', 'наявність', 'присутність', 'присутний', 'статус', 'присутствие', 'presence', 'present'],
@@ -126,7 +126,7 @@ export function localHeaderMap(headers: string[]): Record<string, StdKey> {
   return map;
 }
 
-/* ---------- Text & Name Normalization Helpers ---------- */
+/* ---------- Нормалізація та розпізнавання рядків ---------- */
 
 const ROMAN_NUMERALS: Record<string, number> = {
   i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10,
@@ -191,9 +191,6 @@ export function isCounselorOrMentorRow(text: string): boolean {
   return false;
 }
 
-/**
- * Розділяє рядок на: Номер у списку, ПІБ дитини, Примітку (напр. "- ГОТЕЛЬ")
- */
 export function extractLineDetails(raw: string): {
   rowNumber: number | null;
   cleanName: string;
@@ -205,14 +202,14 @@ export function extractLineDetails(raw: string): {
   let rowNumber: number | null = null;
   let note: string | null = null;
 
-  // 1. Витягуємо номер на початку: "1.", "1 ", "14.Ковалевська", "26) "
+  // Витягуємо номер: "1.", "1 ", "14.Ковалевська", "26) "
   const numMatch = s.match(/^(\d+)[\.\)\-:\s]+\s*(.*)$/);
   if (numMatch) {
     rowNumber = parseInt(numMatch[1], 10);
     s = numMatch[2].trim();
   }
 
-  // 2. Витягуємо примітку в кінці: " - ГОТЕЛЬ", "(ГОТЕЛЬ)", "[Київ]"
+  // Витягуємо примітку: " - ГОТЕЛЬ", "(ГОТЕЛЬ)", "[Київ]"
   const noteMatch = s.match(/[\s\t]+[-–—]\s+([^\-]+)$/) || s.match(/[\s\t]*\(([^\)]+)\)$/) || s.match(/[\s\t]*\[([^\]]+)\]$/);
   if (noteMatch && noteMatch[1]) {
     note = noteMatch[1].trim();
@@ -230,7 +227,6 @@ export function cleanPersonName(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Правильне капіталізування кожного слова (враховує 'мілана віталіївна' та дефіси 'Жан-Люк')
   return s
     .split(' ')
     .map((word) => {
@@ -258,7 +254,6 @@ export function isLikelyPersonName(text: string): boolean {
   }
 
   const words = cleanName.split(' ').filter(Boolean);
-  // Дозволяємо від 1 до 5 слів (наприклад, "Авраменко Серафім", "Христина Степанівна Скалич")
   if (words.length < 1 || words.length > 5) return false;
 
   const namePattern = /^[A-Za-zА-Яа-яЄєІіЇїҐґ'`ʼ\-]+$/;
@@ -294,21 +289,65 @@ export function parseIntSafe(v: any): number | null {
   return s ? parseInt(s, 10) : null;
 }
 
-/* ---------- Text & PDF Matrix Builders ---------- */
+/* ---------- Динамічне завантаження PDF.js через CDN ---------- */
+
+let pdfjsLoadingPromise: Promise<any> | null = null;
+
+async function getPdfJsLib(): Promise<any> {
+  if (typeof window === 'undefined') return null;
+  if ((window as any).pdfjsLib) return (window as any).pdfjsLib;
+
+  if (pdfjsLoadingPromise) return pdfjsLoadingPromise;
+
+  pdfjsLoadingPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-pdfjs]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve((window as any).pdfjsLib));
+      existing.addEventListener('error', reject);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.setAttribute('data-pdfjs', 'true');
+    script.async = true;
+
+    script.onload = () => {
+      const lib = (window as any).pdfjsLib;
+      if (lib && lib.GlobalWorkerOptions) {
+        lib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+      resolve(lib);
+    };
+
+    script.onerror = () => {
+      // Fallback на unpkg CDN
+      const fallbackScript = document.createElement('script');
+      fallbackScript.src = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js';
+      fallbackScript.async = true;
+      fallbackScript.onload = () => {
+        const lib = (window as any).pdfjsLib;
+        if (lib && lib.GlobalWorkerOptions) {
+          lib.GlobalWorkerOptions.workerSrc =
+            'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        }
+        resolve(lib);
+      };
+      fallbackScript.onerror = () => reject(new Error('Не вдалося завантажити бібліотеку PDF.js'));
+      document.head.appendChild(fallbackScript);
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return pdfjsLoadingPromise;
+}
+
+/* ---------- Конвертація файлів та PDF у матрицю ---------- */
 
 export function matrixFromCsv(csv: string): any[][] {
   const wb = XLSX.read(csv, { type: 'string', raw: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
-}
-
-export async function matrixFromFile(file: File): Promise<any[][]> {
-  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-  if (isPdf) {
-    return matrixFromPdf(file);
-  }
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
 }
@@ -326,46 +365,21 @@ export function matrixFromRawText(text: string): any[][] {
 }
 
 /**
- * Парсер PDF: читає через pdfjs-dist у браузері або Node середовищі
+ * Читає PDF сторінка за сторінкою, точно групує текст по координатах Y та X
  */
 export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Array): Promise<any[][]> {
+  let arrayBuffer: ArrayBuffer;
+  if (fileOrBuffer instanceof File) {
+    arrayBuffer = await fileOrBuffer.arrayBuffer();
+  } else if (fileOrBuffer instanceof Uint8Array) {
+    arrayBuffer = fileOrBuffer.buffer;
+  } else {
+    arrayBuffer = fileOrBuffer;
+  }
+
   try {
-    let pdfjsLib: any = (window as any).pdfjsLib;
-
-    if (!pdfjsLib) {
-      // Динамічний імпорт або CDN fallback
-      try {
-        pdfjsLib = await import('pdfjs-dist');
-      } catch {
-        if (typeof window !== 'undefined') {
-          await new Promise<void>((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-            script.onload = () => resolve();
-            script.onerror = reject;
-            document.head.appendChild(script);
-          });
-          pdfjsLib = (window as any).pdfjsLib;
-        }
-      }
-    }
-
-    if (!pdfjsLib) {
-      throw new Error('PDF.js library not available.');
-    }
-
-    if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-
-    let arrayBuffer: ArrayBuffer;
-    if (fileOrBuffer instanceof File) {
-      arrayBuffer = await fileOrBuffer.arrayBuffer();
-    } else if (fileOrBuffer instanceof Uint8Array) {
-      arrayBuffer = fileOrBuffer.buffer;
-    } else {
-      arrayBuffer = fileOrBuffer;
-    }
+    const pdfjsLib = await getPdfJsLib();
+    if (!pdfjsLib) throw new Error('PDF.js недоступний');
 
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
@@ -374,22 +388,39 @@ export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Arra
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      
-      // Групуємо текст за координатою Y (рядки)
-      const items = textContent.items as Array<{ str: string; transform: number[] }>;
-      const linesMap = new Map<number, string[]>();
 
+      interface RawItem {
+        str: string;
+        x: number;
+        y: number;
+      }
+
+      const items: RawItem[] = (textContent.items as any[])
+        .filter((it) => it.str && it.str.trim())
+        .map((it) => ({
+          str: it.str.trim(),
+          x: it.transform[4],
+          y: Math.round(it.transform[5]),
+        }));
+
+      // Групуємо елементи по координаті Y з точністю до 4px (один рядок)
+      const lineGroups: { y: number; items: RawItem[] }[] = [];
       for (const item of items) {
-        if (!item.str || !item.str.trim()) continue;
-        const y = Math.round(item.transform[5]); // координата Y
-        if (!linesMap.has(y)) linesMap.set(y, []);
-        linesMap.get(y)!.push(item.str);
+        let group = lineGroups.find((g) => Math.abs(g.y - item.y) <= 4);
+        if (!group) {
+          group = { y: item.y, items: [] };
+          lineGroups.push(group);
+        }
+        group.items.push(item);
       }
 
       // Сортуємо рядки зверху вниз (Y спадає)
-      const sortedY = [...linesMap.keys()].sort((a, b) => b - a);
-      for (const y of sortedY) {
-        const rowText = linesMap.get(y)!.join(' ').replace(/\s+/g, ' ').trim();
+      lineGroups.sort((a, b) => b.y - a.y);
+
+      for (const group of lineGroups) {
+        // У межах одного рядка сортуємо зліва направо (X зростає)
+        group.items.sort((a, b) => a.x - b.x);
+        const rowText = group.items.map((it) => it.str).join(' ').replace(/\s+/g, ' ').trim();
         if (rowText) {
           allLines.push([rowText]);
         }
@@ -398,9 +429,34 @@ export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Arra
 
     return allLines;
   } catch (err) {
-    console.error('PDF parsing error, falling back to text extractor:', err);
+    console.warn('PDF.js parsing failed, attempting raw text extraction:', err);
+    // Резервний парсер сирих текстових блоків PDF
+    try {
+      const decoder = new TextDecoder('latin1');
+      const text = decoder.decode(new Uint8Array(arrayBuffer));
+      const extractedMatches = text.match(/\(([^()]+)\)\s*Tj/g) || text.match(/\[([^\[\]]+)\]\s*TJ/g);
+      if (extractedMatches && extractedMatches.length > 0) {
+        const rawStrings = extractedMatches
+          .map((m) => m.replace(/^[\(\[]/, '').replace(/[\)\]]\s*T[jJ]$/, '').trim())
+          .filter(Boolean);
+        return rawStrings.map((str) => [str]);
+      }
+    } catch (fallbackErr) {
+      console.error('Fallback PDF parser failed:', fallbackErr);
+    }
     return [];
   }
+}
+
+export async function matrixFromFile(file: File): Promise<any[][]> {
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  if (isPdf) {
+    return matrixFromPdf(file);
+  }
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
 }
 
 export function detectHeaderIndex(matrix: any[][]): number {
@@ -419,7 +475,7 @@ export function detectHeaderIndex(matrix: any[][]): number {
   return bestScore >= 2 ? best : -1;
 }
 
-/* ---------- Custom/Manual Mapping Parser ---------- */
+/* ---------- Ручний парсер з кастомним мапінгом ---------- */
 
 export function parseWithCustomMapping(
   matrix: any[][],
@@ -519,7 +575,9 @@ export function parseWithCustomMapping(
   const headerMap: Record<string, StdKey> = {};
   Object.entries(mapping).forEach(([colIdx, key]) => {
     if (key !== 'ignore') {
-      const headerName = String(matrix[Math.max(0, startRow - 1)]?.[parseInt(colIdx, 10)] || `Колонка ${parseInt(colIdx, 10) + 1}`);
+      const headerName = String(
+        matrix[Math.max(0, startRow - 1)]?.[parseInt(colIdx, 10)] || `Колонка ${parseInt(colIdx, 10) + 1}`
+      );
       headerMap[headerName] = key;
     }
   });
@@ -535,7 +593,7 @@ export function parseWithCustomMapping(
   };
 }
 
-/* ---------- Intelligent Block / PDF Parser ---------- */
+/* ---------- Інтелектуальний блоковий парсер ---------- */
 
 function parseBlockFormat(matrix: any[][]): ImportResult | null {
   let hasTeamHeaders = false;
@@ -566,7 +624,6 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     const cell0 = cells[0] || '';
     const teamNum = extractTeamNumberFromText(cell0);
 
-    // Зміна команди (напр. "1 команда", "2 команда")
     if (teamNum !== null) {
       currentTeamNumber = teamNum;
       currentTeamName = null;
@@ -578,7 +635,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     if (cells.some(isStatsRow)) continue;
     if (cells.some(isCounselorOrMentorRow)) continue;
 
-    // Якщо це рядок заголовка/проєкту команди (напр. "МАН + Сайт", "КПДЮ + Сайт")
+    // Назва проєкту команди (наприклад: "МАН + Сайт", "КПДЮ + Сайт")
     if (!currentTeamName && cell0 && !isLikelyPersonName(cell0)) {
       if (cell0.length < 80 && !/^\d+$/.test(cell0)) {
         currentTeamName = cell0;
@@ -586,7 +643,6 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
       }
     }
 
-    // Шукаємо клітинку з ПІБ
     let nameIdx = -1;
     for (let c = 0; c < Math.min(3, cells.length); c++) {
       if (isLikelyPersonName(cells[c])) {
@@ -678,7 +734,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
   };
 }
 
-/* ---------- Classic Table Parser ---------- */
+/* ---------- Класичний табличний парсер ---------- */
 
 function parseClassicTable(
   matrix: any[][],
@@ -789,7 +845,7 @@ function parseClassicTable(
   return { rows, skipped };
 }
 
-/* ---------- Головна функція парсингу ---------- */
+/* ---------- Головна функція парсингу списків ---------- */
 
 export function buildRows(
   matrix: any[][],
@@ -808,7 +864,7 @@ export function buildRows(
     };
   }
 
-  // 1. Спроба розпарсити як блоковий / PDF список (як у вашому прикладі)
+  // 1. Спроба розпарсити блоковий/PDF список
   const blockResult = parseBlockFormat(matrix);
   if (blockResult && blockResult.rows.length >= 1) {
     return blockResult;
