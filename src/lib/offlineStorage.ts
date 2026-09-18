@@ -141,7 +141,7 @@ export function backoffDelay(tries: number, baseMs = 4000, maxMs = 5 * 60 * 1000
 
 /** Помилки, які не має сенсу повторювати (бізнес-логіка або постійні збої БД). */
 const PERMANENT_ERROR_REGEX =
-  /insufficient_funds|forbidden|not_authenticated|unauthorized|fair_closed|child_not_found|not_found|invalid_amount|invalid input|awaiting_target_consent|violates row-level security|row-level security|violates foreign key|violates check constraint|duplicate key|null value in column|does not exist|22p02|23503|23505|42501|42703|400|401|403|404|409|422/i;
+  /insufficient_funds|forbidden|not_authenticated|unauthorized|fair_closed|child_not_found|not_found|invalid_amount|invalid input|awaiting_target_consent|violates row-level security|row-level security|violates foreign key|violates check constraint|duplicate key|null value in column|does not exist|22p02|23503|23505|42501|42703/i;
 
 export function isPermanentDbError(error: unknown): boolean {
   const err = error as any;
