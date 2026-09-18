@@ -118,22 +118,36 @@ Deno.serve(async (req) => {
       if (!roles?.length) return json({ error: 'forbidden' }, 403);
 
       const targetTeam = Number(body?.team ?? body?.team_number);
-      const targetPass = String(body?.password ?? body?.new_password ?? '').trim().toLowerCase();
+      const targetPass = canonical(String(body?.password ?? body?.new_password ?? ''));
 
       if (!targetTeam || targetTeam < 1 || targetTeam > 999 || !targetPass) {
         return json({ error: 'invalid_team_or_password' }, 400);
       }
 
-      const { error: updateErr } = await svc
+      const { data: saved, error: updateErr } = await svc
         .from('team_passwords')
-        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' });
+        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' })
+        .select('team, password')
+        .maybeSingle();
 
       if (updateErr) {
         console.error('Update error:', updateErr);
         return json({ error: 'database_update_failed' }, 500);
       }
 
-      return json({ ok: true, team: targetTeam, password: targetPass });
+      // Повертаємо саме те, що реально лежить у базі — джерело правди для UI.
+      const { data: readback } = await svc
+        .from('team_passwords')
+        .select('password')
+        .eq('team', targetTeam)
+        .maybeSingle();
+
+      const effective = readback?.password ?? saved?.password ?? targetPass;
+      if (canonical(effective) !== targetPass) {
+        return json({ error: 'save_not_persisted' }, 500);
+      }
+
+      return json({ ok: true, team: targetTeam, password: effective });
     }
 
     // =========================================================================
