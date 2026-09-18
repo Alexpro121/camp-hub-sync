@@ -9,6 +9,15 @@ function defaultSupervisorPassword(team: number): string {
   return `${SUPERVISOR_PREFIX}${team}`;
 }
 
+/**
+ * Єдина канонічна форма пароля: Unicode NFC, без пробілів по краях,
+ * нижній регістр, подвійні пробіли згорнуті. Використовується І при збереженні,
+ * І при перевірці — інакше адмін-панель і вхід розходяться.
+ */
+function canonical(s: string): string {
+  return (s ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function constantTimeEqual(a: string, b: string): boolean {
   const ea = new TextEncoder().encode(a);
   const eb = new TextEncoder().encode(b);
@@ -29,10 +38,19 @@ function toLatinLayout(s: string): string {
   }).join('');
 }
 
+function toCyrillicLayout(s: string): string {
+  return [...s].map((ch) => {
+    const i = EN_KEYS.indexOf(ch);
+    return i === -1 ? ch : UA_KEYS[i];
+  }).join('');
+}
+
 function passwordMatches(input: string, expected: string): boolean {
-  const inp = input.trim().toLowerCase();
-  const exp = expected.trim().toLowerCase();
-  return constantTimeEqual(inp, exp) || constantTimeEqual(toLatinLayout(inp), exp);
+  const inp = canonical(input);
+  const exp = canonical(expected);
+  return constantTimeEqual(inp, exp)
+    || constantTimeEqual(canonical(toLatinLayout(inp)), exp)
+    || constantTimeEqual(canonical(toCyrillicLayout(inp)), exp);
 }
 
 /** Отримання збереженої карти паролів з таблиці team_passwords */
