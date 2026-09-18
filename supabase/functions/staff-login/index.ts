@@ -9,6 +9,15 @@ function defaultSupervisorPassword(team: number): string {
   return `${SUPERVISOR_PREFIX}${team}`;
 }
 
+/**
+ * Єдина канонічна форма пароля: Unicode NFC, без пробілів по краях,
+ * нижній регістр, подвійні пробіли згорнуті. Використовується І при збереженні,
+ * І при перевірці — інакше адмін-панель і вхід розходяться.
+ */
+function canonical(s: string): string {
+  return (s ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function constantTimeEqual(a: string, b: string): boolean {
   const ea = new TextEncoder().encode(a);
   const eb = new TextEncoder().encode(b);
@@ -29,10 +38,19 @@ function toLatinLayout(s: string): string {
   }).join('');
 }
 
+function toCyrillicLayout(s: string): string {
+  return [...s].map((ch) => {
+    const i = EN_KEYS.indexOf(ch);
+    return i === -1 ? ch : UA_KEYS[i];
+  }).join('');
+}
+
 function passwordMatches(input: string, expected: string): boolean {
-  const inp = input.trim().toLowerCase();
-  const exp = expected.trim().toLowerCase();
-  return constantTimeEqual(inp, exp) || constantTimeEqual(toLatinLayout(inp), exp);
+  const inp = canonical(input);
+  const exp = canonical(expected);
+  return constantTimeEqual(inp, exp)
+    || constantTimeEqual(canonical(toLatinLayout(inp)), exp)
+    || constantTimeEqual(canonical(toCyrillicLayout(inp)), exp);
 }
 
 /** Отримання збереженої карти паролів з таблиці team_passwords */
@@ -71,12 +89,16 @@ Deno.serve(async (req) => {
 
       const detectedTeams = (teams ?? []).map((t: { team_number: number }) => t.team_number).filter(Boolean);
       const assigned = (shifts?.[0]?.assigned_teams || []) as number[];
-      const unique = [...new Set([...detectedTeams, ...assigned])].sort((a: number, b: number) => a - b);
+      // Команди зі збереженим паролем мають бути в списку завжди,
+      // навіть якщо в них ще немає учасників — інакше адмін не бачить робочий пароль.
+      const stored = Object.keys(passwordMap).map((k) => Number(k)).filter((n) => Number.isFinite(n));
+      const unique = [...new Set([...detectedTeams, ...assigned, ...stored])].sort((a: number, b: number) => a - b);
       const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
       const list = teamList.map((t: number) => ({
         team: t,
-        password: passwordMap[String(t)] || defaultSupervisorPassword(t),
+        password: passwordMap[String(t)] ?? defaultSupervisorPassword(t),
+        is_custom: Boolean(passwordMap[String(t)]),
       }));
 
       return json({ passwords: list });
@@ -96,22 +118,36 @@ Deno.serve(async (req) => {
       if (!roles?.length) return json({ error: 'forbidden' }, 403);
 
       const targetTeam = Number(body?.team ?? body?.team_number);
-      const targetPass = String(body?.password ?? body?.new_password ?? '').trim().toLowerCase();
+      const targetPass = canonical(String(body?.password ?? body?.new_password ?? ''));
 
       if (!targetTeam || targetTeam < 1 || targetTeam > 999 || !targetPass) {
         return json({ error: 'invalid_team_or_password' }, 400);
       }
 
-      const { error: updateErr } = await svc
+      const { data: saved, error: updateErr } = await svc
         .from('team_passwords')
-        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' });
+        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' })
+        .select('team, password')
+        .maybeSingle();
 
       if (updateErr) {
         console.error('Update error:', updateErr);
         return json({ error: 'database_update_failed' }, 500);
       }
 
-      return json({ ok: true, team: targetTeam, password: targetPass });
+      // Повертаємо саме те, що реально лежить у базі — джерело правди для UI.
+      const { data: readback } = await svc
+        .from('team_passwords')
+        .select('password')
+        .eq('team', targetTeam)
+        .maybeSingle();
+
+      const effective = readback?.password ?? saved?.password ?? targetPass;
+      if (canonical(effective) !== targetPass) {
+        return json({ error: 'save_not_persisted' }, 500);
+      }
+
+      return json({ ok: true, team: targetTeam, password: effective });
     }
 
     // =========================================================================

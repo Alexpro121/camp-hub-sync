@@ -698,7 +698,7 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
-  const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
+  const [passwords, setPasswords] = useState<Array<{ team: number; password: string; is_custom?: boolean }> | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwFilter, setPwFilter] = useState('');
   
@@ -715,40 +715,22 @@ const DataTab = () => {
   };
   useEffect(() => { load(); }, []);
 
-  // Завантаження паролів з Edge Function або безпосередньо з активної зміни
-  const loadPasswords = async () => {
+  // Завантаження паролів — єдине джерело правди - база через Edge Function.
+  // Жодних локальних «дефолтних» підстановок: вони показували неробочі паролі.
+  const loadPasswords = async (silent = false) => {
     setPwLoading(true);
     try {
-      let loaded = false;
       const { data, error } = await supabase.functions.invoke('staff-login', {
         body: { action: 'list_team_passwords' },
       });
 
-      if (!error && data?.passwords && Array.isArray(data.passwords) && data.passwords.length > 0) {
-        setPasswords(data.passwords);
-        loaded = true;
+      if (error || !data?.passwords || !Array.isArray(data.passwords)) {
+        throw new Error(data?.error || error?.message || 'load_failed');
       }
 
-      // Fallback: дефолтні паролі для виявлених команд
-      if (!loaded) {
-        const [{ data: kids }, { data: shiftList }] = await Promise.all([
-          supabase.from('children').select('team_number'),
-          supabase.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
-        ]);
-
-        const detectedTeams = Array.from(new Set((kids || []).map((k: any) => k.team_number).filter(Boolean))).sort((a, b) => a - b);
-        const assigned = shiftList?.[0]?.assigned_teams || [];
-        const allTeams = Array.from(new Set([...detectedTeams, ...assigned])).sort((a, b) => a - b);
-
-        const list = (allTeams.length ? allTeams : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((t) => ({
-          team: t,
-          password: `Супровід${t}`,
-        }));
-
-        setPasswords(list);
-      }
+      setPasswords(data.passwords);
     } catch {
-      toast.error('Не вдалося отримати паролі');
+      if (!silent) toast.error('Не вдалося отримати паролі з бази. Спробуйте ще раз.');
     } finally {
       setPwLoading(false);
     }
@@ -774,7 +756,7 @@ const DataTab = () => {
 
   // ✅ Збереження пароля через Edge Function (upsert у таблицю team_passwords)
   const savePassword = async (teamNum: number, newPass: string) => {
-    const trimmed = newPass.trim().toLowerCase();
+    const trimmed = newPass.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
     if (!trimmed) {
       toast.error('Пароль не може бути порожнім');
       return;
@@ -793,19 +775,22 @@ const DataTab = () => {
         throw new Error(data?.error || error?.message || 'save_failed');
       }
 
-      // 3. Миттєве оновлення локального списку паролів
+      // Показуємо рівно те, що підтвердила база (readback), а не локальне припущення
+      const effective: string = data.password ?? trimmed;
       setPasswords((prev) => {
-        if (!prev) return [{ team: teamNum, password: trimmed }];
+        const row = { team: teamNum, password: effective, is_custom: true };
+        if (!prev) return [row];
         const exists = prev.some((p) => p.team === teamNum);
-        if (exists) {
-          return prev.map((p) => (p.team === teamNum ? { ...p, password: trimmed } : p));
-        }
-        return [...prev, { team: teamNum, password: trimmed }].sort((a, b) => a.team - b.team);
+        if (exists) return prev.map((p) => (p.team === teamNum ? { ...p, ...row } : p));
+        return [...prev, row].sort((a, b) => a.team - b.team);
       });
 
       haptics.notification('success');
-      toast.success(`Пароль для команди №${teamNum} оновлено: ${trimmed}`);
+      toast.success(`Пароль для команди №${teamNum} оновлено: ${effective}`);
       setEditDialogTeam(null);
+
+      // Повторна синхронізація зі списком у базі (гарантія, що адмін бачить робочий пароль)
+      void loadPasswords(true);
     } catch (err: any) {
       haptics.notification('error');
       toast.error(err.message || 'Помилка збереження пароля');
@@ -863,7 +848,7 @@ const DataTab = () => {
 
         {!passwords ? (
           <Button 
-            onClick={loadPasswords} 
+            onClick={() => loadPasswords()} 
             disabled={pwLoading} 
             className="w-full h-11 font-bold uppercase rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10"
           >
