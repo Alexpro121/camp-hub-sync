@@ -10,7 +10,6 @@
 
 export interface StoredRecord {
   id: string;
-  [key: string]: unknown;
 }
 
 type WriteFn = (value: unknown) => Promise<void> | void;
