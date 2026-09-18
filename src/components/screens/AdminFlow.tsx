@@ -715,40 +715,22 @@ const DataTab = () => {
   };
   useEffect(() => { load(); }, []);
 
-  // Завантаження паролів з Edge Function або безпосередньо з активної зміни
-  const loadPasswords = async () => {
+  // Завантаження паролів — єдине джерело правди - база через Edge Function.
+  // Жодних локальних «дефолтних» підстановок: вони показували неробочі паролі.
+  const loadPasswords = async (silent = false) => {
     setPwLoading(true);
     try {
-      let loaded = false;
       const { data, error } = await supabase.functions.invoke('staff-login', {
         body: { action: 'list_team_passwords' },
       });
 
-      if (!error && data?.passwords && Array.isArray(data.passwords) && data.passwords.length > 0) {
-        setPasswords(data.passwords);
-        loaded = true;
+      if (error || !data?.passwords || !Array.isArray(data.passwords)) {
+        throw new Error(data?.error || error?.message || 'load_failed');
       }
 
-      // Fallback: дефолтні паролі для виявлених команд
-      if (!loaded) {
-        const [{ data: kids }, { data: shiftList }] = await Promise.all([
-          supabase.from('children').select('team_number'),
-          supabase.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
-        ]);
-
-        const detectedTeams = Array.from(new Set((kids || []).map((k: any) => k.team_number).filter(Boolean))).sort((a, b) => a - b);
-        const assigned = shiftList?.[0]?.assigned_teams || [];
-        const allTeams = Array.from(new Set([...detectedTeams, ...assigned])).sort((a, b) => a - b);
-
-        const list = (allTeams.length ? allTeams : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map((t) => ({
-          team: t,
-          password: `Супровід${t}`,
-        }));
-
-        setPasswords(list);
-      }
+      setPasswords(data.passwords);
     } catch {
-      toast.error('Не вдалося отримати паролі');
+      if (!silent) toast.error('Не вдалося отримати паролі з бази. Спробуйте ще раз.');
     } finally {
       setPwLoading(false);
     }
