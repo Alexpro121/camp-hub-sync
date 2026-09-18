@@ -61,7 +61,7 @@ const CHANNEL_NAME = 'ironshift-outbox';
 
 /** Жорсткий таймаут одного запиту для умов потяга (EDGE / 2G) */
 const REQUEST_TIMEOUT_MS = 12000;
-const MAX_TRIES = 8;
+const MAX_BACKOFF_MS = 15 * 60 * 1000;
 const MAX_QUEUE = 800;
 const MAX_DEAD_LETTERS = 50;
 
@@ -339,15 +339,9 @@ class OutboxManager {
             continue;
           }
 
-          if (tries >= MAX_TRIES) {
-            this.moveToDeadLetter(item, e);
-            completedIds.add(item.id);
-            continue;
-          }
-
           retries.set(item.id, {
             tries,
-            nextAttemptAt: Date.now() + backoffDelay(tries),
+            nextAttemptAt: Date.now() + backoffDelay(tries, 4000, MAX_BACKOFF_MS),
             lastError: String(e?.message ?? e ?? 'network'),
           });
         }

@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { networkPulse } from '@/lib/networkEngine';
 import {
   buildRows,
   detectHeaderIndex,
