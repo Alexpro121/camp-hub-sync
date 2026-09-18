@@ -44,7 +44,7 @@ import type { Child, Shift, ShiftType } from '@/types/app';
 import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
-import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
+import { parseSheetUrl, toDbRow, type ImportResult, type ImportRow } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import MultiFileShiftModal from '@/components/admin/MultiFileShiftModal';
 import { shiftStatus } from '@/lib/shift';

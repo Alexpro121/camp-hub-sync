@@ -67,7 +67,9 @@ function unrollSideBySideTeams(matrix: any[][]): any[][] | null {
 async function aiHeaderMap(headers: string[], samples: any[][]): Promise<Record<string, StdKey> | null> {
   if (!headers.length) return null;
 
-  if (!networkPulse.isOnline() || networkPulse.isSlow()) {
+  // Повільний зв'язок не привід відмовлятись від розпізнавання колонок —
+  // блокуємо лише при справжньому офлайні пристрою.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return null;
   }
 
@@ -136,7 +138,7 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
   const hasFullName = Object.values(headerMap).includes('full_name');
   const hasTeam = Object.values(headerMap).includes('team_number');
 
-  if ((!hasFullName || !hasTeam) && headers.length >= 2 && networkPulse.isOnline() && !networkPulse.isSlow()) {
+  if ((!hasFullName || !hasTeam) && headers.length >= 2) {
     const sampleRows = matrix.slice(effectiveHeaderIdx + 1, effectiveHeaderIdx + 5);
     const aiMap = await aiHeaderMap(headers, sampleRows);
 
@@ -190,7 +192,7 @@ export async function analyzeSheetUrl(url: string): Promise<ImportResult> {
     throw new Error('Будь ласка, вкажіть посилання на Google Таблицю');
   }
 
-  if (!networkPulse.isOnline()) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     throw new Error('Немає підключення до інтернету. Імпорт за посиланням Google Таблиць недоступний в офлайні.');
   }
 
