@@ -305,7 +305,11 @@ class OutboxManager {
   async flush(): Promise<{ done: number; failed: number }> {
     await this.ready;
     if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
-    if (!networkPulse.isOnline()) return { done: 0, failed: this.queue.length };
+    // Відправляємо, доки пристрій не втратив мережу за сигналом ОС:
+    // помилкова оцінка якості зв'язку не має зупиняти синхронізацію.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { done: 0, failed: this.queue.length };
+    }
 
     // Не даємо двом вкладкам відправляти ті самі дії одночасно
     const lease = acquireFlushLease(LEASE_KEY);
@@ -323,7 +327,7 @@ class OutboxManager {
     try {
       for (const item of snapshot) {
         // Якщо під час циклу мережа знову зникла в тунелі — зупиняємось без паніки
-        if (!networkPulse.isOnline()) break;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
 
         try {
           await this.run(item);
