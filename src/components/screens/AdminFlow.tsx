@@ -698,7 +698,7 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
-  const [passwords, setPasswords] = useState<Array<{ team: number; password: string }> | null>(null);
+  const [passwords, setPasswords] = useState<Array<{ team: number; password: string; is_custom?: boolean }> | null>(null);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwFilter, setPwFilter] = useState('');
   
