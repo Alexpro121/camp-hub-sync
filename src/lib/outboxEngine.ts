@@ -6,12 +6,25 @@
  *  • Нульова затримка: UI оновлюється за 0 мс.
  *  • Мікро-пакети: у запиті лише ID сутності та дельта (<150 байт).
  *  • Склеювання (coalescing): швидкі повторні кліки по одному учаснику склеюються в 1 запит.
- *  • Ідемпотентність: фінансові дії (А$) захищені унікальним клієнтським `txId`.
- *  • Захист від втрати даних (Race-Condition Free).
+ *  • Ідемпотентність: фінансові дії (А$) захищені стабільним клієнтським `txId`.
+ *  • Подвійне дзеркало сховища (IndexedDB + LocalStorage) із серіалізованим записом.
+ *  • Експоненційний бекоф + «мертва пошта» замість нескінченних ретраїв у БД.
+ *  • Синхронізація між вкладками та захист від подвійної відправки.
  */
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
 import { networkPulse } from '@/lib/networkEngine';
+import {
+  acquireFlushLease,
+  backoffDelay,
+  createChannel,
+  createSerialWriter,
+  isPermanentDbError,
+  mergeById,
+  safeLocalGet,
+  safeLocalSet,
+  safeUUID,
+} from '@/lib/offlineStorage';
 
 export type OutboxType = 'PRESENCE' | 'NOTE' | 'AIR_CHARGE';
 
@@ -24,11 +37,15 @@ export interface OutboxItem {
   txId?: string;
   createdAt: number;
   tries: number;
+  /** Час наступної дозволеної спроби (бекоф). */
+  nextAttemptAt?: number;
+  lastError?: string;
 }
 
 export interface OutboxState {
   pending: number;
   syncing: boolean;
+  failed: number;
 }
 
 type Listener = (s: OutboxState) => void;
@@ -37,10 +54,16 @@ type FlushListener = (done: number, failed: number) => void;
 const store = createStore('ironshift-outbox', 'kv');
 const QUEUE_KEY = 'outbox:v2';
 const FALLBACK_LS_KEY = 'ironshift:outbox:fallback:v2';
+const DEAD_LETTER_KEY = 'ironshift:outbox:dead:v1';
 const TEAMS_SNAPSHOT_KEY = 'ironshift:teams-snapshot:v2';
+const LEASE_KEY = 'ironshift:outbox:lease';
+const CHANNEL_NAME = 'ironshift-outbox';
 
 /** Жорсткий таймаут одного запиту для умов потяга (EDGE / 2G) */
-const REQUEST_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 12000;
+const MAX_TRIES = 8;
+const MAX_QUEUE = 800;
+const MAX_DEAD_LETTERS = 50;
 
 function withTimeout<T>(p: PromiseLike<T>, ms = REQUEST_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -57,6 +80,8 @@ class OutboxManager {
   private listeners = new Set<Listener>();
   private flushListeners = new Set<FlushListener>();
   private syncing = false;
+  private writeIdb = createSerialWriter((value) => idbSet(QUEUE_KEY, value, store));
+  private channel = createChannel(CHANNEL_NAME, (data) => this.onChannelMessage(data));
 
   readonly ready: Promise<void>;
 
@@ -73,37 +98,56 @@ class OutboxManager {
       setInterval(() => {
         if (networkPulse.isOnline()) void this.flush();
       }, 15000);
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && networkPulse.isOnline()) void this.flush();
+      });
+
+      // Остання спроба зберегти чергу перед закриттям вкладки
+      window.addEventListener('pagehide', () => this.persistSync());
+      window.addEventListener('beforeunload', () => this.persistSync());
     }
   }
 
-  /** Безпечне завантаження з IndexedDB або LocalStorage */
+  /** Безпечне завантаження з IndexedDB та LocalStorage зі злиттям обох джерел. */
   private async initStorage(): Promise<void> {
+    let fromIdb: OutboxItem[] | null = null;
     try {
-      const fromIdb = await idbGet<OutboxItem[]>(QUEUE_KEY, store);
-      if (fromIdb && Array.isArray(fromIdb)) {
-        this.queue = fromIdb;
-      } else {
-        const rawLs = localStorage.getItem(FALLBACK_LS_KEY);
-        this.queue = rawLs ? JSON.parse(rawLs) : [];
-      }
+      fromIdb = (await idbGet<OutboxItem[]>(QUEUE_KEY, store)) ?? null;
     } catch {
-      try {
-        const rawLs = localStorage.getItem(FALLBACK_LS_KEY);
-        this.queue = rawLs ? JSON.parse(rawLs) : [];
-      } catch {
-        this.queue = [];
-      }
+      fromIdb = null;
     }
+    const fromLs = safeLocalGet<OutboxItem[]>(FALLBACK_LS_KEY);
+
+    // Злиття захищає від втрати дій, якщо один із записів не встиг зберегтися
+    this.queue = mergeById<OutboxItem>(fromIdb as any, fromLs as any).filter(
+      (i) => i && typeof i.type === 'string' && typeof i.entityId === 'string',
+    );
     this.emit();
+    if (this.queue.length) void this.persist();
   }
 
-  get pending(): number { 
-    return this.queue.length; 
+  private onChannelMessage(data: any) {
+    if (!data || data.source === 'self') return;
+    if (data.type === 'queue' && Array.isArray(data.queue)) {
+      // Приймаємо стан іншої вкладки, не втрачаючи власних нових дій
+      this.queue = mergeById<OutboxItem>(data.queue, this.queue);
+      this.emit();
+    }
+  }
+
+  get pending(): number {
+    return this.queue.length;
+  }
+
+  /** Дії, які впали і чекають наступної спроби. */
+  get failed(): number {
+    return this.queue.filter((i) => (i.tries ?? 0) > 0).length;
   }
 
   subscribe(l: Listener): () => void {
     this.listeners.add(l);
-    l({ pending: this.queue.length, syncing: this.syncing });
+    l(this.snapshotState());
     return () => { this.listeners.delete(l); };
   }
 
@@ -112,25 +156,52 @@ class OutboxManager {
     return () => { this.flushListeners.delete(l); };
   }
 
+  private snapshotState(): OutboxState {
+    return { pending: this.queue.length, syncing: this.syncing, failed: this.failed };
+  }
+
   private emit() {
-    const s: OutboxState = { pending: this.queue.length, syncing: this.syncing };
+    const s = this.snapshotState();
     this.listeners.forEach((l) => l(s));
   }
 
-  private persist() {
-    // 1. Збереження в IndexedDB
-    idbSet(QUEUE_KEY, this.queue, store).catch(() => {
-      // 2. Резервне збереження в LocalStorage при збої WebKit
-      try {
-        localStorage.setItem(FALLBACK_LS_KEY, JSON.stringify(this.queue));
-      } catch { /* квота пам'яті */ }
-    });
-
-    try {
-      localStorage.setItem(FALLBACK_LS_KEY, JSON.stringify(this.queue));
-    } catch { /* ignore */ }
-
+  /** Серіалізоване збереження: IndexedDB → LocalStorage-дзеркало → підписники → інші вкладки. */
+  private persist(): Promise<void> {
+    this.trimQueue();
+    const snapshot = this.queue.map((i) => ({ ...i }));
+    safeLocalSet(FALLBACK_LS_KEY, snapshot);
     this.emit();
+    this.channel.post({ type: 'queue', queue: snapshot });
+    return this.writeIdb(snapshot);
+  }
+
+  /** Синхронне збереження при закритті вкладки (IndexedDB може не встигнути). */
+  private persistSync() {
+    safeLocalSet(FALLBACK_LS_KEY, this.queue);
+  }
+
+  /** Захист від нескінченного росту черги: фінансові дії ніколи не викидаємо першими. */
+  private trimQueue() {
+    if (this.queue.length <= MAX_QUEUE) return;
+    const financial = this.queue.filter((i) => i.type === 'AIR_CHARGE');
+    const rest = this.queue.filter((i) => i.type !== 'AIR_CHARGE');
+    const keepRest = rest.slice(Math.max(0, rest.length - (MAX_QUEUE - financial.length)));
+    this.queue = mergeById<OutboxItem>(financial, keepRest);
+  }
+
+  private moveToDeadLetter(item: OutboxItem, error: unknown) {
+    const list = safeLocalGet<OutboxItem[]>(DEAD_LETTER_KEY) ?? [];
+    list.push({ ...item, lastError: String((error as any)?.message ?? error ?? 'unknown') });
+    safeLocalSet(DEAD_LETTER_KEY, list.slice(-MAX_DEAD_LETTERS));
+  }
+
+  /** Дії, які не вдалося застосувати (для діагностики в адмінці). */
+  getDeadLetters(): OutboxItem[] {
+    return safeLocalGet<OutboxItem[]>(DEAD_LETTER_KEY) ?? [];
+  }
+
+  clearDeadLetters() {
+    safeLocalSet(DEAD_LETTER_KEY, []);
   }
 
   /**
@@ -139,34 +210,37 @@ class OutboxManager {
    */
   enqueue(type: OutboxType, entityId: string, payload: Record<string, unknown>): OutboxItem {
     const coalescable = type === 'PRESENCE' || type === 'NOTE';
-    
+
     if (coalescable) {
       const idx = this.queue.findIndex((i) => i.type === type && i.entityId === entityId);
       if (idx >= 0) {
-        this.queue[idx] = { 
-          ...this.queue[idx], 
-          payload: { ...this.queue[idx].payload, ...payload }, 
+        this.queue[idx] = {
+          ...this.queue[idx],
+          payload: { ...this.queue[idx].payload, ...payload },
           tries: 0,
-          createdAt: Date.now()
+          nextAttemptAt: undefined,
+          lastError: undefined,
+          createdAt: Date.now(),
         };
-        this.persist();
+        void this.persist();
         void this.flush();
         return this.queue[idx];
       }
     }
 
     const item: OutboxItem = {
-      id: crypto.randomUUID(),
+      id: safeUUID(),
       type,
       entityId,
       payload,
-      txId: type === 'AIR_CHARGE' ? (payload.txId as string || crypto.randomUUID()) : undefined,
+      // txId стабільний на весь час життя дії — повтор не спишe А$ двічі
+      txId: type === 'AIR_CHARGE' ? ((payload.txId as string) || safeUUID()) : undefined,
       createdAt: Date.now(),
       tries: 0,
     };
 
     this.queue.push(item);
-    this.persist();
+    void this.persist();
     void this.flush();
     return item;
   }
@@ -215,9 +289,11 @@ class OutboxManager {
       );
 
       if (error) throw error;
-      if (data && typeof data === 'object' && (data as any).status === 'insufficient_funds') {
-        // Недостатньо коштів — дія вважається завершеною з помилкою бізнес-логіки (не повторюємо вічно)
-        return;
+
+      const status = data && typeof data === 'object' ? String((data as any).status ?? '') : '';
+      // Бізнес-відмова — дія завершена, повторювати немає сенсу
+      if (status && !/ok|success|already_processed|duplicate/i.test(status)) {
+        this.moveToDeadLetter(item, `status:${status}`);
       }
     }
   }
@@ -228,51 +304,66 @@ class OutboxManager {
    */
   async flush(): Promise<{ done: number; failed: number }> {
     await this.ready;
-    if (this.syncing || !this.queue.length) return { done: 0, failed: 0 };
+    if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
     if (!networkPulse.isOnline()) return { done: 0, failed: this.queue.length };
+
+    // Не даємо двом вкладкам відправляти ті самі дії одночасно
+    const lease = acquireFlushLease(LEASE_KEY);
+    if (!lease) return { done: 0, failed: this.queue.length };
 
     this.syncing = true;
     this.emit();
 
-    const snapshot = [...this.queue];
+    const now = Date.now();
+    const snapshot = this.queue.filter((i) => !i.nextAttemptAt || i.nextAttemptAt <= now);
     const completedIds = new Set<string>();
+    const retries = new Map<string, Partial<OutboxItem>>();
     let done = 0;
-    let failed = 0;
 
-    for (const item of snapshot) {
-      // Якщо під час циклу мережа знову зникла в тунелі — зупиняємось без паніки
-      if (!networkPulse.isOnline()) {
-        failed++;
-        break;
-      }
+    try {
+      for (const item of snapshot) {
+        // Якщо під час циклу мережа знову зникла в тунелі — зупиняємось без паніки
+        if (!networkPulse.isOnline()) break;
 
-      try {
-        await this.run(item);
-        completedIds.add(item.id);
-        done++;
-      } catch (e: any) {
-        const errorMsg = String(e?.message ?? e).toLowerCase();
-        
-        // Помилки, які не мають сенсу повторюватися вічно (видаляємо з черги)
-        const isPermanent = /insufficient_funds|child_not_found|invalid_amount|forbidden|not_found|22p02/i.test(errorMsg);
-        
-        if (isPermanent) {
+        try {
+          await this.run(item);
           completedIds.add(item.id);
           done++;
-        } else {
-          // Тимчасова помилка мережі — збільшуємо лічильник спроб
-          item.tries += 1;
-          failed++;
+        } catch (e: any) {
+          const tries = (item.tries ?? 0) + 1;
+
+          if (isPermanentDbError(e)) {
+            // Постійна помилка БД (RLS, FK, дублікат) — не мучимо базу вічно
+            this.moveToDeadLetter(item, e);
+            completedIds.add(item.id);
+            continue;
+          }
+
+          if (tries >= MAX_TRIES) {
+            this.moveToDeadLetter(item, e);
+            completedIds.add(item.id);
+            continue;
+          }
+
+          retries.set(item.id, {
+            tries,
+            nextAttemptAt: Date.now() + backoffDelay(tries),
+            lastError: String(e?.message ?? e ?? 'network'),
+          });
         }
       }
+    } finally {
+      // ✅ БЕЗПЕЧНЕ ОНОВЛЕННЯ: видаляємо ТІЛЬКИ оброблені ID, зберігаючи всі нові дії!
+      this.queue = this.queue
+        .filter((item) => !completedIds.has(item.id))
+        .map((item) => (retries.has(item.id) ? { ...item, ...retries.get(item.id) } : item));
+
+      this.syncing = false;
+      lease.release();
+      await this.persist();
     }
 
-    // ✅ БЕЗПЕЧНЕ ОНОВЛЕННЯ: видаляємо ТІЛЬКИ успішні ID, зберігаючи всі нові дії!
-    this.queue = this.queue.filter((item) => !completedIds.has(item.id));
-    this.syncing = false;
-    this.persist();
-
-    if (done > 0 || failed > 0) {
+    if (done > 0 || retries.size > 0) {
       this.flushListeners.forEach((l) => l(done, this.queue.length));
     }
 
@@ -281,18 +372,11 @@ class OutboxManager {
 
   // ── Локальні снепшоти команди (Миттєвий запуск 0 мс) ───────────────────
   saveTeamsSnapshot(data: unknown) {
-    try {
-      localStorage.setItem(TEAMS_SNAPSHOT_KEY, JSON.stringify({ savedAt: Date.now(), data }));
-    } catch { /* квота пам'яті */ }
+    safeLocalSet(TEAMS_SNAPSHOT_KEY, { savedAt: Date.now(), data });
   }
 
   getTeamsSnapshot<T = unknown>(): { savedAt: number; data: T } | null {
-    try {
-      const raw = localStorage.getItem(TEAMS_SNAPSHOT_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+    return safeLocalGet<{ savedAt: number; data: T }>(TEAMS_SNAPSHOT_KEY);
   }
 }
 
