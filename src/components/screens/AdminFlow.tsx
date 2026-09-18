@@ -848,7 +848,7 @@ const DataTab = () => {
 
         {!passwords ? (
           <Button 
-            onClick={loadPasswords} 
+            onClick={() => loadPasswords()} 
             disabled={pwLoading} 
             className="w-full h-11 font-bold uppercase rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10"
           >
