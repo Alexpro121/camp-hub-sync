@@ -89,12 +89,16 @@ Deno.serve(async (req) => {
 
       const detectedTeams = (teams ?? []).map((t: { team_number: number }) => t.team_number).filter(Boolean);
       const assigned = (shifts?.[0]?.assigned_teams || []) as number[];
-      const unique = [...new Set([...detectedTeams, ...assigned])].sort((a: number, b: number) => a - b);
+      // Команди зі збереженим паролем мають бути в списку завжди,
+      // навіть якщо в них ще немає учасників — інакше адмін не бачить робочий пароль.
+      const stored = Object.keys(passwordMap).map((k) => Number(k)).filter((n) => Number.isFinite(n));
+      const unique = [...new Set([...detectedTeams, ...assigned, ...stored])].sort((a: number, b: number) => a - b);
       const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
       const list = teamList.map((t: number) => ({
         team: t,
-        password: passwordMap[String(t)] || defaultSupervisorPassword(t),
+        password: passwordMap[String(t)] ?? defaultSupervisorPassword(t),
+        is_custom: Boolean(passwordMap[String(t)]),
       }));
 
       return json({ passwords: list });
