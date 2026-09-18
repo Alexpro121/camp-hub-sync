@@ -50,10 +50,15 @@ export const ImportPreviewDialog: React.FC<Props> = ({
   busy = false,
   onConfirm,
 }) => {
-  if (!initialResult) return null;
+  // Порожній результат-заглушка: хуки мають викликатись у сталому порядку,
+  // навіть коли діалог змонтований ще без даних аналізу.
+  const emptyResult = useMemo<ImportResult>(
+    () => ({ rows: [], matrix: [], headerMap: {}, detectedTeams: [], mapSource: 'dict' } as unknown as ImportResult),
+    [],
+  );
 
   // Local state for active result (allows real-time updates when remapping columns)
-  const [activeResult, setActiveResult] = useState<ImportResult>(initialResult);
+  const [activeResult, setActiveResult] = useState<ImportResult>(initialResult ?? emptyResult);
   const [showManualMapper, setShowManualMapper] = useState(false);
   const [defaultTeam, setDefaultTeam] = useState<number>(1);
 
@@ -161,6 +166,8 @@ export const ImportPreviewDialog: React.FC<Props> = ({
         );
     }
   };
+
+  if (!initialResult) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

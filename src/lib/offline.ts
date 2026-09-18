@@ -46,7 +46,8 @@ const DEAD_LETTER_KEY = 'helpsuprov:offline-queue:dead';
 const LEASE_KEY = 'helpsuprov:offline-queue:lease';
 const IDB_KEY = 'queue';
 const store = createStore('helpsuprov', 'offline');
-const MAX_RETRY_ATTEMPTS = 8;
+/** Мережеві збої НІКОЛИ не видаляють дію — лише збільшують паузу до повтору. */
+const MAX_BACKOFF_MS = 15 * 60 * 1000;
 const MAX_QUEUE = 500;
 const MAX_DEAD_LETTERS = 50;
 
@@ -217,6 +218,11 @@ async function run(a: QueuedAction) {
   }
 }
 
+/** Пристрій точно без мережі (сигнал ОС), а не здогадка про якість зв'язку. */
+function isDeviceOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export function isPermanentError(error: unknown): boolean {
   return isPermanentDbError(error);
 }
@@ -226,7 +232,9 @@ export async function queuedWrite(
 ): Promise<{ queued: boolean; error?: unknown }> {
   await ready;
 
-  if (!networkPulse.isOnline()) {
+  // Черга лише коли пристрій справді офлайн: помилкова оцінка якості зв'язку
+  // не має відкладати запис, який реально пройшов би.
+  if (isDeviceOffline()) {
     enqueue(action);
     return { queued: true };
   }
@@ -273,7 +281,7 @@ export async function queuedIronDollarChange(opts: {
 export async function flushQueue(): Promise<{ done: number; failed: number }> {
   await ready;
 
-  if (syncing || !networkPulse.isOnline() || !cache.length) {
+  if (syncing || isDeviceOffline() || !cache.length) {
     return { done: 0, failed: cache.length };
   }
 
@@ -291,7 +299,7 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
 
   try {
     for (const action of itemsToProcess) {
-      if (!networkPulse.isOnline()) break;
+      if (isDeviceOffline()) break;
 
       try {
         await run(action);
@@ -300,16 +308,18 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
       } catch (e: any) {
         const attempts = (action.attempts || 0) + 1;
 
-        if (isPermanentError(e) || attempts >= MAX_RETRY_ATTEMPTS) {
-          console.warn(`[OfflineQueue] Dropping action ${action.id} (${action.label}):`, e);
+        if (isPermanentError(e)) {
+          // База відхилила запис назавжди (немає прав, дублікат, звʼязок) — зберігаємо в журнал
+          console.warn(`[OfflineQueue] Permanent failure ${action.id} (${action.label}):`, e);
           moveToDeadLetter(action, e);
           completed.add(action.id);
           continue;
         }
 
+        // Тимчасова помилка мережі — дія лишається в черзі назавжди
         retries.set(action.id, {
           attempts,
-          nextAttemptAt: Date.now() + backoffDelay(attempts),
+          nextAttemptAt: Date.now() + backoffDelay(attempts, 4000, MAX_BACKOFF_MS),
           lastError: String(e?.message || e || 'Network error'),
         });
       }
@@ -340,11 +350,11 @@ networkPulse.subscribe((state) => {
 if (typeof window !== 'undefined') {
   // Регулярний пульс: підбирає дії, чия пауза бекофу вже минула
   setInterval(() => {
-    if (networkPulse.isOnline() && cache.length) void flushQueue();
+    if (!isDeviceOffline() && cache.length) void flushQueue();
   }, 20000);
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && networkPulse.isOnline()) void flushQueue();
+    if (document.visibilityState === 'visible' && !isDeviceOffline()) void flushQueue();
   });
 
   window.addEventListener('pagehide', () => {

@@ -44,7 +44,7 @@ import type { Child, Shift, ShiftType } from '@/types/app';
 import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
 import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
-import { parseSheetUrl, toDbRow, type ImportResult } from '@/lib/importer';
+import { parseSheetUrl, toDbRow, type ImportResult, type ImportRow } from '@/lib/importer';
 import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
 import MultiFileShiftModal from '@/components/admin/MultiFileShiftModal';
 import { shiftStatus } from '@/lib/shift';
@@ -376,7 +376,7 @@ const ShiftsTab = () => {
     }
   };
 
-  const confirmImport = async () => {
+  const confirmImport = async (overrideRows?: ImportRow[]) => {
     if (!preview) return;
     setCreating(true);
     island.showExcelProgress(20, sourceLabel || 'Google Sheets');
@@ -385,7 +385,9 @@ const ShiftsTab = () => {
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
       if (type === 'long') await syncShortShifts(start, end);
 
-      const valid = preview.rows.filter(r => r.full_name && r.team_number);
+      // Пріоритет — рядки з вікна перегляду (ручне налаштування колонок)
+      const sourceRows = overrideRows?.length ? overrideRows : preview.rows;
+      const valid = sourceRows.filter(r => r.full_name && r.team_number);
       const dbRows = valid.map(r => toDbRow(r, shift.id));
       island.showExcelProgress(45, sourceLabel || 'Google Sheets');
 

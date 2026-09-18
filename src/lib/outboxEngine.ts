@@ -61,7 +61,7 @@ const CHANNEL_NAME = 'ironshift-outbox';
 
 /** Жорсткий таймаут одного запиту для умов потяга (EDGE / 2G) */
 const REQUEST_TIMEOUT_MS = 12000;
-const MAX_TRIES = 8;
+const MAX_BACKOFF_MS = 15 * 60 * 1000;
 const MAX_QUEUE = 800;
 const MAX_DEAD_LETTERS = 50;
 
@@ -305,7 +305,11 @@ class OutboxManager {
   async flush(): Promise<{ done: number; failed: number }> {
     await this.ready;
     if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
-    if (!networkPulse.isOnline()) return { done: 0, failed: this.queue.length };
+    // Відправляємо, доки пристрій не втратив мережу за сигналом ОС:
+    // помилкова оцінка якості зв'язку не має зупиняти синхронізацію.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return { done: 0, failed: this.queue.length };
+    }
 
     // Не даємо двом вкладкам відправляти ті самі дії одночасно
     const lease = acquireFlushLease(LEASE_KEY);
@@ -323,7 +327,7 @@ class OutboxManager {
     try {
       for (const item of snapshot) {
         // Якщо під час циклу мережа знову зникла в тунелі — зупиняємось без паніки
-        if (!networkPulse.isOnline()) break;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
 
         try {
           await this.run(item);
@@ -339,15 +343,9 @@ class OutboxManager {
             continue;
           }
 
-          if (tries >= MAX_TRIES) {
-            this.moveToDeadLetter(item, e);
-            completedIds.add(item.id);
-            continue;
-          }
-
           retries.set(item.id, {
             tries,
-            nextAttemptAt: Date.now() + backoffDelay(tries),
+            nextAttemptAt: Date.now() + backoffDelay(tries, 4000, MAX_BACKOFF_MS),
             lastError: String(e?.message ?? e ?? 'network'),
           });
         }

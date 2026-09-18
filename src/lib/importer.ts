@@ -779,7 +779,11 @@ function parseClassicTable(
     let teamNum = colOf.team_number !== undefined ? (parseIntSafe(r[colOf.team_number]) ?? 0) : 0;
     if (!teamNum) {
       for (const cell of r) {
-        const extracted = extractTeamNumberFromText(String(cell ?? ''));
+        const cellText = String(cell ?? '');
+        // Без окремої колонки команди довіряємо ЛИШЕ явним підписам («Команда 3», «2 загін»),
+        // інакше порядковий номер рядка помилково стає номером команди.
+        if (!/команд|загін|загон|team|група/i.test(cellText)) continue;
+        const extracted = extractTeamNumberFromText(cellText);
         if (extracted !== null) {
           currentTeam = extracted;
           teamNum = extracted;
