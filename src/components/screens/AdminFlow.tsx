@@ -756,7 +756,7 @@ const DataTab = () => {
 
   // ✅ Збереження пароля через Edge Function (upsert у таблицю team_passwords)
   const savePassword = async (teamNum: number, newPass: string) => {
-    const trimmed = newPass.trim().toLowerCase();
+    const trimmed = newPass.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
     if (!trimmed) {
       toast.error('Пароль не може бути порожнім');
       return;
@@ -775,19 +775,22 @@ const DataTab = () => {
         throw new Error(data?.error || error?.message || 'save_failed');
       }
 
-      // 3. Миттєве оновлення локального списку паролів
+      // Показуємо рівно те, що підтвердила база (readback), а не локальне припущення
+      const effective: string = data.password ?? trimmed;
       setPasswords((prev) => {
-        if (!prev) return [{ team: teamNum, password: trimmed }];
+        const row = { team: teamNum, password: effective, is_custom: true };
+        if (!prev) return [row];
         const exists = prev.some((p) => p.team === teamNum);
-        if (exists) {
-          return prev.map((p) => (p.team === teamNum ? { ...p, password: trimmed } : p));
-        }
-        return [...prev, { team: teamNum, password: trimmed }].sort((a, b) => a.team - b.team);
+        if (exists) return prev.map((p) => (p.team === teamNum ? { ...p, ...row } : p));
+        return [...prev, row].sort((a, b) => a.team - b.team);
       });
 
       haptics.notification('success');
-      toast.success(`Пароль для команди №${teamNum} оновлено: ${trimmed}`);
+      toast.success(`Пароль для команди №${teamNum} оновлено: ${effective}`);
       setEditDialogTeam(null);
+
+      // Повторна синхронізація зі списком у базі (гарантія, що адмін бачить робочий пароль)
+      void loadPasswords(true);
     } catch (err: any) {
       haptics.notification('error');
       toast.error(err.message || 'Помилка збереження пароля');
