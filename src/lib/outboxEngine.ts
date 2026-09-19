@@ -123,9 +123,12 @@ class OutboxManager {
     }
     const fromLs = safeLocalGet<OutboxItem[]>(FALLBACK_LS_KEY);
 
-    // Злиття захищає від втрати дій, якщо один із записів не встиг зберегтися
-    this.queue = mergeById<OutboxItem>(fromIdb as any, fromLs as any).filter(
-      (i) => i && typeof i.type === 'string' && typeof i.entityId === 'string',
+    // Злиття захищає від втрати дій, якщо один із записів не встиг зберегтися,
+    // а надгробки не дають повернутись тим, що вже пішли в базу.
+    this.queue = this.tombstones.filter(
+      mergeById<OutboxItem>(fromIdb as any, fromLs as any).filter(
+        (i) => i && typeof i.type === 'string' && typeof i.entityId === 'string',
+      ),
     );
     this.emit();
     if (this.queue.length) void this.persist();
@@ -135,7 +138,7 @@ class OutboxManager {
     if (!data || data.source === 'self') return;
     if (data.type === 'queue' && Array.isArray(data.queue)) {
       // Приймаємо стан іншої вкладки, не втрачаючи власних нових дій
-      this.queue = mergeById<OutboxItem>(data.queue, this.queue);
+      this.queue = this.tombstones.filter(mergeById<OutboxItem>(data.queue, this.queue));
       this.emit();
     }
   }
