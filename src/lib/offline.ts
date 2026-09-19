@@ -16,6 +16,7 @@ import {
   backoffDelay,
   createChannel,
   createSerialWriter,
+  createTombstones,
   isPermanentDbError,
   mergeById,
   safeLocalGet,
