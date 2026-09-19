@@ -332,6 +332,8 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
       }
     }
   } finally {
+    // Фіксуємо завершені дії, щоб вони не повернулись із дзеркала чи іншої вкладки
+    if (completed.size) tombstones.mark(completed);
     const next = cache
       .filter((a) => !completed.has(a.id))
       .map((a) => (retries.has(a.id) ? { ...a, ...retries.get(a.id) } : a));
