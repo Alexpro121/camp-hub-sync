@@ -359,6 +359,7 @@ class OutboxManager {
       }
     } finally {
       // ✅ БЕЗПЕЧНЕ ОНОВЛЕННЯ: видаляємо ТІЛЬКИ оброблені ID, зберігаючи всі нові дії!
+      if (completedIds.size) this.tombstones.mark(completedIds);
       this.queue = this.queue
         .filter((item) => !completedIds.has(item.id))
         .map((item) => (retries.has(item.id) ? { ...item, ...retries.get(item.id) } : item));
