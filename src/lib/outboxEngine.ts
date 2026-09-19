@@ -56,6 +56,7 @@ const store = createStore('ironshift-outbox', 'kv');
 const QUEUE_KEY = 'outbox:v2';
 const FALLBACK_LS_KEY = 'ironshift:outbox:fallback:v2';
 const DEAD_LETTER_KEY = 'ironshift:outbox:dead:v1';
+const DONE_KEY = 'ironshift:outbox:done:v1';
 const TEAMS_SNAPSHOT_KEY = 'ironshift:teams-snapshot:v2';
 const LEASE_KEY = 'ironshift:outbox:lease';
 const CHANNEL_NAME = 'ironshift-outbox';
