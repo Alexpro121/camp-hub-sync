@@ -16,6 +16,7 @@ import {
   backoffDelay,
   createChannel,
   createSerialWriter,
+  createTombstones,
   isPermanentDbError,
   mergeById,
   safeLocalGet,
@@ -57,9 +58,13 @@ let syncing = false;
 let cache: QueuedAction[] = [];
 
 const writeIdb = createSerialWriter((value) => idbSet(IDB_KEY, value, store));
+/** Уже відправлені дії — щоб злиття дзеркал чи вкладок не воскресило їх. */
+const tombstones = createTombstones('helpsuprov:offline-queue:done');
 const channel = createChannel('helpsuprov-offline-queue', (data) => {
   if (data?.type === 'queue' && Array.isArray(data.queue)) {
-    cache = mergeById<any>(data.queue, cache, (i: any) => i.created_at ?? 0);
+    cache = tombstones.filter(
+      mergeById<any>(data.queue, cache, (i: any) => i.created_at ?? 0),
+    );
     notifyListeners();
   }
 });
@@ -80,11 +85,13 @@ export const ready: Promise<void> = (async () => {
     /* ignore */
   }
 
-  cache = mergeById<any>(
-    mergeById<any>(stored as any, mirror as any, (i: any) => i.created_at ?? 0),
-    (legacy ?? []) as any,
-    (i: any) => i.created_at ?? 0,
-  ).filter((a: any) => a && typeof a.table === 'string' && typeof a.op === 'string');
+  cache = tombstones.filter(
+    mergeById<any>(
+      mergeById<any>(stored as any, mirror as any, (i: any) => i.created_at ?? 0),
+      (legacy ?? []) as any,
+      (i: any) => i.created_at ?? 0,
+    ).filter((a: any) => a && typeof a.table === 'string' && typeof a.op === 'string'),
+  );
 
   if (cache.length) writeQueue(cache);
   notifyListeners();
@@ -325,6 +332,8 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
       }
     }
   } finally {
+    // Фіксуємо завершені дії, щоб вони не повернулись із дзеркала чи іншої вкладки
+    if (completed.size) tombstones.mark(completed);
     const next = cache
       .filter((a) => !completed.has(a.id))
       .map((a) => (retries.has(a.id) ? { ...a, ...retries.get(a.id) } : a));

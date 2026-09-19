@@ -82,6 +82,45 @@ export function safeUUID(): string {
   });
 }
 
+/**
+ * Реєстр «надгробків» — ID уже виконаних дій.
+ *
+ * Потрібен тому, що mergeById лише додає записи й не вміє виражати видалення:
+ * без нього завершена дія «воскресає» з дзеркала IndexedDB або з іншої вкладки
+ * і повторно перезаписує свіжіші дані на сервері.
+ * Сховище спільне для всіх вкладок (localStorage), із самоочищенням за TTL.
+ */
+export function createTombstones(key: string, ttlMs = 24 * 60 * 60 * 1000) {
+  const read = (): Record<string, number> => {
+    const raw = safeLocalGet<Record<string, number>>(key);
+    if (!raw || typeof raw !== 'object') return {};
+    const now = Date.now();
+    const fresh: Record<string, number> = {};
+    for (const [id, ts] of Object.entries(raw)) {
+      if (typeof ts === 'number' && now - ts < ttlMs) fresh[id] = ts;
+    }
+    return fresh;
+  };
+
+  return {
+    mark(ids: Iterable<string>) {
+      const map = read();
+      const now = Date.now();
+      for (const id of ids) map[id] = now;
+      safeLocalSet(key, map);
+    },
+    has(id: string): boolean {
+      return Object.prototype.hasOwnProperty.call(read(), id);
+    },
+    /** Прибирає з переліку все, що вже було успішно відправлено. */
+    filter<T extends StoredRecord>(list: T[]): T[] {
+      const map = read();
+      if (!Object.keys(map).length) return list;
+      return list.filter((item) => !map[item.id]);
+    },
+  };
+}
+
 /** Канал синхронізації черг між вкладками одного пристрою. */
 export function createChannel(name: string, onMessage: (data: any) => void) {
   let channel: BroadcastChannel | null = null;

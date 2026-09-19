@@ -19,6 +19,7 @@ import {
   backoffDelay,
   createChannel,
   createSerialWriter,
+  createTombstones,
   isPermanentDbError,
   mergeById,
   safeLocalGet,
@@ -55,6 +56,7 @@ const store = createStore('ironshift-outbox', 'kv');
 const QUEUE_KEY = 'outbox:v2';
 const FALLBACK_LS_KEY = 'ironshift:outbox:fallback:v2';
 const DEAD_LETTER_KEY = 'ironshift:outbox:dead:v1';
+const DONE_KEY = 'ironshift:outbox:done:v1';
 const TEAMS_SNAPSHOT_KEY = 'ironshift:teams-snapshot:v2';
 const LEASE_KEY = 'ironshift:outbox:lease';
 const CHANNEL_NAME = 'ironshift-outbox';
@@ -82,6 +84,8 @@ class OutboxManager {
   private syncing = false;
   private writeIdb = createSerialWriter((value) => idbSet(QUEUE_KEY, value, store));
   private channel = createChannel(CHANNEL_NAME, (data) => this.onChannelMessage(data));
+  /** ID уже відправлених дій — злиття дзеркал не має їх воскрешати. */
+  private tombstones = createTombstones(DONE_KEY);
 
   readonly ready: Promise<void>;
 
@@ -119,9 +123,12 @@ class OutboxManager {
     }
     const fromLs = safeLocalGet<OutboxItem[]>(FALLBACK_LS_KEY);
 
-    // Злиття захищає від втрати дій, якщо один із записів не встиг зберегтися
-    this.queue = mergeById<OutboxItem>(fromIdb as any, fromLs as any).filter(
-      (i) => i && typeof i.type === 'string' && typeof i.entityId === 'string',
+    // Злиття захищає від втрати дій, якщо один із записів не встиг зберегтися,
+    // а надгробки не дають повернутись тим, що вже пішли в базу.
+    this.queue = this.tombstones.filter(
+      mergeById<OutboxItem>(fromIdb as any, fromLs as any).filter(
+        (i) => i && typeof i.type === 'string' && typeof i.entityId === 'string',
+      ),
     );
     this.emit();
     if (this.queue.length) void this.persist();
@@ -131,7 +138,7 @@ class OutboxManager {
     if (!data || data.source === 'self') return;
     if (data.type === 'queue' && Array.isArray(data.queue)) {
       // Приймаємо стан іншої вкладки, не втрачаючи власних нових дій
-      this.queue = mergeById<OutboxItem>(data.queue, this.queue);
+      this.queue = this.tombstones.filter(mergeById<OutboxItem>(data.queue, this.queue));
       this.emit();
     }
   }
@@ -352,6 +359,7 @@ class OutboxManager {
       }
     } finally {
       // ✅ БЕЗПЕЧНЕ ОНОВЛЕННЯ: видаляємо ТІЛЬКИ оброблені ID, зберігаючи всі нові дії!
+      if (completedIds.size) this.tombstones.mark(completedIds);
       this.queue = this.queue
         .filter((item) => !completedIds.has(item.id))
         .map((item) => (retries.has(item.id) ? { ...item, ...retries.get(item.id) } : item));
