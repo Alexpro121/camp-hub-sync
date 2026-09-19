@@ -58,9 +58,13 @@ let syncing = false;
 let cache: QueuedAction[] = [];
 
 const writeIdb = createSerialWriter((value) => idbSet(IDB_KEY, value, store));
+/** Уже відправлені дії — щоб злиття дзеркал чи вкладок не воскресило їх. */
+const tombstones = createTombstones('helpsuprov:offline-queue:done');
 const channel = createChannel('helpsuprov-offline-queue', (data) => {
   if (data?.type === 'queue' && Array.isArray(data.queue)) {
-    cache = mergeById<any>(data.queue, cache, (i: any) => i.created_at ?? 0);
+    cache = tombstones.filter(
+      mergeById<any>(data.queue, cache, (i: any) => i.created_at ?? 0),
+    );
     notifyListeners();
   }
 });
