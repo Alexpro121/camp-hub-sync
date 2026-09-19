@@ -85,11 +85,13 @@ export const ready: Promise<void> = (async () => {
     /* ignore */
   }
 
-  cache = mergeById<any>(
-    mergeById<any>(stored as any, mirror as any, (i: any) => i.created_at ?? 0),
-    (legacy ?? []) as any,
-    (i: any) => i.created_at ?? 0,
-  ).filter((a: any) => a && typeof a.table === 'string' && typeof a.op === 'string');
+  cache = tombstones.filter(
+    mergeById<any>(
+      mergeById<any>(stored as any, mirror as any, (i: any) => i.created_at ?? 0),
+      (legacy ?? []) as any,
+      (i: any) => i.created_at ?? 0,
+    ).filter((a: any) => a && typeof a.table === 'string' && typeof a.op === 'string'),
+  );
 
   if (cache.length) writeQueue(cache);
   notifyListeners();
