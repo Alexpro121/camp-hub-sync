@@ -84,6 +84,8 @@ class OutboxManager {
   private syncing = false;
   private writeIdb = createSerialWriter((value) => idbSet(QUEUE_KEY, value, store));
   private channel = createChannel(CHANNEL_NAME, (data) => this.onChannelMessage(data));
+  /** ID уже відправлених дій — злиття дзеркал не має їх воскрешати. */
+  private tombstones = createTombstones(DONE_KEY);
 
   readonly ready: Promise<void>;
 
