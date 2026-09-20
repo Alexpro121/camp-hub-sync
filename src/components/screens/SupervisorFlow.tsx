@@ -207,36 +207,43 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
     }
     setLoading(true);
 
-    const { data, error } = await supabase.functions.invoke('staff-login', {
-      body: { team: teamNum, password },
-    });
+    try {
+      // Будь-яка відмова входу опрацьовується тут — без «сирих» помилок у консолі
+      const { data, error } = await supabase.functions
+        .invoke('staff-login', { body: { team: teamNum, password } })
+        .catch((e) => ({ data: null as any, error: e }));
 
-    if (error || !data?.session) {
-      haptics.notification('error');
-      toast.error('Невірний пароль для цієї команди');
-      setLoading(false);
-      return;
-    }
+      if (error || !data?.session) {
+        haptics.notification('error');
+        toast.error('Невірний пароль для цієї команди');
+        setLoading(false);
+        return;
+      }
 
-    await supabase.auth.setSession({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    });
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
 
-    if (data.role === 'admin') {
+      if (data.role === 'admin') {
+        haptics.notification('success');
+        saveSession('admin');
+        setShowAdminAnim(true);
+        setTimeout(() => onAdminUnlock(), 1800);
+        return;
+      }
+
+      setAuthedTeam(teamNum);
+      localStorage.setItem('helpsuprov:supervisor-team', String(teamNum));
+      saveSession('supervisor', { teamNumber: teamNum });
       haptics.notification('success');
-      saveSession('admin');
-      setShowAdminAnim(true);
-      setTimeout(() => onAdminUnlock(), 1800);
-      return;
+      toast.success(`Вітаємо, супровід Команди №${teamNum}!`);
+      setLoading(false);
+    } catch {
+      haptics.notification('error');
+      toast.error('Не вдалося увійти. Спробуйте ще раз');
+      setLoading(false);
     }
-
-    setAuthedTeam(teamNum);
-    localStorage.setItem('helpsuprov:supervisor-team', String(teamNum));
-    saveSession('supervisor', { teamNumber: teamNum });
-    haptics.notification('success');
-    toast.success(`Вітаємо, супровід Команди №${teamNum}!`);
-    setLoading(false);
   };
 
   const logout = async () => {

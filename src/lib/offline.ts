@@ -347,6 +347,18 @@ export async function flushQueue(): Promise<{ done: number; failed: number }> {
 
 let autoFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Негайна синхронізація після повернення мережі:
+ * скидає паузи бекофу, щоб дії пішли в базу одразу, а не за розкладом.
+ */
+export async function kickFlush(): Promise<{ done: number; failed: number }> {
+  await ready;
+  if (cache.some((a) => a.nextAttemptAt)) {
+    writeQueue(cache.map((a) => ({ ...a, nextAttemptAt: undefined })));
+  }
+  return flushQueue();
+}
+
 networkPulse.subscribe((state) => {
   if (state.quality !== 'OFFLINE' && !syncing && cache.length > 0) {
     if (autoFlushTimer) clearTimeout(autoFlushTimer);
@@ -361,6 +373,9 @@ if (typeof window !== 'undefined') {
   setInterval(() => {
     if (!isDeviceOffline() && cache.length) void flushQueue();
   }, 20000);
+
+  // Мережа повернулась — відправляємо все негайно, без очікування таймера
+  window.addEventListener('online', () => { void kickFlush(); });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !isDeviceOffline()) void flushQueue();

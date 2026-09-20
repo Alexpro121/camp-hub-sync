@@ -98,10 +98,13 @@ class OutboxManager {
         if (s.quality !== 'OFFLINE') void this.flush();
       });
 
+      // Мережа повернулась — миттєвий старт синхронізації
+      window.addEventListener('online', () => { void this.kick(); });
+
       // Періодичний фоновий пульс скидання черги
       setInterval(() => {
-        if (networkPulse.isOnline()) void this.flush();
-      }, 15000);
+        if (typeof navigator === 'undefined' || navigator.onLine !== false) void this.flush();
+      }, 10000);
 
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && networkPulse.isOnline()) void this.flush();
@@ -309,6 +312,16 @@ class OutboxManager {
    * Фонова відправка черги (Race-Condition Free).
    * Ніколи не затирає нові дії, додані під час польоту запитів.
    */
+  /** Негайна синхронізація: скидає паузи бекофу після повернення мережі. */
+  async kick(): Promise<{ done: number; failed: number }> {
+    await this.ready;
+    if (this.queue.some((i) => i.nextAttemptAt)) {
+      this.queue = this.queue.map((i) => ({ ...i, nextAttemptAt: undefined }));
+      await this.persist();
+    }
+    return this.flush();
+  }
+
   async flush(): Promise<{ done: number; failed: number }> {
     await this.ready;
     if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
