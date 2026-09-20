@@ -312,6 +312,16 @@ class OutboxManager {
    * Фонова відправка черги (Race-Condition Free).
    * Ніколи не затирає нові дії, додані під час польоту запитів.
    */
+  /** Негайна синхронізація: скидає паузи бекофу після повернення мережі. */
+  async kick(): Promise<{ done: number; failed: number }> {
+    await this.ready;
+    if (this.queue.some((i) => i.nextAttemptAt)) {
+      this.queue = this.queue.map((i) => ({ ...i, nextAttemptAt: undefined }));
+      await this.persist();
+    }
+    return this.flush();
+  }
+
   async flush(): Promise<{ done: number; failed: number }> {
     await this.ready;
     if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
