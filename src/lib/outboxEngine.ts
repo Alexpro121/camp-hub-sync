@@ -98,10 +98,13 @@ class OutboxManager {
         if (s.quality !== 'OFFLINE') void this.flush();
       });
 
+      // Мережа повернулась — миттєвий старт синхронізації
+      window.addEventListener('online', () => { void this.kick(); });
+
       // Періодичний фоновий пульс скидання черги
       setInterval(() => {
-        if (networkPulse.isOnline()) void this.flush();
-      }, 15000);
+        if (typeof navigator === 'undefined' || navigator.onLine !== false) void this.flush();
+      }, 10000);
 
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && networkPulse.isOnline()) void this.flush();
