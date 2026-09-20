@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DynamicIslandProvider } from "@/context/DynamicIslandContext";
 import DynamicIsland from "@/components/ui/DynamicIsland";
+import SyncStatusPill from "@/components/ui/SyncStatusPill";
 import Index from "./pages/Index.tsx";
 import StageMaintenance from "./pages/StageMaintenance.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -19,6 +20,7 @@ const App = () => (
       <BrowserRouter>
         <DynamicIslandProvider>
           <DynamicIsland />
+          <SyncStatusPill />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/stage-console" element={<StageMaintenance />} />
