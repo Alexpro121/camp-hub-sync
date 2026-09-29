@@ -74,6 +74,7 @@ import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
 import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
@@ -204,9 +205,11 @@ const AdminFlow = ({ onBack }: Props) => {
                   <Train className="w-4 h-4" /> <span>Потяг</span>
                 </TabsTrigger>
               )}
-              <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
-                <ShoppingBag className="w-4 h-4" /> <span>Ярмарок</span>
-              </TabsTrigger>
+              {FAIR_FEATURE_ENABLED && (
+                <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                  <ShoppingBag className="w-4 h-4" /> <span>Ярмарок</span>
+                </TabsTrigger>
+              )}
               <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
                 <BarChart3 className="w-4 h-4" /> <span>Статистика</span>
               </TabsTrigger>
@@ -221,7 +224,7 @@ const AdminFlow = ({ onBack }: Props) => {
           <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
           <TabsContent value="notifications" className="mt-3 space-y-3 animate-fade-in"><AdminAlumniBroadcast /><AdminNotificationsView /></TabsContent>
           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
-          <TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>
+          {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
           <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
           <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
         </Tabs>

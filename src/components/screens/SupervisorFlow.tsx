@@ -80,7 +80,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   
   const haptics = useHaptics();
   const talent = useTalentEventActive();
-  const fair = useAggressiveFairUnlock(authedTeam !== null);
+  const fair = useAggressiveFairUnlock(FAIR_FEATURE_ENABLED && authedTeam !== null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
