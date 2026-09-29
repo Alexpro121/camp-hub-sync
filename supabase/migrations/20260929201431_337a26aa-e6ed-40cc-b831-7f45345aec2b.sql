@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.get_stage_console_data(uuid, text) FROM anon, authenticated, public;
+REVOKE EXECUTE ON FUNCTION public.verify_stage_password(uuid, text) FROM anon, authenticated, public;
