@@ -72,7 +72,8 @@ Deno.serve(async (req) => {
     if (before.slowDown) await sleep(1500);
 
     const svc = admin();
-    const today = new Date().toISOString().slice(0, 10);
+    // Доступ і під час зміни, і ще 14 днів після її завершення.
+    const today = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
     const { data: shifts } = await svc.from('shifts').select('id, start_date, end_date').is('deleted_at', null);
     const live = (shifts || []).filter((s: any) => s.end_date >= today).map((s: any) => s.id);
     if (!live.length) return json({ error: 'not_found' }, 404);
