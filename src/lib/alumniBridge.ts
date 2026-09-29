@@ -264,62 +264,114 @@ export const claimPassportBridge = (pin: string, timeoutMs = 45000) => {
 export type AlumniBroadcastKind = 'alumni_raffle' | 'alumni_announcement';
 
 export interface AlumniBroadcastPayload {
+  id?: string;
   title: string;
   prize?: string;
   message?: string;
   sent_at: number;
+  target_year?: number | null;
 }
 
-/** Штаб: відправка сповіщення випускникам онлайн */
+/**
+ * Розсилки зберігаються в таблиці (30 днів), тож їх отримують і ті випускники,
+ * що були офлайн або мають старі профілі/старі версії паспорта.
+ */
+const SEEN_KEY = 'iron_alumni_seen_broadcasts_v1';
+const LAST_SEEN_KEY = 'iron_alumni_last_broadcast_at_v1';
+const db = supabase as any;
+
+type Row = { id: string; kind: string; title: string; prize: string | null; message: string | null; target_year: number | null; created_at: string };
+
+const readSeen = (): string[] => {
+  try { const v = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+};
+const markSeen = (id: string, createdAt: string) => {
+  try {
+    const next = [id, ...readSeen().filter((x) => x !== id)].slice(0, 200);
+    localStorage.setItem(SEEN_KEY, JSON.stringify(next));
+    const prev = localStorage.getItem(LAST_SEEN_KEY);
+    if (!prev || prev < createdAt) localStorage.setItem(LAST_SEEN_KEY, createdAt);
+  } catch { /* ignore */ }
+};
+
+const toPayload = (r: Row): [AlumniBroadcastKind, AlumniBroadcastPayload] => [
+  r.kind === 'alumni_raffle' ? 'alumni_raffle' : 'alumni_announcement',
+  {
+    id: r.id,
+    title: r.title,
+    prize: r.prize ?? undefined,
+    message: r.message ?? undefined,
+    target_year: r.target_year,
+    sent_at: new Date(r.created_at).getTime(),
+  },
+];
+
+/** Штаб: відправка сповіщення всім випускникам (онлайн — одразу, офлайн — при відкритті) */
 export async function sendAlumniBroadcast(
   kind: AlumniBroadcastKind,
-  payload: Omit<AlumniBroadcastPayload, 'sent_at'>,
+  payload: Omit<AlumniBroadcastPayload, 'sent_at' | 'id'>,
 ): Promise<void> {
-  const channel = supabase.channel(ALUMNI_BROADCAST_CHANNEL);
-
-  await new Promise<void>((resolve, reject) => {
-    const timer = window.setTimeout(() => resolve(), 3500);
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        window.clearTimeout(timer);
-        resolve();
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        window.clearTimeout(timer);
-        reject(new Error(`Помилка підключення до каналу сповіщень: ${status}`));
-      }
-    });
+  const { error } = await db.from('alumni_broadcasts').insert({
+    kind,
+    title: payload.title.slice(0, 200),
+    prize: payload.prize || null,
+    message: payload.message ? payload.message.slice(0, 2000) : null,
+    target_year: payload.target_year ?? null,
   });
-
-  await channel.send({
-    type: 'broadcast',
-    event: kind,
-    payload: { ...payload, sent_at: Date.now() } satisfies AlumniBroadcastPayload,
-  });
-
-  window.setTimeout(() => {
-    channel.unsubscribe();
-    supabase.removeChannel(channel);
-  }, 1000);
+  if (error) throw new Error(error.message || 'Не вдалося надіслати розсилку');
 }
 
-/** Випускник: прослуховування оголошень та розіграшів Штабу */
+/** Штаб: останні розсилки */
+export async function listAlumniBroadcasts(limit = 10): Promise<Array<Row>> {
+  const { data } = await db.from('alumni_broadcasts').select('*').order('created_at', { ascending: false }).limit(limit);
+  return (data as Row[]) ?? [];
+}
+
+export async function deleteAlumniBroadcast(id: string): Promise<void> {
+  const { error } = await db.from('alumni_broadcasts').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Випускник: отримує пропущені розсилки (з моменту останнього перегляду)
+ * і слухає нові в реальному часі. Кожна розсилка показується лише один раз.
+ */
 export function subscribeAlumniBroadcast(
   handler: (kind: AlumniBroadcastKind, payload: AlumniBroadcastPayload) => void,
+  opts: { year?: number } = {},
 ): () => void {
-  const channel = supabase.channel(ALUMNI_BROADCAST_CHANNEL);
+  let stopped = false;
+  const deliver = (r: Row) => {
+    if (stopped || !r?.id || readSeen().includes(r.id)) return;
+    if (r.target_year && opts.year && r.target_year !== opts.year) return;
+    markSeen(r.id, r.created_at);
+    const [k, p] = toPayload(r);
+    handler(k, p);
+  };
 
-  channel
-    .on('broadcast', { event: 'alumni_raffle' }, ({ payload }) =>
-      handler('alumni_raffle', payload as AlumniBroadcastPayload),
-    )
-    .on('broadcast', { event: 'alumni_announcement' }, ({ payload }) =>
-      handler('alumni_announcement', payload as AlumniBroadcastPayload),
-    )
+  // 1. Пропущені (поки додаток був закритий)
+  (async () => {
+    try {
+      let q = db.from('alumni_broadcasts').select('*').order('created_at', { ascending: true }).limit(20);
+      const last = localStorage.getItem(LAST_SEEN_KEY);
+      if (last) q = q.gt('created_at', last);
+      const { data } = await q;
+      const rows = (data as Row[]) ?? [];
+      // Показуємо лише найсвіжішу, решту позначаємо переглянутими
+      rows.slice(0, -1).forEach((r) => markSeen(r.id, r.created_at));
+      const latest = rows[rows.length - 1];
+      if (latest) deliver(latest);
+    } catch { /* офлайн — спробуємо наступного разу */ }
+  })();
+
+  // 2. Нові в реальному часі
+  const channel = supabase
+    .channel(`alumni-broadcasts-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'alumni_broadcasts' }, (p) => deliver(p.new as Row))
     .subscribe();
 
   return () => {
-    channel.unsubscribe();
+    stopped = true;
     supabase.removeChannel(channel);
   };
 }
