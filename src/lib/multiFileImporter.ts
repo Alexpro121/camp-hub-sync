@@ -1,3 +1,4 @@
+import { backfillGenders } from '@/lib/gender';
 import { supabase } from '@/integrations/supabase/client';
 import { analyzeFile, analyzeSheetUrl, analyzeRawText } from '@/lib/importAnalyze';
 import { detectTeams, toDbRow, type ImportResult, type ImportRow } from '@/lib/importer';
@@ -374,6 +375,7 @@ export async function commitMultiFileShift(
     }
 
     onProgress?.(100, 'Зміну та базу учасників успішно створено!');
+    void backfillGenders();
     return {
       shiftId,
       shift: shift as Shift,
