@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      alumni_broadcasts: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          kind: string
+          message: string | null
+          prize: string | null
+          target_year: number | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind?: string
+          message?: string | null
+          prize?: string | null
+          target_year?: number | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          kind?: string
+          message?: string | null
+          prize?: string | null
+          target_year?: number | null
+          title?: string
+        }
+        Relationships: []
+      }
       broadcasts: {
         Row: {
           color: string
