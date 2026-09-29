@@ -101,9 +101,9 @@ const AlumniFlow = ({ onBack }: Props) => {
         'gradient',
         'Штаб · випускники',
       );
-    });
+    }, { year: passport.child_profile.year });
     return off;
-  }, [passport, haptics]);
+  }, [passport?.passport_id, passport?.child_profile.year, haptics]);
 
   const handleReceived = useCallback((next: AlumniPassportEnvelope) => {
     setPassport(next);
