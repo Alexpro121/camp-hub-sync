@@ -50,9 +50,11 @@ import SupervisorTour, { tourStorageKey } from '@/components/supervisor/Supervis
 interface Props {
   onBack: () => void;
   onAdminUnlock: () => void;
+  /** Відкрито з особистого кабінету: «Вийти» повертає в кабінет без виходу з акаунта */
+  cabinetMode?: boolean;
 }
 
-const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
+const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) => {
   const [team, setTeam] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -247,6 +249,11 @@ const SupervisorFlow = ({ onBack, onAdminUnlock }: Props) => {
   };
 
   const logout = async () => {
+    if (cabinetMode) {
+      localStorage.removeItem('helpsuprov:supervisor-team');
+      onBack();
+      return;
+    }
     setAuthedTeam(null);
     localStorage.removeItem('helpsuprov:supervisor-team');
     clearSavedSession();

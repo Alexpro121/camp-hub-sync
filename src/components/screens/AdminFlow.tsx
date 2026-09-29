@@ -79,6 +79,7 @@ import { backfillGenders } from '@/lib/gender';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
+import AdminStaffAccounts from '@/components/admin/AdminStaffAccounts';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
 import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
@@ -228,7 +229,7 @@ const AdminFlow = ({ onBack }: Props) => {
           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
           {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
           <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
-          <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
+          <TabsContent value="data" className="mt-3 space-y-3 animate-fade-in"><AdminStaffAccounts /><DataTab /></TabsContent>
         </Tabs>
 
       </div>

@@ -644,6 +644,69 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_assignments: {
+        Row: {
+          created_at: string
+          id: string
+          shift_id: string
+          staff_user_id: string
+          team_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          shift_id: string
+          staff_user_id: string
+          team_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          shift_id?: string
+          staff_user_id?: string
+          team_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_assignments_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_assignments_staff_user_id_fkey"
+            columns: ["staff_user_id"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      staff_members: {
+        Row: {
+          created_at: string
+          full_name: string
+          is_active: boolean
+          login: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name: string
+          is_active?: boolean
+          login: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          is_active?: boolean
+          login?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       talent_entries: {
         Row: {
           attachments: Json

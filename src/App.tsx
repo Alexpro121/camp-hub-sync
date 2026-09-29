@@ -10,6 +10,7 @@ import AppUpdatePrompt from "@/components/ui/AppUpdatePrompt";
 import Index from "./pages/Index.tsx";
 import StageMaintenance from "./pages/StageMaintenance.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import StaffPortal from "./pages/StaffPortal.tsx";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/stage-console" element={<StageMaintenance />} />
+            <Route path="/staff" element={<StaffPortal />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -137,47 +137,6 @@ const RoleSelect = ({ onSelect }: Props) => {
             </div>
           </div>
 
-          {/* 2. РОЛЬ: СУПРОВІД */}
-          <div className="card-hero-wrap">
-            <div
-              ref={secondaryRef}
-              role="button"
-              tabIndex={0}
-              onMouseMove={onTilt(secondaryRef)}
-              onMouseLeave={onTiltLeave(secondaryRef)}
-              onPointerDown={onRipple(secondaryRef)}
-              onClick={() => pick('supervisor')}
-              onKeyDown={(e) => { 
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  pick('supervisor');
-                }
-              }}
-              className="card-secondary spotlight group p-4 sm:p-5 cursor-pointer select-none overflow-hidden rounded-3xl bg-[#0A0E18]/70 border border-white/10 backdrop-blur-2xl shadow-lg hover:border-[#FA5A15]/40 hover:bg-[#0A0E18]/85 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FA5A15]"
-              aria-label="Вхід для супроводу команди"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#FA5A15] to-[#D94500] flex items-center justify-center flex-shrink-0 shadow-md shadow-[#FA5A15]/25 group-hover:scale-105 group-hover:shadow-[0_0_18px_rgba(250,90,21,0.5)] transition-all duration-300">
-                    <Award className="w-5 h-5 text-white" strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0 pr-1">
-                    <h2 className="text-sm sm:text-base font-bold text-slate-200 tracking-wide group-hover:text-white transition-colors">
-                      Я супровід
-                    </h2>
-                    <p className="text-[11px] sm:text-xs text-slate-400 leading-snug mt-0.5">
-                      Керування командою, присутність та активності
-                    </p>
-                  </div>
-                </div>
-
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 group-hover:text-[#FA5A15] group-hover:translate-x-1 transition-all duration-300 flex-shrink-0">
-                  <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
-                </div>
-              </div>
-            </div>
-          </div>
 
         </main>
 

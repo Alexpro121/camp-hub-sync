@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import RoleSelect from '@/components/screens/RoleSelect';
 import ChildFlow from '@/components/screens/ChildFlow';
 import SupervisorFlow from '@/components/screens/SupervisorFlow';
@@ -14,6 +15,7 @@ export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni';
 
 /** Головний роутер ролей проєкту «Залізна Зміна» (Учасник / Супровід / Штаб) */
 const Index = () => {
+  const navigate = useNavigate();
   const [screen, setScreen] = useState<Screen>('role');
   const [restoring, setRestoring] = useState<boolean>(true);
   const [showIntro, setShowIntro] = useState<boolean>(() => shouldShowIntro());
@@ -54,8 +56,14 @@ const Index = () => {
           return;
         }
 
-        // 3. Відновлення кабінету СУПРОВОДУ або АДМІНІСТРАТОРА
-        if (savedRole === 'supervisor' || savedRole === 'admin') {
+        // 3. Супровід тепер працює лише через окреме посилання /staff
+        if (savedRole === 'supervisor') {
+          navigate('/staff', { replace: true });
+          return;
+        }
+
+        // 4. Відновлення кабінету АДМІНІСТРАТОРА
+        if (savedRole === 'admin') {
           const { data, error } = await supabase.auth.getSession();
           if (cancelled) return;
 
