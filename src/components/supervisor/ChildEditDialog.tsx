@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
+import { GENDER_LABEL, type Gender } from '@/lib/gender';
 
 interface Props {
   child: Child;
@@ -24,6 +25,8 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   const [phone, setPhone] = useState(child.phone || '');
   const [telegram, setTelegram] = useState(child.telegram_username || '');
   const [notes, setNotes] = useState(child.supervisor_notes || '');
+  const [gender, setGender] = useState<Gender | ''>(((child as any).gender as Gender) || '');
+  const [detecting, setDetecting] = useState(false);
   const [iron, setIron] = useState(String(child.iron_dollars));
   const [saving, setSaving] = useState(false);
   const haptics = useHaptics();
@@ -48,6 +51,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       phone: phone || null,
       telegram_username: telegram || null,
       supervisor_notes: notes || null,
+      gender: gender || null,
     },
   });
 
@@ -61,7 +65,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
     }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, telegram, notes, open, child.id]);
+  }, [phone, telegram, notes, gender, open, child.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -190,6 +194,41 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-slate-300">Номер телефону</Label>
                 <Input id="phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-slate-300">Стать</Label>
+                  <button
+                    type="button"
+                    disabled={detecting}
+                    onClick={async () => {
+                      setDetecting(true);
+                      try {
+                        const { data } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: child.id } });
+                        const g = data?.results?.[child.id] as Gender | undefined;
+                        if (g) { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
+                        else toast.error('Не вдалося визначити');
+                      } catch { toast.error('Не вдалося визначити'); }
+                      setDetecting(false);
+                    }}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {detecting ? 'Визначаю…' : 'Визначити за ПІБ'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['boy', 'girl', 'unknown'] as Gender[]).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGender(g)}
+                      className={`h-11 rounded-xl border text-xs font-semibold transition ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                    >
+                      {GENDER_LABEL[g]}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">

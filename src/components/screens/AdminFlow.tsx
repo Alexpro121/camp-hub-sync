@@ -75,6 +75,7 @@ import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
 import TrainTab from '@/components/admin/TrainTab';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
+import { backfillGenders } from '@/lib/gender';
 import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
@@ -146,6 +147,7 @@ export const generateMemorablePassword = (): string => {
 };
 
 const AdminFlow = ({ onBack }: Props) => {
+  useEffect(() => { void backfillGenders(); }, []);
   useEffect(() => { saveSession('admin'); }, []);
   const unreadTransfers = useUnreadTransfers();
 
@@ -417,6 +419,7 @@ const ShiftsTab = () => {
       if (toInsert.length) {
         const { error: insErr } = await supabase.from('children').insert(toInsert);
         if (insErr) throw insErr;
+        void backfillGenders();
       }
 
       await supabase.from('uploaded_files').insert({
