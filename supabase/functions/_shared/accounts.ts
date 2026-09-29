@@ -64,7 +64,7 @@ async function findUserIdByEmail(svc: ReturnType<typeof admin>, email: string): 
   return null;
 }
 
-async function ensureRole(
+export async function ensureRole(
   svc: ReturnType<typeof admin>,
   userId: string,
   role: 'admin' | 'supervisor' | 'child',
