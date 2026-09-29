@@ -1,7 +1,7 @@
 import type { Child } from '@/types/app';
 import type { IronTx } from '@/components/fair/TransactionDetailsDialog';
 
-export type AppRole = 'child' | 'supervisor' | 'admin';
+export type AppRole = 'child' | 'supervisor' | 'admin' | 'parent';
 
 const ROLE_KEY = 'helpsuprov:role';
 const SESSION_META_KEY = 'helpsuprov:session-meta';
@@ -172,7 +172,7 @@ export const getSavedRole = (): AppRole | null => {
 
   try {
     const role = localStorage.getItem(ROLE_KEY);
-    if (role === 'child' || role === 'supervisor' || role === 'admin') {
+    if (role === 'child' || role === 'supervisor' || role === 'admin' || role === 'parent') {
       return role as AppRole;
     }
     return null;
