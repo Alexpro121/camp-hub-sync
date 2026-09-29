@@ -54,7 +54,8 @@ import {
   getSavedChildId, 
   getSavedRole, 
   saveSession, 
-  getChildArchiveSnapshot 
+  getChildArchiveSnapshot,
+  saveChildArchiveSnapshot,
 } from '@/lib/session';
 import { CertificateModal } from '@/components/certificate/CertificateModal';
 
@@ -125,31 +126,49 @@ const ChildFlow = ({ onBack }: Props) => {
   // Автоматичний вхід при збереженій дійсній сесії або офлайн-паспорті
   useEffect(() => {
     let cancelled = false;
+    const fallbackToSnapshot = (savedId: string) => {
+      const snapshot = getChildArchiveSnapshot();
+      if (snapshot && snapshot.child.id === savedId && !cancelled) {
+        setChild(snapshot.child);
+        setStep('profile');
+      }
+    };
     (async () => {
       const savedId = getSavedRole() === 'child' ? getSavedChildId() : null;
       if (!savedId) return;
 
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session || cancelled) return;
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (cancelled) return;
+        // Сесія закінчилась (зміна завершена) — показуємо збережений профіль
+        if (!sess.session) { fallbackToSnapshot(savedId); return; }
 
-      const { data: row } = await supabase.from('children').select('*').eq('id', savedId).maybeSingle();
-      if (cancelled) return;
+        const { data: row, error } = await supabase.from('children').select('*').eq('id', savedId).maybeSingle();
+        if (cancelled) return;
 
-      if (!row) {
-        const snapshot = getChildArchiveSnapshot();
-        if (snapshot) {
-          setChild(snapshot.child);
-          setStep('profile');
-        }
-        return;
+        // Немає мережі / дитину видалили після зміни — профіль з пристрою
+        if (error || !row) { fallbackToSnapshot(savedId); return; }
+
+        setChild(row as Child);
+        setStep('profile');
+      } catch {
+        fallbackToSnapshot(savedId);
       }
-
-      setChild(row as Child);
-      setStep('profile');
     })();
 
     return () => { cancelled = true; };
   }, []);
+
+  // Постійне збереження профілю на пристрої (переживає кінець зміни)
+  useEffect(() => {
+    if (!child?.id || !child.full_name) return;
+    const prev = getChildArchiveSnapshot();
+    const sameChild = prev?.child.id === child.id;
+    saveChildArchiveSnapshot(child, sameChild ? prev!.transactions : [], {
+      schedule: sameChild ? prev!.schedule : undefined,
+      coupe: sameChild ? prev!.coupe : null,
+    });
+  }, [child]);
 
   // Якщо ярмарок вимкнули, а дитина була на вкладці "Ярмарок" — плавно повертаємо на "Профіль"
   useEffect(() => {

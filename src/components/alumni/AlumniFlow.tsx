@@ -51,14 +51,20 @@ const AlumniFlow = ({ onBack }: Props) => {
     const boot = async () => {
       const existing = await loadAlumniPassport();
       if (cancelled) return;
+      const snapshot = getChildArchiveSnapshot();
 
-      if (existing) {
+      // Новіша зміна / інша дитина на цьому пристрої — паспорт треба оновити
+      const stale = !!existing && !!snapshot?.child && (
+        existing.child_profile.full_name !== snapshot.child.full_name ||
+        (existing.child_profile.shift_id || '') !== (snapshot.child.shift_id || '')
+      ) && new Date(snapshot.savedAt).getTime() > new Date(existing.created_at).getTime();
+
+      if (existing && !stale) {
         setPassport(existing);
         setLoading(false);
         return;
       }
 
-      const snapshot = getChildArchiveSnapshot();
       if (snapshot?.child) {
         const built = buildAlumniPassport({
           full_name: snapshot.child.full_name,
