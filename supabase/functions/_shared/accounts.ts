@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
 export const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 export const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,33 +50,26 @@ export async function derivePassword(identity: string): Promise<string> {
  * Ensure an internal auth account exists for `email`, that its role row matches,
  * then return a fresh session for it.
  */
-export async function issueSession(
-  email: string,
+async function findUserIdByEmail(svc: ReturnType<typeof admin>, email: string): Promise<string | null> {
+  const target = email.toLowerCase();
+  // Посторінковий пошук: раніше дивились лише перші 1000 акаунтів — після кількох змін вхід ламався.
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) return null;
+    const users = data?.users ?? [];
+    const found = users.find((u) => u.email?.toLowerCase() === target);
+    if (found) return found.id;
+    if (users.length < 1000) return null;
+  }
+  return null;
+}
+
+async function ensureRole(
+  svc: ReturnType<typeof admin>,
+  userId: string,
   role: 'admin' | 'supervisor' | 'child',
   extra: { team_number?: number | null; child_id?: string | null },
 ) {
-  const password = await derivePassword(email);
-  const svc = admin();
-
-  let userId: string | null = null;
-  const { data: created, error: createErr } = await svc.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (created?.user) {
-    userId = created.user.id;
-  } else if (createErr) {
-    // Already exists — reset to the derived password so sign-in is deterministic.
-    const { data: list } = await svc.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const found = list?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-    if (!found) throw new Error('account_unavailable');
-    userId = found.id;
-    await svc.auth.admin.updateUserById(userId, { password, email_confirm: true });
-  }
-  if (!userId) throw new Error('account_unavailable');
-
-  // Idempotent: concurrent logins for the same identity must not race each other.
   const { data: existing } = await svc
     .from('user_roles')
     .select('id, role, team_number, child_id')
@@ -99,16 +92,55 @@ export async function issueSession(
       team_number: extra.team_number ?? null,
       child_id: extra.child_id ?? null,
     });
-    // A concurrent request may have inserted the same row first — that's fine.
     if (roleErr && roleErr.code !== '23505') {
       throw new Error(`role_assignment_failed: ${roleErr.message}`);
     }
   }
+}
 
+/**
+ * Ensure an internal auth account exists for `email`, that its role row matches,
+ * then return a fresh session for it.
+ *
+ * Швидкий шлях (повторний вхід — 95% випадків під навантаженням): одразу входимо
+ * детермінованим паролем. Повільний шлях (створення/скидання) — лише при першому вході.
+ */
+export async function issueSession(
+  email: string,
+  role: 'admin' | 'supervisor' | 'child',
+  extra: { team_number?: number | null; child_id?: string | null },
+) {
+  const password = await derivePassword(email);
+  const svc = admin();
   const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+
+  // 1. Швидкий шлях
+  const fast = await pub.auth.signInWithPassword({ email, password });
+  if (fast.data?.session && fast.data.user) {
+    await ensureRole(svc, fast.data.user.id, role, extra);
+    return fast.data.session;
+  }
+
+  // 2. Повільний шлях: створити акаунт або вирівняти пароль
+  let userId: string | null = null;
+  const { data: created, error: createErr } = await svc.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (created?.user) {
+    userId = created.user.id;
+  } else if (createErr) {
+    userId = await findUserIdByEmail(svc, email);
+    if (!userId) throw new Error('account_unavailable');
+    await svc.auth.admin.updateUserById(userId, { password, email_confirm: true });
+  }
+  if (!userId) throw new Error('account_unavailable');
+
+  await ensureRole(svc, userId, role, extra);
+
   const { data: signIn, error: signInErr } = await pub.auth.signInWithPassword({ email, password });
   if (signInErr || !signIn.session) throw new Error('sign_in_failed');
-
   return signIn.session;
 }
 
