@@ -82,6 +82,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           full_name: string
+          gender: string | null
           has_logged_in: boolean
           id: string
           iron_dollars: number
@@ -101,6 +102,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           full_name: string
+          gender?: string | null
           has_logged_in?: boolean
           id?: string
           iron_dollars?: number
@@ -120,6 +122,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           full_name?: string
+          gender?: string | null
           has_logged_in?: boolean
           id?: string
           iron_dollars?: number
