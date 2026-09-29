@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DynamicIslandProvider } from "@/context/DynamicIslandContext";
 import DynamicIsland from "@/components/ui/DynamicIsland";
 import SyncStatusPill from "@/components/ui/SyncStatusPill";
+import AppUpdatePrompt from "@/components/ui/AppUpdatePrompt";
 import Index from "./pages/Index.tsx";
 import StageMaintenance from "./pages/StageMaintenance.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -21,6 +22,7 @@ const App = () => (
         <DynamicIslandProvider>
           <DynamicIsland />
           <SyncStatusPill />
+          <AppUpdatePrompt />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/stage-console" element={<StageMaintenance />} />
