@@ -107,10 +107,14 @@ Deno.serve(async (req) => {
 
     const { data: shifts } = await svc
       .from('shifts')
-      .select('*')
+      .select('id, start_date, end_date, deleted_at')
       .is('deleted_at', null)
       .order('start_date', { ascending: false });
-    const active = pickActiveShift(shifts || []);
+    // Паралельні зміни: усі зміни, що йдуть сьогодні, доступні для входу одночасно.
+    const today = new Date().toISOString().slice(0, 10);
+    const liveNow = (shifts || []).filter((s: any) => s.start_date <= today && today <= s.end_date).map((s: any) => s.id);
+    const fallback = pickActiveShift(shifts || []);
+    const liveIds: string[] = liveNow.length ? liveNow : (fallback?.id ? [fallback.id] : []);
 
     if (action === 'search') {
       const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
@@ -126,13 +130,15 @@ Deno.serve(async (req) => {
 
       // [H-2] Brute-force protection: 5 misses in a minute start stalling, 10 block.
       const rlKey = clientKey(req, `child:${team}`);
-      const before = peek(rlKey);
+      // Уся команда сидить на одному Wi-Fi табору з однаковим Telegram — ліміт м'якший.
+      const RL = { slowAfter: 15, blockAfter: 40 };
+      const before = peek(rlKey, 60_000, RL);
       if (before.blocked) return json({ error: 'too_many_attempts' }, 429);
       if (before.slowDown) await sleep(1500);
 
       let q = svc.from('children').select('id, full_name, team_number, team_name');
-      if (active?.id) q = q.eq('shift_id', active.id);
-      q = q.eq('team_number', team);
+      if (liveIds.length) q = q.in('shift_id', liveIds);
+      q = q.eq('team_number', team).is('deleted_at', null);
       const { data, error } = await q;
       if (error) return json({ error: 'search_failed' }, 500);
 
@@ -161,7 +167,7 @@ Deno.serve(async (req) => {
       }
 
 
-      const after = recordFailure(rlKey);
+      const after = recordFailure(rlKey, RL);
       if (after.blocked) return json({ error: 'too_many_attempts' }, 429);
       if (after.slowDown) await sleep(1500);
       return json({ suggestions: [] });
@@ -175,7 +181,8 @@ Deno.serve(async (req) => {
     }
 
     let cq = svc.from('children').select('id, shift_id').eq('id', childId);
-    if (active?.id) cq = cq.eq('shift_id', active.id);
+    if (liveIds.length) cq = cq.in('shift_id', liveIds);
+    cq = cq.is('deleted_at', null);
     const { data: child } = await cq.maybeSingle();
     if (!child) return json({ error: 'child_not_found' }, 404);
 
