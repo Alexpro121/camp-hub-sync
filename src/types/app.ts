@@ -27,6 +27,7 @@ export interface Child {
   row_number: number | null;
   team_number: number;
   full_name: string;
+  gender?: 'boy' | 'girl' | 'unknown' | null;
   phone: string | null;
   team_name: string | null;
   note_from_table: string | null;

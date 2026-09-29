@@ -1,3 +1,5 @@
+import { GENDER_LABEL } from '@/lib/gender';
+import { UserRound } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { 
   ArrowLeft, 
@@ -634,6 +636,20 @@ const ChildFlow = ({ onBack }: Props) => {
                       </div>
                       <span className={`font-mono font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         {child.phone}
+                      </span>
+                    </div>
+                  )}
+
+                  {child.gender && (
+                    <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+                      isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200/80'
+                    }`}>
+                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                        <UserRound className="w-3.5 h-3.5 text-sky-500" />
+                        <span>Стать:</span>
+                      </div>
+                      <span className={`font-semibold text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        {GENDER_LABEL[child.gender]}
                       </span>
                     </div>
                   )}
