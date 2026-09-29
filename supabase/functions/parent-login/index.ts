@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
 
     // Оновлення даних для вже авторизованих батьків
     if (body?.action === 'info') {
-      const user = await requireUser(req).catch(() => null);
+      const { user } = await requireUser(req).catch(() => ({ user: null }));
       const childId = (user as any)?.user_metadata?.child_id || null;
       const svc = admin();
       let id = childId;
