@@ -155,6 +155,42 @@ Deno.serve(async (req) => {
       return error ? json({ error: 'assign_failed' }, 500) : json({ ok: true });
     }
 
+    // ---------- ПЕРЕНЕСЕННЯ СТАРИХ КОМАНДНИХ ВХОДІВ ----------
+    if (action === 'migrate_legacy') {
+      const { data: rows } = await svc.from('team_passwords').select('team, password').order('team');
+      const cutoff = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+      const { data: shifts } = await svc.from('shifts').select('id, assigned_teams, end_date')
+        .is('deleted_at', null).gte('end_date', cutoff);
+      const report: Array<{ team: number; login: string; password: string; status: string }> = [];
+      for (const r of rows ?? []) {
+        const team = Number(r.team);
+        if (!team || team < 1 || team > 999) continue;
+        const login = `team${team}`;
+        let password = String(r.password ?? '').trim();
+        let status = 'ok';
+        if (password.length < 6) { password = password + crypto.randomUUID().replace(/-/g, '').slice(0, 6); status = 'new_password'; }
+        const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
+        let uid = exists?.user_id as string | undefined;
+        if (uid) {
+          await svc.auth.admin.updateUserById(uid, { password });
+          if (status === 'ok') status = 'updated';
+        } else {
+          const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
+          if (error || !created.user) { report.push({ team, login, password: '', status: 'failed' }); continue; }
+          uid = created.user.id;
+          await svc.from('staff_members').insert({ user_id: uid, full_name: `Супровід команди №${team}`, login });
+          await ensureRole(svc, uid, 'supervisor', { team_number: null });
+        }
+        for (const s of shifts ?? []) {
+          const teams = (s.assigned_teams ?? []) as number[];
+          if (teams.length && !teams.includes(team)) continue;
+          await svc.from('staff_assignments').upsert({ staff_user_id: uid, shift_id: s.id, team_number: team }, { onConflict: 'staff_user_id,shift_id,team_number' });
+        }
+        report.push({ team, login, password, status });
+      }
+      return json({ ok: true, report });
+    }
+
     if (action === 'unassign') {
       await svc.from('staff_assignments').delete().eq('id', String(body?.assignment_id));
       return json({ ok: true });
