@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, LogOut, Phone, User, Users, CalendarDays, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, LogOut, User, CalendarDays, Loader2, ChevronDown, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { saveSession, getSavedRole, getSessionMeta, updateSessionMeta, clearSavedSession } from '@/lib/session';
@@ -30,6 +30,10 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // null = ще не знаємо, true = номер є в списку, false = номера немає
+  const [hasPhone, setHasPhone] = useState<boolean | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const checkSeq = useRef(0);
 
   // Тихе оновлення даних (супровід міг змінитися)
   useEffect(() => {
@@ -42,12 +46,27 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Після вводу ПІБ тихо перевіряємо, чи є в дитини номер у списку
+  useEffect(() => {
+    const name = fullName.trim();
+    if (name.split(/\s+/).filter(Boolean).length < 2) { setHasPhone(null); return; }
+    const seq = ++checkSeq.current;
+    const t = setTimeout(() => {
+      supabase.functions.invoke('parent-login', { body: { action: 'check', fullName: name } })
+        .then(({ data }) => { if (seq === checkSeq.current) setHasPhone(!!data?.has_phone); })
+        .catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [fullName]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const { data, error: fnErr } = await supabase.functions.invoke('parent-login', { body: { fullName, phone } });
+      const { data, error: fnErr } = await supabase.functions.invoke('parent-login', {
+        body: { fullName, phone, confirmParent: hasPhone === false },
+      });
       let code = data?.error as string | undefined;
       if (fnErr) {
         try { code = (await (fnErr as any).context?.json())?.error; } catch { /* ignore */ }
@@ -72,6 +91,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
   };
 
   if (!info) {
+    const noPhone = hasPhone === false;
     return (
       <div className="min-h-[100dvh] w-full flex flex-col px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-8">
         <button onClick={onBack} className="self-start flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors h-10">
@@ -79,7 +99,11 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
         </button>
         <div className="w-full max-w-sm mx-auto my-auto">
           <h1 className="text-2xl font-black text-white tracking-tight">Вхід для батьків</h1>
-          <p className="text-sm text-slate-400 mt-2 leading-relaxed">Введіть ПІБ дитини та номер телефону, вказаний у заявці.</p>
+          <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+            {noPhone
+              ? 'У цієї дитини в списку немає номера телефону. Просто підтвердіть, що ви її батьки.'
+              : 'Введіть ПІБ дитини та номер телефону, вказаний у заявці.'}
+          </p>
           <form onSubmit={submit} className="mt-7 flex flex-col gap-4">
             <label className="flex flex-col gap-2">
               <span className="text-xs font-semibold text-slate-300">ПІБ дитини</span>
@@ -87,16 +111,20 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
                 placeholder="Коваль Марʼяна Олегівна"
                 className="h-12 rounded-2xl bg-white/[0.04] border border-white/10 px-4 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#FA5A15]" />
             </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-slate-300">Номер телефону</span>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" maxLength={20}
-                placeholder="+380 67 123 45 67"
-                className="h-12 rounded-2xl bg-white/[0.04] border border-white/10 px-4 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#FA5A15]" />
-            </label>
+            {!noPhone && (
+              <label className="flex flex-col gap-2">
+                <span className="text-xs font-semibold text-slate-300">Номер телефону</span>
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" maxLength={20}
+                  placeholder="+380 67 123 45 67"
+                  className="h-12 rounded-2xl bg-white/[0.04] border border-white/10 px-4 text-white placeholder:text-slate-500 focus:outline-none focus:border-[#FA5A15]" />
+              </label>
+            )}
             {error && <p className="text-sm text-red-400 leading-snug">{error}</p>}
-            <button type="submit" disabled={loading || !fullName.trim() || !phone.trim()}
+            <button type="submit" disabled={loading || !fullName.trim() || (!noPhone && !phone.trim())}
               className="h-12 mt-1 rounded-2xl bg-[#FA5A15] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Увійти'}
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : noPhone ? (
+                <><ShieldCheck className="w-4 h-4" /> Підтверджую, що я батьки дитини</>
+              ) : 'Увійти'}
             </button>
           </form>
         </div>
@@ -106,8 +134,8 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
 
   const { child, shift, supervisors } = info;
   return (
-    <div className="min-h-[100dvh] w-full px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-10">
-      <div className="max-w-lg mx-auto flex flex-col gap-5">
+    <div className="min-h-[100dvh] w-full px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-8">
+      <div className="max-w-lg mx-auto flex flex-col gap-4">
         <header className="flex items-center justify-between">
           <span className="text-xs text-slate-400">Кабінет батьків</span>
           <button onClick={logout} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white h-9 px-3 rounded-full border border-white/10">
@@ -115,40 +143,39 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
           </button>
         </header>
 
-        <section className="rounded-3xl bg-white/[0.04] border border-white/10 p-5">
+        <section className="rounded-3xl bg-white/[0.04] border border-white/10 p-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#FA5A15]/15 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-[#FA5A15]/15 flex items-center justify-center shrink-0">
               <User className="w-5 h-5 text-[#FA5A15]" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-black text-white truncate">{child.full_name}</h1>
-              <p className="text-sm text-slate-400">Команда {child.team_number}{child.team_name ? `, ${child.team_name}` : ''}</p>
+              <h1 className="text-base font-black text-white truncate">{child.full_name}</h1>
+              <p className="text-xs text-slate-400">Команда {child.team_number}{child.team_name ? ` · ${child.team_name}` : ''}</p>
             </div>
           </div>
           {shift && (
-            <p className="mt-4 pt-4 border-t border-white/10 text-sm text-slate-300 flex items-center gap-2">
-              <CalendarDays className="w-4 h-4 text-slate-500" />
-              {shift.name}: {fmt(shift.start_date)} - {fmt(shift.end_date)}
+            <p className="mt-3 pt-3 border-t border-white/10 text-xs text-slate-300 flex items-center gap-2">
+              <CalendarDays className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              {shift.name}: {fmt(shift.start_date)} – {fmt(shift.end_date)}
             </p>
           )}
+          <p className="mt-3 pt-3 border-t border-white/10 text-xs text-slate-300">
+            <span className="text-slate-500">Супровід: </span>
+            {supervisors.length ? supervisors.map((s) => s.full_name).join(', ') : 'ще не призначено'}
+          </p>
         </section>
 
-        <section>
-          <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><Users className="w-4 h-4 text-slate-400" /> Супровід команди</h2>
-          {supervisors.length ? (
-            <ul className="flex flex-col gap-2">
-              {supervisors.map((s) => (
-                <li key={s.full_name} className="rounded-2xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-slate-200">{s.full_name}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-500 flex items-center gap-2"><Phone className="w-4 h-4" /> Супровід ще не призначено</p>
+        <section className="rounded-3xl bg-white/[0.04] border border-white/10 overflow-hidden">
+          <button onClick={() => setScheduleOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-4 h-12 text-sm font-bold text-white active:bg-white/[0.03] transition">
+            <span className="flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400" /> Розклад команди</span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {scheduleOpen && (
+            <div className="px-2 pb-3">
+              <ScheduleView myTeam={child.team_number} lockTeam />
+            </div>
           )}
-        </section>
-
-        <section>
-          <h2 className="text-sm font-bold text-white mb-2 flex items-center gap-2"><CalendarDays className="w-4 h-4 text-slate-400" /> Розклад</h2>
-          <ScheduleView myTeam={child.team_number} lockTeam />
         </section>
       </div>
     </div>
