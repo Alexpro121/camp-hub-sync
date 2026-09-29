@@ -448,7 +448,7 @@ const TalentAdmin = () => {
                 {event.title || 'Вечір талантів'}
               </h1>
               <p className="text-[11px] text-slate-400 font-mono">
-                Пульт координації сцени
+                Координація виступів
               </p>
             </div>
           </div>
