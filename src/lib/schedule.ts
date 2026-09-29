@@ -112,10 +112,8 @@ export const broadcastScheduleUpdated = async (payload: Record<string, unknown> 
   const ch = supabase.channel(SCHEDULE_CHANNEL);
   await ch.subscribe();
   await ch.send({ type: 'broadcast', event: SCHEDULE_UPDATED, payload });
-  const fair = supabase.channel('fair_global_status');
-  await fair.subscribe();
-  await fair.send({ type: 'broadcast', event: 'FAIR_STATUS_UPDATED', payload });
-  setTimeout(() => { supabase.removeChannel(ch); supabase.removeChannel(fair); }, 500);
+  // Ярмарок тимчасово вимкнено — не пінгуємо його канал.
+  setTimeout(() => { supabase.removeChannel(ch); }, 500);
 };
 
 /** Key used to detect duplicates across merged schedules of the same day. */

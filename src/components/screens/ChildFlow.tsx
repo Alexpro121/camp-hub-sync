@@ -105,7 +105,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const haptics = useHaptics();
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
-  const fair = useAggressiveFairUnlock(!!child);
+  const fair = useAggressiveFairUnlock(FAIR_FEATURE_ENABLED && !!child);
   const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // Сповіщення про події розкладу у Dynamic Island
