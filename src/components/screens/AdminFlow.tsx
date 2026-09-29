@@ -147,6 +147,7 @@ export const generateMemorablePassword = (): string => {
 };
 
 const AdminFlow = ({ onBack }: Props) => {
+  useEffect(() => { void backfillGenders(); }, []);
   useEffect(() => { saveSession('admin'); }, []);
   const unreadTransfers = useUnreadTransfers();
 
