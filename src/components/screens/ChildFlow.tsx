@@ -70,6 +70,19 @@ interface Candidate {
   team_name: string | null;
 }
 
+/** Виклик входу з повтором: під піковим навантаженням (300+ дітей одночасно) сервер іноді відповідає 5xx */
+async function invokeLogin(body: Record<string, unknown>) {
+  let last: any = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await supabase.functions.invoke('child-login', { body });
+    const status = (res.error as any)?.context?.status ?? 0;
+    if (!res.error || (status && status < 500 && status !== 0)) return res;
+    last = res;
+    await new Promise((r) => setTimeout(r, 800 * 2 ** attempt + Math.random() * 600));
+  }
+  return last;
+}
+
 const ChildFlow = ({ onBack }: Props) => {
   const [step, setStep] = useState<'login' | 'profile'>('login');
   const [fullName, setFullName] = useState('');
@@ -226,9 +239,7 @@ const ChildFlow = ({ onBack }: Props) => {
   const loginAs = async (candidate: { id: string }) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('child-login', {
-        body: { action: 'claim', childId: candidate.id },
-      });
+      const { data, error } = await invokeLogin({ action: 'claim', childId: candidate.id });
       if (error || !data?.session) throw new Error('Не вдалося увійти');
 
       await supabase.auth.setSession({
@@ -277,9 +288,7 @@ const ChildFlow = ({ onBack }: Props) => {
     setLoading(true);
     setSuggestions([]);
     try {
-      const { data, error } = await supabase.functions.invoke('child-login', {
-        body: { action: 'search', fullName: fullName.trim(), team },
-      });
+      const { data, error } = await invokeLogin({ action: 'search', fullName: fullName.trim(), team });
       if (error) throw new Error('Помилка входу');
 
       if (data?.exact) {
