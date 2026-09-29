@@ -649,7 +649,7 @@ const ChildFlow = ({ onBack }: Props) => {
                         <span>Стать:</span>
                       </div>
                       <span className={`font-semibold text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {GENDER_LABEL[child.gender]}
+                        {GENDER_LABEL[child.gender as keyof typeof GENDER_LABEL] ?? 'Не визначено'}
                       </span>
                     </div>
                   )}
