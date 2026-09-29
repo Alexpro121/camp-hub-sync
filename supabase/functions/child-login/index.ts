@@ -1,4 +1,26 @@
-import { admin, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+import { admin, corsHeaders, issueSession, json, SERVICE_KEY } from '../_shared/accounts.ts';
+
+/* ---------- short-lived signed claim tickets ---------- */
+const TICKET_TTL_MS = 2 * 60_000;
+async function hmacHex(msg: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function makeTicket(childId: string): Promise<string> {
+  const exp = Date.now() + TICKET_TTL_MS;
+  return `${exp}.${await hmacHex(`child-claim:${childId}:${exp}`)}`;
+}
+async function verifyTicket(childId: string, ticket: string): Promise<boolean> {
+  const [expStr, sig] = String(ticket || '').split('.');
+  const exp = Number(expStr);
+  if (!exp || !sig || exp < Date.now()) return false;
+  const expected = await hmacHex(`child-claim:${childId}:${exp}`);
+  if (expected.length !== sig.length) return false;
+  let d = 0;
+  for (let i = 0; i < sig.length; i++) d |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return d === 0;
+}
 import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 /* ---------- name matching (mirrors src/lib/normalize.ts) ---------- */
@@ -148,7 +170,7 @@ Deno.serve(async (req) => {
       // We never return names, teams or partial hints, so the endpoint cannot be
       // used to enumerate the roster.
       const exactAll = pool.filter((c) => normalizeName(c.full_name) === normalizeName(fullName));
-      if (exactAll.length === 1) { resetFailures(rlKey); return json({ exact: { id: exactAll[0].id } }); }
+      if (exactAll.length === 1) { resetFailures(rlKey); return json({ exact: { id: exactAll[0].id, ticket: await makeTicket(exactAll[0].id) } }); }
       if (exactAll.length > 1) return json({ error: 'ambiguous_name' }, 409);
 
       if (!singleToken) {
@@ -158,12 +180,12 @@ Deno.serve(async (req) => {
           .sort((a, b) => b.s - a.s);
 
         const strong = scored.filter((x) => x.s >= 0.92);
-        if (strong.length === 1) { resetFailures(rlKey); return json({ exact: { id: strong[0].item.id } }); }
+        if (strong.length === 1) { resetFailures(rlKey); return json({ exact: { id: strong[0].item.id, ticket: await makeTicket(strong[0].item.id) } }); }
 
         // [M-1] Softer, still unique fallback: a partial surname match is enough
         // when exactly one child in the team is plausible.
         const soft = scored.filter((x) => x.cov >= 0.65 && x.s >= 0.7);
-        if (soft.length === 1) { resetFailures(rlKey); return json({ exact: { id: soft[0].item.id } }); }
+        if (soft.length === 1) { resetFailures(rlKey); return json({ exact: { id: soft[0].item.id, ticket: await makeTicket(soft[0].item.id) } }); }
       }
 
 
@@ -178,6 +200,10 @@ Deno.serve(async (req) => {
     const childId = typeof body?.childId === 'string' ? body.childId : '';
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(childId)) {
       return json({ error: 'invalid_child' }, 400);
+    }
+    // Only a caller that just proved knowledge of the child's name + team gets a ticket.
+    if (!(await verifyTicket(childId, typeof body?.ticket === 'string' ? body.ticket : ''))) {
+      return json({ error: 'invalid_ticket' }, 401);
     }
 
     let cq = svc.from('children').select('id, shift_id').eq('id', childId);

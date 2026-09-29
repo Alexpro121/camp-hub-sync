@@ -2,11 +2,19 @@ import { admin as adminClient, corsHeaders, issueSession, json } from '../_share
 import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 const ADMIN_TEAM = 99;
-const SUPERVISOR_PREFIX = 'Супровід';
-
-/** Дефолтний пароль для команди за замовчуванням */
-function defaultSupervisorPassword(team: number): string {
-  return `${SUPERVISOR_PREFIX}${team}`;
+/**
+ * Стартовий пароль команди без збереженого пароля: HMAC від серверного секрету,
+ * тож його неможливо вгадати. Адміністратор бачить його в панелі паролів.
+ */
+async function defaultSupervisorPassword(team: number): Promise<string | null> {
+  const secret = Deno.env.get('STAFF_SUPERVISOR_SECRET');
+  if (!secret) return null;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`team:${team}`)));
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let out = '';
+  for (let i = 0; i < 10; i++) out += alphabet[sig[i] % alphabet.length];
+  return `k${team}-${out}`;
 }
 
 /**
@@ -95,11 +103,11 @@ Deno.serve(async (req) => {
       const unique = [...new Set([...detectedTeams, ...assigned, ...stored])].sort((a: number, b: number) => a - b);
       const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-      const list = teamList.map((t: number) => ({
+      const list = await Promise.all(teamList.map(async (t: number) => ({
         team: t,
-        password: passwordMap[String(t)] ?? defaultSupervisorPassword(t),
+        password: passwordMap[String(t)] ?? (await defaultSupervisorPassword(t)) ?? '',
         is_custom: Boolean(passwordMap[String(t)]),
-      }));
+      })));
 
       return json({ passwords: list });
     }
@@ -168,8 +176,8 @@ Deno.serve(async (req) => {
 
     // Вхід адміністратора
     if (team === ADMIN_TEAM) {
-      const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD') ?? 'admin2026';
-      if (!passwordMatches(password, adminPassword)) {
+      const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD');
+      if (!adminPassword || !passwordMatches(password, adminPassword)) {
         const v = recordFailure(rlKey, { slowAfter: 3 });
         if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
         return json({ error: 'invalid_credentials' }, 401);
@@ -195,9 +203,10 @@ Deno.serve(async (req) => {
     }
 
     // Якщо пароль команди збережено, жоден дефолтний або резервний пароль не приймається.
+    const fallback = passRow?.password ? null : await defaultSupervisorPassword(team);
     const ok = passRow?.password
       ? passwordMatches(password, passRow.password)
-      : passwordMatches(password, defaultSupervisorPassword(team));
+      : Boolean(fallback) && passwordMatches(password, fallback!);
 
     if (!ok) {
       const v = recordFailure(rlKey, { slowAfter: 3 });
