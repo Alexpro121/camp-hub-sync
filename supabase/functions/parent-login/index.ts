@@ -63,7 +63,6 @@ Deno.serve(async (req) => {
     const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
     const phone = phoneKey(body?.phone);
     if (fullName.split(/\s+/).filter(Boolean).length < 2 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
-    if (phone.length < 9) return json({ error: 'invalid_phone' }, 400);
 
     const rlKey = clientKey(req, 'parent');
     const RL = { slowAfter: 8, blockAfter: 20 };
@@ -83,11 +82,24 @@ Deno.serve(async (req) => {
     if (error) return json({ error: 'search_failed' }, 500);
 
     const target = sortedTokens(fullName);
-    const matches = (rows || []).filter((c: any) => sortedTokens(c.full_name) === target && phoneKey(c.phone) === phone);
+    const byName = (rows || []).filter((c: any) => sortedTokens(c.full_name) === target);
+
+    // Перевірка під час вводу ПІБ: чи є в дитини номер телефону в списку.
+    // Не розкриваємо, чи знайдено дитину: завжди однакова відповідь.
+    if (body?.action === 'check') {
+      const unique = byName.length === 1 ? byName[0] : null;
+      return json({ has_phone: !!(unique && phoneKey(unique.phone).length >= 9) });
+    }
+
+    const matches = byName.filter((c: any) => phoneKey(c.phone).length >= 9
+      ? phoneKey(c.phone) === phone
+      : body?.confirmParent === true);
 
     if (matches.length !== 1) {
       const after = recordFailure(rlKey, RL);
       if (after.blocked) return json({ error: 'too_many_attempts' }, 429);
+      const noPhoneMatch = byName.length === 1 && phoneKey(byName[0].phone).length < 9;
+      if (noPhoneMatch && body?.confirmParent !== true) return json({ error: 'confirm_required' }, 400);
       return json({ error: matches.length > 1 ? 'ambiguous' : 'not_found' }, 404);
     }
     resetFailures(rlKey);
