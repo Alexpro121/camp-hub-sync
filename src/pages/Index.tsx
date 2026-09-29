@@ -54,8 +54,14 @@ const Index = () => {
           return;
         }
 
-        // 3. Відновлення кабінету СУПРОВОДУ або АДМІНІСТРАТОРА
-        if (savedRole === 'supervisor' || savedRole === 'admin') {
+        // 3. Супровід тепер працює лише через окреме посилання /staff
+        if (savedRole === 'supervisor') {
+          navigate('/staff', { replace: true });
+          return;
+        }
+
+        // 4. Відновлення кабінету АДМІНІСТРАТОРА
+        if (savedRole === 'admin') {
           const { data, error } = await supabase.auth.getSession();
           if (cancelled) return;
 
