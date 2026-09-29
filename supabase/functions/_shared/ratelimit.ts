@@ -39,10 +39,14 @@ export function recordFailure(
 }
 
 /** Current verdict without recording a new failure. */
-export function peek(key: string, windowMs = 60_000): RateVerdict {
+export function peek(
+  key: string,
+  windowMs = 60_000,
+  opts: { slowAfter?: number; blockAfter?: number } = {},
+): RateVerdict {
   const now = Date.now();
   const hits = (buckets.get(key) ?? []).filter((t) => now - t < windowMs);
-  return { hits: hits.length, slowDown: hits.length > 5, blocked: hits.length > 10 };
+  return { hits: hits.length, slowDown: hits.length > (opts.slowAfter ?? 5), blocked: hits.length > (opts.blockAfter ?? 10) };
 }
 
 export function resetFailures(key: string) {
