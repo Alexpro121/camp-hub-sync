@@ -30,6 +30,8 @@ const AdminStaffAccounts = () => {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ full_name: '', login: '', password: genPass() });
   const [pick, setPick] = useState<Record<string, { shift: string; team: string }>>({});
+  const [migrating, setMigrating] = useState(false);
+  const [report, setReport] = useState<Array<{ team: number; login: string; password: string; status: string }>>([]);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +62,36 @@ const AdminStaffAccounts = () => {
         </Button>
       </div>
       <p className="text-[11px] text-slate-500 break-all">{link}</p>
+
+      <div className="rounded-xl border border-[#FA5A15]/25 bg-[#FA5A15]/5 p-3 space-y-2">
+        <p className="text-xs text-slate-300">Старі входи за номером команди → акаунти <b>team1, team2…</b> з тими самими паролями, одразу призначені на поточні зміни.</p>
+        <Button size="sm" disabled={migrating} className="w-full bg-[#FA5A15] hover:bg-[#FF7D3B] text-white rounded-xl" onClick={async () => {
+          setMigrating(true);
+          try {
+            const d = await call({ action: 'migrate_legacy' });
+            setReport(d.report ?? []);
+            toast.success(`Перенесено: ${(d.report ?? []).filter((r: any) => r.status !== 'failed').length}`);
+            await load();
+          } catch { toast.error('Не вдалося перенести'); }
+          setMigrating(false);
+        }}>{migrating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Перенести старі акаунти на /staff'}</Button>
+        {report.length > 0 && (
+          <div className="space-y-1">
+            {report.map((r) => (
+              <div key={r.team} className="flex items-center justify-between text-[11px] font-mono text-slate-200">
+                <span>№{r.team} · {r.login}</span>
+                <span className={r.status === 'failed' ? 'text-red-400' : r.status === 'new_password' ? 'text-amber-300' : ''}>
+                  {r.status === 'failed' ? 'помилка' : r.password}{r.status === 'new_password' ? ' (новий)' : ''}
+                </span>
+              </div>
+            ))}
+            <Button size="sm" variant="ghost" className="w-full text-xs text-slate-300" onClick={() => {
+              navigator.clipboard.writeText(report.filter((r) => r.status !== 'failed').map((r) => `Команда ${r.team}: логін ${r.login}, пароль ${r.password} — ${link}`).join('\n'));
+              toast.success('Скопійовано');
+            }}><Copy className="w-3.5 h-3.5 mr-1" /> Скопіювати всі входи</Button>
+          </div>
+        )}
+      </div>
 
       <div className="grid gap-2">
         <Input placeholder="ПІБ" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="bg-white/5 border-white/10 text-white" />
