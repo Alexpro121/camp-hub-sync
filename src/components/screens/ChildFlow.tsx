@@ -236,10 +236,10 @@ const ChildFlow = ({ onBack }: Props) => {
     };
   }, [child?.id, island, haptics]);
 
-  const loginAs = async (candidate: { id: string }) => {
+  const loginAs = async (candidate: { id: string; ticket?: string }) => {
     setLoading(true);
     try {
-      const { data, error } = await invokeLogin({ action: 'claim', childId: candidate.id });
+      const { data, error } = await invokeLogin({ action: 'claim', childId: candidate.id, ticket: candidate.ticket });
       if (error || !data?.session) throw new Error('Не вдалося увійти');
 
       await supabase.auth.setSession({
