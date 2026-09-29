@@ -4,6 +4,7 @@ import RoleSelect from '@/components/screens/RoleSelect';
 import ChildFlow from '@/components/screens/ChildFlow';
 import SupervisorFlow from '@/components/screens/SupervisorFlow';
 import AdminFlow from '@/components/screens/AdminFlow';
+import ParentFlow from '@/components/screens/ParentFlow';
 import AlumniFlow from '@/components/alumni/AlumniFlow';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +12,7 @@ import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 
-export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni';
+export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'parent';
 
 /** Головний роутер ролей проєкту «Залізна Зміна» (Учасник / Супровід / Штаб) */
 const Index = () => {
@@ -53,6 +54,11 @@ const Index = () => {
             setScreen('child');
             setRestoring(false);
           }
+          return;
+        }
+
+        if (savedRole === 'parent') {
+          if (!cancelled) { setScreen('parent'); setRestoring(false); }
           return;
         }
 
@@ -152,6 +158,10 @@ const Index = () => {
 
         {screen === 'admin' && (
           <AdminFlow onBack={goRole} />
+        )}
+
+        {screen === 'parent' && (
+          <ParentFlow onBack={goRole} />
         )}
 
         {screen === 'alumni' && (
