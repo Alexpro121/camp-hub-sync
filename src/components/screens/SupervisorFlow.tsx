@@ -307,62 +307,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
         isDark ? 'theme-dark bg-[#07090E] text-slate-100' : 'theme-light bg-[#F1F5F9] text-slate-900'
       }`}
     >
-      {/* ================= ГЛОБАЛЬНИЙ CSS-РУШІЙ СВІТЛОЇ ТЕМИ ДЛЯ СУПРОВОДУ ================= */}
-      <style>{`
-        #supervisor-flow-root.theme-light {
-          color-scheme: light;
-        }
-
-        /* Перефарбування всіх чорних карток, списку команд та учасників у білий колір */
-        #supervisor-flow-root.theme-light .bg-card,
-        #supervisor-flow-root.theme-light [class*="bg-card"],
-        #supervisor-flow-root.theme-light [class*="bg-[#0F1523]"],
-        #supervisor-flow-root.theme-light [class*="bg-[#0f1523]"],
-        #supervisor-flow-root.theme-light [class*="bg-[#0A0E18]"],
-        #supervisor-flow-root.theme-light [class*="bg-[#0a0e18]"] {
-          background-color: #ffffff !important;
-          color: #0f172a !important;
-          border-color: #e2e8f0 !important;
-          box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.05) !important;
-        }
-
-        /* Тексти та підписи */
-        #supervisor-flow-root.theme-light [class*="text-white"],
-        #supervisor-flow-root.theme-light [class*="text-slate-100"],
-        #supervisor-flow-root.theme-light [class*="text-slate-200"],
-        #supervisor-flow-root.theme-light [class*="text-slate-300"] {
-          color: #0f172a !important;
-        }
-
-        #supervisor-flow-root.theme-light [class*="text-muted-foreground"],
-        #supervisor-flow-root.theme-light [class*="text-slate-400"],
-        #supervisor-flow-root.theme-light [class*="text-slate-500"] {
-          color: #64748b !important;
-        }
-
-        /* Поля вводу, селекти та випадаючі списки (сортування) */
-        #supervisor-flow-root.theme-light input,
-        #supervisor-flow-root.theme-light select,
-        #supervisor-flow-root.theme-light [class*="bg-white/5"],
-        #supervisor-flow-root.theme-light [class*="bg-surface-1"] {
-          background-color: #ffffff !important;
-          color: #0f172a !important;
-          border-color: #cbd5e1 !important;
-        }
-
-        /* Розділювачі та рамки */
-        #supervisor-flow-root.theme-light [class*="border-white/5"],
-        #supervisor-flow-root.theme-light [class*="border-white/10"],
-        #supervisor-flow-root.theme-light [class*="border-border"] {
-          border-color: #e2e8f0 !important;
-        }
-
-        /* Фірмовий помаранчевий акцент */
-        #supervisor-flow-root.theme-light [class*="text-[#FA5A15]"] {
-          color: #FA5A15 !important;
-        }
-      `}</style>
-
       {/* ЕКРАН АВТОРИЗАЦІЇ */}
       {authedTeam === null ? (
         <div className="min-h-[100dvh] w-full max-w-md mx-auto px-4 py-6 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none">

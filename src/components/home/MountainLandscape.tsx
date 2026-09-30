@@ -46,9 +46,9 @@ const MountainLandscape = () => {
     let width = window.innerWidth;
     let height = window.innerHeight;
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       width = window.innerWidth;
       height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, width < 768 ? 1.5 : 2);
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -57,7 +57,7 @@ const MountainLandscape = () => {
     window.addEventListener('resize', resize);
 
     const starColors = ['#FFFFFF', '#FFE4C4', '#BAE6FD', '#FED7AA'];
-    const starCount = width < 768 ? 65 : 130;
+    const starCount = width < 768 ? 32 : 130;
     const stars = Array.from({ length: starCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * (height * 0.65),
@@ -70,7 +70,9 @@ const MountainLandscape = () => {
 
     type Meteor = { x: number; y: number; length: number; speed: number; angle: number; alpha: number; thickness: number };
     let meteors: Meteor[] = [];
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const meteorTimer = window.setInterval(() => {
+      if (document.hidden || reducedMotion.matches) return;
       const t = themeRef.current;
       if (t !== 'deep-night' && t !== 'dusk' && t !== 'golden-hour') return;
       meteors.push({
@@ -89,7 +91,7 @@ const MountainLandscape = () => {
       { x: -120, y: height * 0.3, speed: 0.95, scale: 0.6, flap: 1.5 },
     ];
 
-    const emberCount = width < 768 ? 20 : 35;
+    const emberCount = width < 768 ? 10 : 35;
     const embers = Array.from({ length: emberCount }, () => ({
       x: Math.random() * width,
       y: height + Math.random() * 30,
@@ -115,7 +117,15 @@ const MountainLandscape = () => {
     if (!isTouch) window.addEventListener('mousemove', onMove);
 
     let raf = 0;
-    const render = () => {
+    let running = false;
+    let lastFrame = 0;
+    const render = (time: number) => {
+      if (!running) return;
+      if (width < 768 && time - lastFrame < 32) {
+        raf = requestAnimationFrame(render);
+        return;
+      }
+      lastFrame = time;
       ctx.clearRect(0, 0, width, height);
       const t = themeRef.current;
       const isNight = t === 'deep-night' || t === 'dusk';
@@ -203,12 +213,29 @@ const MountainLandscape = () => {
       });
 
       ctx.globalAlpha = 1;
-      raf = requestAnimationFrame(render);
+      if (running && !reducedMotion.matches) raf = requestAnimationFrame(render);
     };
-    raf = requestAnimationFrame(render);
+    const updatePlayback = () => {
+      const shouldRun = !document.hidden && !reducedMotion.matches;
+      if (shouldRun === running) return;
+      running = shouldRun;
+      cancelAnimationFrame(raf);
+      if (shouldRun) { lastFrame = 0; raf = requestAnimationFrame(render); }
+      else if (reducedMotion.matches && !document.hidden) {
+        // Show a still sky without running a continuous loop.
+        running = true;
+        render(0);
+        running = false;
+      }
+    };
+    document.addEventListener('visibilitychange', updatePlayback);
+    reducedMotion.addEventListener('change', updatePlayback);
+    updatePlayback();
 
     return () => {
       cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', updatePlayback);
+      reducedMotion.removeEventListener('change', updatePlayback);
       window.clearInterval(meteorTimer);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', onMove);

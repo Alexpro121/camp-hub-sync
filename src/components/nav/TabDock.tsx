@@ -49,7 +49,7 @@ const TabDock = ({ items, value, onChange, className }: Props) => {
         title={item.live ? 'Каса активна зараз' : item.label}
         className={cn(
           'relative flex items-center justify-center gap-2 rounded-xl select-none',
-          'transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.92]',
+          'transition-[transform,background-color,color,border-color] duration-200 ease-out active:scale-[0.96]',
           compact
             ? 'w-full min-h-[44px] h-11 px-2'
             : 'w-full min-h-[44px] px-3.5 py-2.5 text-xs font-semibold',
@@ -100,17 +100,15 @@ const TabDock = ({ items, value, onChange, className }: Props) => {
 
   // Мобільна версія: плаваючий острівець у нижній частині екрана
   if (isMobile) {
-    if (keyboardOpen) return null;
-
     return (
       <nav
         role="tablist"
         aria-label="Нижня панель навігації"
         className={cn(
           'fixed left-3 right-3 z-40 flex items-center justify-around gap-1 p-1.5',
-          'rounded-2xl border border-white/10 bg-card/85 dark:bg-[#07090E]/90 backdrop-blur-2xl',
-          'shadow-[0_12px_40px_-10px_rgba(0,0,0,0.7),_inset_0_1px_1px_rgba(255,255,255,0.15)]',
-          'bottom-[max(0.75rem,env(safe-area-inset-bottom))] transition-transform duration-300 animate-slide-up',
+          'rounded-2xl border border-border bg-card/95 shadow-card',
+          'bottom-[max(0.75rem,env(safe-area-inset-bottom))] transition-[transform,opacity] duration-200 ease-out',
+          keyboardOpen ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100',
           className
         )}
       >

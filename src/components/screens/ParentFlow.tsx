@@ -3,7 +3,9 @@ import { ArrowLeft, LogOut, User, CalendarDays, Loader2, ChevronDown, ShieldChec
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { saveSession, getSavedRole, getSessionMeta, updateSessionMeta, clearSavedSession } from '@/lib/session';
-import ScheduleView from '@/components/schedule/ScheduleView';
+import { lazy, Suspense } from 'react';
+
+const ScheduleView = lazy(() => import('@/components/schedule/ScheduleView'));
 
 interface ParentInfo {
   child: { id: string; full_name: string; team_number: number; team_name: string | null };
@@ -49,13 +51,14 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
   // Після вводу ПІБ тихо перевіряємо, чи є в дитини номер у списку
   useEffect(() => {
     const name = fullName.trim();
-    if (name.split(/\s+/).filter(Boolean).length < 2) { setHasPhone(null); return; }
     const seq = ++checkSeq.current;
+    setHasPhone(null);
+    if (name.split(/\s+/).filter(Boolean).length < 2) return;
     const t = setTimeout(() => {
       supabase.functions.invoke('parent-login', { body: { action: 'check', fullName: name } })
-        .then(({ data }) => { if (seq === checkSeq.current) setHasPhone(!!data?.has_phone); })
+        .then(({ data, error }) => { if (seq === checkSeq.current && !error && typeof data?.has_phone === 'boolean') setHasPhone(data.has_phone); })
         .catch(() => {});
-    }, 500);
+    }, 800);
     return () => clearTimeout(t);
   }, [fullName]);
 
@@ -120,7 +123,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
               </label>
             )}
             {error && <p className="text-sm text-red-400 leading-snug">{error}</p>}
-            <button type="submit" disabled={loading || !fullName.trim() || (!noPhone && !phone.trim())}
+            <button type="submit" disabled={loading || !fullName.trim() || (hasPhone === null && !phone.trim()) || (!noPhone && !phone.trim())}
               className="h-12 mt-1 rounded-2xl bg-[#FA5A15] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : noPhone ? (
                 <><ShieldCheck className="w-4 h-4" /> Підтверджую, що я батьки дитини</>
@@ -173,7 +176,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
           </button>
           {scheduleOpen && (
             <div className="px-2 pb-3">
-              <ScheduleView myTeam={child.team_number} lockTeam />
+               <Suspense fallback={<p className="px-3 py-4 text-sm text-slate-400">Завантажуємо розклад...</p>}><ScheduleView myTeam={child.team_number} lockTeam /></Suspense>
             </div>
           )}
         </section>
