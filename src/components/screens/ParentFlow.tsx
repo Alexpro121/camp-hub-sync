@@ -20,6 +20,7 @@ const ERRORS: Record<string, string> = {
   not_found: 'Не знайшли дитину з таким ПІБ і номером. Перевірте дані або зверніться до супроводу',
   ambiguous: 'Знайдено кілька збігів. Зверніться до супроводу',
   too_many_attempts: 'Забагато спроб. Спробуйте за хвилину',
+  phone_missing: 'У списку немає номера телефону цієї дитини. Попросіть супровід додати ваш номер',
 };
 
 const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' }) : '');
