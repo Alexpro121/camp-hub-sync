@@ -202,6 +202,12 @@ const StaffRegister = () => {
                     {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {pwWeak && (
+                  <p role="status" className="mt-2 flex items-start gap-1.5 text-xs text-amber-500">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    Пароль простий — його легко вгадати. Радимо додати цифри, великі літери або символи, але реєстрація все одно доступна.
+                  </p>
+                )}
               </Fld>
             </div>
 
