@@ -204,13 +204,22 @@ const AdminFlow = ({ onBack }: Props) => {
 
         <Tabs value={tab} onValueChange={setTab} className="w-full px-4 pt-2">
           <div className="hidden sm:block sticky top-[108px] z-20 -mx-4 px-4 py-2 bg-background/95 overflow-x-auto no-scrollbar">
-            <TabsList className="flex h-auto w-max min-w-full p-1 gap-1 bg-muted border border-border rounded-md">
-              {[...primaryTabs, ...moreTabs].map(({ value, label, icon: Icon }) => (
-                <TabsTrigger key={value} value={value} className="relative gap-1.5 min-h-11 flex-1 text-xs font-semibold">
+            <TabsList className="flex h-auto w-full p-1 gap-1 bg-muted border border-border rounded-md">
+              {primaryTabs.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger key={value} value={value} className="gap-1.5 min-h-11 flex-1 text-xs font-semibold">
                   <Icon className="w-4 h-4" /> <span>{label}</span>
-                  {value === 'notifications' && unreadTransfers > 0 && <span className="rounded-full bg-primary text-primary-foreground px-1 text-[10px]">{unreadTransfers > 99 ? '99+' : unreadTransfers}</span>}
                 </TabsTrigger>
               ))}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={`min-h-11 flex-1 gap-1.5 text-xs ${moreTabs.some(item => item.value === tab) ? 'bg-background text-primary' : 'text-muted-foreground'}`}>
+                    <Menu /> {moreTabs.find(item => item.value === tab)?.label ?? 'Ще'} {unreadTransfers > 0 && <span className="rounded-full bg-primary px-1.5 text-primary-foreground">{unreadTransfers > 99 ? '99+' : unreadTransfers}</span>}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  {moreTabs.map(({ value, label, icon: Icon }) => <DropdownMenuItem key={value} onSelect={() => setTab(value)} className="min-h-11 gap-3"><Icon className="w-4 h-4" />{label}</DropdownMenuItem>)}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TabsList>
           </div>
 
