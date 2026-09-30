@@ -96,22 +96,27 @@ const AdminStaffAccounts = () => {
       (!s || m.full_name.toLowerCase().includes(s) || m.login.includes(s) || (m.phone ?? '').includes(s) || (m.telegram ?? '').toLowerCase().includes(s)),
     );
   }, [members, q, filter]);
+  const assignmentsByMember = useMemo(() => {
+    const byMember = new Map<string, Asg[]>();
+    for (const assignment of asg) byMember.set(assignment.staff_user_id, [...(byMember.get(assignment.staff_user_id) ?? []), assignment]);
+    return byMember;
+  }, [asg]);
 
   const shiftName = (id: string) => shifts.find((s) => s.id === id)?.name ?? 'Зміна';
   const aliveInvites = invites.filter(inviteAlive);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-4 space-y-4">
-      <header className="flex items-center justify-between gap-2">
+    <section className="space-y-4 py-3">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-bold text-foreground inline-flex items-center gap-2"><UserCog className="w-4 h-4 text-primary" /> Супровід і каченята</h3>
           <p className="text-xs text-muted-foreground">{counts.supervisor} супровід, {counts.duckling} каченят</p>
         </div>
-        <div className="flex gap-1.5">
-          <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => setInviteOpen(true)}>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button size="sm" variant="secondary" className="flex-1 sm:flex-none min-h-11" onClick={() => setInviteOpen(true)}>
             <Link2 className="w-4 h-4 mr-1" /> Посилання
           </Button>
-          <Button size="sm" className="rounded-xl" onClick={() => setCreating(true)}>
+          <Button size="sm" className="flex-1 sm:flex-none min-h-11" onClick={() => setCreating(true)}>
             <Plus className="w-4 h-4 mr-1" /> Додати
           </Button>
         </div>
@@ -128,13 +133,13 @@ const AdminStaffAccounts = () => {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Пошук: імʼя, логін, телефон" className="pl-9 h-10 rounded-xl" />
         </div>
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
           {([['all', 'Всі'], ['supervisor', 'Супровід'], ['duckling', 'Каченята'], ['off', 'Вимкнені']] as [Filter, string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setFilter(k)}
-              className={cn('shrink-0 h-8 px-3 rounded-full text-xs font-semibold border transition-colors',
+            <Button key={k} variant="ghost" size="sm" onClick={() => setFilter(k)}
+              className={cn('shrink-0 min-h-10 px-3 rounded-md text-xs font-semibold border transition-colors',
                 filter === k ? 'bg-foreground text-background border-foreground' : 'bg-transparent text-muted-foreground border-border hover:text-foreground')}>
               {l} <span className="opacity-60">{counts[k]}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -149,11 +154,11 @@ const AdminStaffAccounts = () => {
       ) : (
         <ul className="space-y-1.5">
           {visible.map((m) => {
-            const mine = asg.filter((a) => a.staff_user_id === m.user_id);
+            const mine = assignmentsByMember.get(m.user_id) ?? [];
             return (
               <li key={m.user_id}>
-                <button onClick={() => setEditing(m)}
-                  className={cn('w-full flex items-center gap-3 rounded-xl p-2.5 text-left hover:bg-muted/60 active:scale-[0.99] transition-all', !m.is_active && 'opacity-50')}>
+                <Button variant="ghost" onClick={() => setEditing(m)}
+                  className={cn('w-full h-auto min-h-16 flex items-center justify-start gap-3 rounded-md p-2.5 text-left hover:bg-muted/60 active:scale-[0.99] transition-transform', !m.is_active && 'opacity-50')}>
                   <StaffAvatar name={m.full_name} src={m.avatar_url} size={42} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
@@ -164,7 +169,7 @@ const AdminStaffAccounts = () => {
                       @{m.login}{mine.length ? `, команда ${[...new Set(mine.map((a) => a.team_number))].join(', ')}` : ', без команди'}
                     </p>
                   </div>
-                </button>
+                </Button>
               </li>
             );
           })}
@@ -180,7 +185,7 @@ const AdminStaffAccounts = () => {
 
       <CreateSheet open={creating} onClose={() => setCreating(false)} onSaved={load} />
       <InviteSheet open={inviteOpen} onClose={() => setInviteOpen(false)} invites={invites} onChanged={load} />
-      <MemberSheet member={editing} onClose={() => setEditing(null)} asg={asg.filter((a) => a.staff_user_id === editing?.user_id)}
+        <MemberSheet member={editing} onClose={() => setEditing(null)} asg={assignmentsByMember.get(editing?.user_id ?? '') ?? []}
         shifts={shifts} shiftName={shiftName} run={run} />
     </section>
   );
