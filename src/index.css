@@ -879,7 +879,7 @@
 .tour-confetti { animation: tourConfetti 1.6s ease-in infinite; will-change: transform, opacity; }
 
 /* ============ Staff light theme ============ */
-.staff-light, #supervisor-flow-root.theme-light {
+.staff-light {
   --background: 220 20% 97%;
   --foreground: 222 40% 12%;
   --card: 0 0% 100%;
@@ -911,29 +911,30 @@ html.staff-invert img, html.staff-invert video, html.staff-invert canvas { filte
 #supervisor-flow-root.theme-light [class*="bg-[#0f1523]"],
 #supervisor-flow-root.theme-light [class*="bg-[#0A0E18]"],
 #supervisor-flow-root.theme-light [class*="bg-[#0a0e18]"] {
-  background-color: hsl(var(--card)) !important;
-  color: hsl(var(--card-foreground)) !important;
-  border-color: hsl(var(--border)) !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.05) !important;
 }
 #supervisor-flow-root.theme-light [class*="text-white"],
 #supervisor-flow-root.theme-light [class*="text-slate-100"],
 #supervisor-flow-root.theme-light [class*="text-slate-200"],
-#supervisor-flow-root.theme-light [class*="text-slate-300"] { color: hsl(var(--foreground)) !important; }
+#supervisor-flow-root.theme-light [class*="text-slate-300"] { color: #0f172a !important; }
 #supervisor-flow-root.theme-light [class*="text-muted-foreground"],
 #supervisor-flow-root.theme-light [class*="text-slate-400"],
-#supervisor-flow-root.theme-light [class*="text-slate-500"] { color: hsl(var(--muted-foreground)) !important; }
+#supervisor-flow-root.theme-light [class*="text-slate-500"] { color: #64748b !important; }
 #supervisor-flow-root.theme-light input,
 #supervisor-flow-root.theme-light select,
 #supervisor-flow-root.theme-light [class*="bg-white/5"],
 #supervisor-flow-root.theme-light [class*="bg-surface-1"] {
-  background-color: hsl(var(--card)) !important;
-  color: hsl(var(--foreground)) !important;
-  border-color: hsl(var(--border)) !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
 }
 #supervisor-flow-root.theme-light [class*="border-white/5"],
 #supervisor-flow-root.theme-light [class*="border-white/10"],
-#supervisor-flow-root.theme-light [class*="border-border"] { border-color: hsl(var(--border)) !important; }
-#supervisor-flow-root.theme-light [class*="text-[#FA5A15]"] { color: hsl(var(--primary)) !important; }
+#supervisor-flow-root.theme-light [class*="border-border"] { border-color: #e2e8f0 !important; }
+#supervisor-flow-root.theme-light [class*="text-[#FA5A15]"] { color: #FA5A15 !important; }
 
 @media (max-width: 767px) {
   /* Glass and large fixed blurs cost frames on budget phones. */
