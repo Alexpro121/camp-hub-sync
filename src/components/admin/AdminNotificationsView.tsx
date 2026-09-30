@@ -91,7 +91,7 @@ const AdminNotificationsView = () => {
   );
 
   const markAllRead = () => {
-    const ts = Date.now();
+    const ts = items.reduce((m, n) => Math.max(m, new Date(n.created_at).getTime()), seenAt);
     localStorage.setItem(ADMIN_NOTIF_SEEN_KEY, String(ts));
     setSeenAt(ts);
     window.dispatchEvent(new Event('admin-notifications-seen'));

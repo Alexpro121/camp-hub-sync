@@ -56,12 +56,12 @@ async function resolveAvatars<T extends { user_id?: string; avatar_url: string |
   return rows.map((r) => (r.avatar_url?.startsWith('storage:') ? { ...r, avatar_url: map.get(r.avatar_url.slice(8)) ?? null } : r));
 }
 
-async function loadInvite(svc: any, token: string) {
+async function loadInvite(svc: any, token: string, ignoreUses = false) {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   const { data } = await svc.from('staff_invites').select('*').eq('token', token).maybeSingle();
   if (!data || data.revoked) return null;
   if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) return null;
-  if (data.max_uses != null && data.uses >= data.max_uses) return null;
+  if (!ignoreUses && data.max_uses != null && data.uses >= data.max_uses) return null;
   return data;
 }
 
@@ -179,15 +179,15 @@ Deno.serve(async (req) => {
       if (password.length < 6 || password.length > 72) return json({ error: 'weak_password' });
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' });
-      // Для посилання конкретної зміни місце витрачається лише після вибору команди.
-      if (!inv.shift_id) {
+      // Місце витрачається під час реєстрації; вибір команди за цим же посиланням уже не списує ще одне.
+      {
         const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
           .eq('id', inv.id).eq('uses', inv.uses).select('id');
         if (!claimed?.length) return json({ error: 'invite_busy' });
       }
       const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
       if (error || !created.user) {
-        if (!inv.shift_id) await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
         const weak = /weak|pwned|guess/i.test(error?.message ?? '');
         return json({ error: weak ? 'weak_password' : 'create_failed' });
       }
@@ -203,7 +203,11 @@ Deno.serve(async (req) => {
 
     // ---------- САМОПРИЗНАЧЕННЯ ЗА ПОСИЛАННЯМ ЗМІНИ ----------
     if (action === 'join_shift') {
-      const inv = await loadInvite(svc, String(body?.token ?? ''));
+      const { data: me } = await svc.from('staff_members').select('registered_via').eq('user_id', user.id).maybeSingle();
+      const rawInv = await loadInvite(svc, String(body?.token ?? ''), true);
+      // Хто зареєструвався саме за цим посиланням, завжди може завершити вибір команди.
+      const ownInvite = !!rawInv && me?.registered_via === rawInv.id;
+      const inv = rawInv && (ownInvite || rawInv.max_uses == null || rawInv.uses < rawInv.max_uses) ? rawInv : null;
       const shift = inv ? await loadInviteShift(svc, inv.shift_id ?? null) : null;
       const team = Math.floor(Number(body?.team_number));
       if (!inv || !shift) return json({ error: 'invite_invalid' });
@@ -213,12 +217,15 @@ Deno.serve(async (req) => {
       if (!member?.is_active) return json({ error: 'not_staff' }, 403);
       const { data: existingShift } = await svc.from('staff_assignments').select('id, team_number').eq('staff_user_id', user.id).eq('shift_id', shift.id).limit(1).maybeSingle();
       if (existingShift) return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: existingShift.team_number, already_assigned: true });
-      const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
-        .eq('id', inv.id).eq('uses', inv.uses).select('id');
-      if (!claimed?.length) return json({ error: 'invite_busy' });
+      const claim = !ownInvite;
+      if (claim) {
+        const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
+          .eq('id', inv.id).eq('uses', inv.uses).select('id');
+        if (!claimed?.length) return json({ error: 'invite_busy' });
+      }
       const { error } = await svc.from('staff_assignments').insert({ staff_user_id: user.id, shift_id: shift.id, team_number: team });
       if (error) {
-        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        if (claim) await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
         return json({ error: 'assign_failed' }, 500);
       }
       return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: team });

@@ -9,7 +9,6 @@ import { sentenceCase } from '@/lib/scheduleCategories';
 import {
   minutesSinceDayStart,
   normalizeScheduleItems,
-  ongoingEvents,
   shiftISODate,
   dedupeItems,
   SCHEDULE_CHANNEL,
@@ -243,8 +242,8 @@ const ScheduleView = ({
       dedupeItems(items.filter((i) => ids.includes(i.schedule_id))).filter(matchesTeam),
       prevDate,
     );
-    return ongoingEvents(prevEvents, now).map((e) => ({ ...e, startMin: e.startMin - 1440, endMin: e.endMin - 1440 }));
-  }, [items, idsForDate, activeDay, matchesTeam, now]);
+    return prevEvents.filter((e) => e.crossesMidnight).map((e) => ({ ...e, startMin: e.startMin - 1440, endMin: e.endMin - 1440 }));
+  }, [items, idsForDate, activeDay, matchesTeam]);
 
   const visibleEvents = useMemo(
     () => [...carryOver, ...dayEvents].sort((a, b) => a.startMin - b.startMin),

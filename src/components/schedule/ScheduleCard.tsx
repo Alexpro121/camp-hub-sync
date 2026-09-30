@@ -63,7 +63,7 @@ interface Props {
 const ScheduleCard = ({ event, team = null, isNow = false, past = false, progress = 0, isStaff = false, onFairAction }: Props) => {
   const item = event.item;
   const slots = slotsOf(item);
-  const mySlot = team != null ? slots.find((s) => s.teams?.includes(team)) : undefined;
+  const mySlot = team != null ? slots.find((s) => s.teams?.map(Number).includes(Number(team))) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
   const isFair = isFairEvent(item);
 

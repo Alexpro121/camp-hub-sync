@@ -40,7 +40,8 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   const clientUpdatedAt = useRef(child.updated_at ?? new Date().toISOString());
   useEffect(() => { clientUpdatedAt.current = child.updated_at ?? new Date().toISOString(); }, [child.id, child.updated_at]);
 
-  const writeProfile = () => queuedWrite({
+  const writeProfile = async () => {
+    const res = await queuedWrite({
     table: 'children',
     op: 'update',
     matchId: child.id,
@@ -53,7 +54,11 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       supervisor_notes: notes || null,
       gender: gender || null,
     },
-  });
+    });
+    // Our own write is now the server version — don't treat it as a conflict next time.
+    if (!res.error) clientUpdatedAt.current = new Date(Date.now() + 1000).toISOString();
+    return res;
+  };
 
   // Auto-save with debounce (profile fields only — the balance is atomic, see below)
   useEffect(() => {
