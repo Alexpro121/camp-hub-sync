@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_credentials' }, 400);
     }
 
-    const rlKey = clientKey(req, `staff:${team}`);
+    const rlKey = clientKey(req, `staff:${team}:${String((body as any)?.password ?? '').length}`);
     const before = peek(rlKey);
     if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
     if (before.hits >= 3) await sleep(1200 * Math.min(before.hits, 5));

@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       .order('start_date', { ascending: false });
     // Паралельні зміни: усі зміни, що йдуть сьогодні, доступні для входу одночасно.
     const today = kyivDate();
-    const liveNow = (shifts || []).filter((s: any) => s.start_date <= today && today <= s.end_date).map((s: any) => s.id);
+    const liveNow = (shifts || []).filter((s: any) => s.start_date <= kyivDate(3) && today <= s.end_date).map((s: any) => s.id);
     const fallback = pickActiveShift(shifts || []);
     const liveIds: string[] = liveNow.length ? liveNow : (fallback?.id ? [fallback.id] : []);
 

@@ -119,12 +119,16 @@ const TeamsView = ({
       if (mounted) { setChildren(unique as Child[]); setLoading(false); }
     };
     load().catch(() => { if (mounted) setLoading(false); });
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
     const channel = supabase
       .channel('children-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => {
+        clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(() => { load().catch(() => {}); }, 600);
+      })
       .subscribe();
-    return () => { mounted = false; clearTimeout(slowTimer); supabase.removeChannel(channel); };
+    return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(reloadTimer); supabase.removeChannel(channel); };
   }, []);
 
   /** Присутність: 0 мс у UI, мережа — фоном через Outbox. */

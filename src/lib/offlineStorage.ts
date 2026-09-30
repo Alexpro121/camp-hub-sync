@@ -186,6 +186,8 @@ export function isPermanentDbError(error: unknown): boolean {
   const code = String(err?.code ?? '');
   const status = Number(err?.status ?? err?.statusCode ?? 0);
   const text = `${err?.message ?? ''} ${err?.details ?? ''} ${err?.hint ?? ''} ${code}`;
+  // 401/403 часто означають прострочений токен після довгого офлайну — повторюємо після оновлення сесії.
+  if (status === 401 || status === 403 || /jwt expired|invalid jwt|pgrst30[13]/i.test(text)) return false;
   if (status >= 400 && status < 500 && status !== 408 && status !== 429) return true;
   if (/^(22|23|42)/.test(code)) return true;
   if (/timeout|failed to fetch|network|aborted|econn|503|502|504|429/i.test(text)) return false;

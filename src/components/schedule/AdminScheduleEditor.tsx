@@ -189,7 +189,8 @@ const AdminScheduleEditor = () => {
   const wipeDay = async () => {
     setBusy(true);
     try {
-      const ids = schedules.map((s) => s.id);
+      // Загальнотаборові розклади (без зміни) не чіпаємо — вони спільні для паралельних змін.
+      const ids = schedules.filter((s) => !shiftId || s.shift_id === shiftId).map((s) => s.id);
       if (ids.length) {
         const { error } = await supabase.from('schedule_items').delete().in('schedule_id', ids);
         if (error) throw error;

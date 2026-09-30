@@ -168,11 +168,11 @@ export class NetworkPulse {
     const started = performance.now();
 
     try {
-      const res = await fetch(`/favicon.ico?_p=${Date.now()}`, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health?_p=${Date.now()}`, {
         method: 'HEAD',
         cache: 'no-store',
         redirect: 'manual',
-        headers: { Accept: '*/*' },
+        headers: { Accept: '*/*', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
         signal: ctrl.signal,
       });
 
