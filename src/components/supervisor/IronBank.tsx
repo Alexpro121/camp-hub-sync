@@ -1,3 +1,4 @@
+import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useState } from 'react';
 import { Coins, Wallet, Edit2, Check, AlertTriangle, Plus, Minus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +15,7 @@ interface Props {
   onClose: () => void;
 }
 
-const KEY = (team: number) => `helpsuprov:bank:${team}`;
+const KEY = (team: number) => `helpsuprov:bank:${getSessionMeta()?.shiftId || 'default'}:${team}`;
 
 const IronBank = ({ myTeam, open, onClose }: Props) => {
   const [budget, setBudget] = useState<number | null>(null);

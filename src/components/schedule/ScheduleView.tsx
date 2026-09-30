@@ -1,3 +1,4 @@
+import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Card } from '@/components/ui/card';
@@ -99,8 +100,10 @@ const ScheduleView = ({
         .eq('is_published', true)
         .is('deleted_at', null)
         .order('date', { ascending: true });
+      // Лише розклади своєї зміни + загальнотаборові (без зміни).
+      const myShift = getSessionMeta()?.shiftId ?? null;
       
-      const list = (sch || []) as Schedule[];
+      const list = ((sch || []) as Schedule[]).filter((s) => !myShift || !s.shift_id || s.shift_id === myShift);
       setSchedules(list);
       
       const ids = list.map((s) => s.id);

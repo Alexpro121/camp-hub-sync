@@ -1,3 +1,5 @@
+import { getSessionMeta } from '@/lib/session';
+import { dedupeItems } from '@/lib/schedule';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
@@ -51,15 +53,17 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
         .select('*')
         .eq('is_published', true)
         .eq('date', todayISO())
-        .limit(1);
-      const day = (sch as Schedule[] | null)?.[0];
-      if (!day) { if (!cancelled) setAlerts([]); return; }
+        .is('deleted_at', null);
+      const myShift = getSessionMeta()?.shiftId ?? null;
+      const days = ((sch as Schedule[] | null) ?? []).filter((s) => !myShift || !s.shift_id || s.shift_id === myShift);
+      if (!days.length) { if (!cancelled) setAlerts([]); return; }
 
-      const { data: its } = await supabase
+      const { data: rawIts } = await supabase
         .from('schedule_items')
         .select('*')
-        .eq('schedule_id', day.id)
+        .in('schedule_id', days.map((d) => d.id))
         .order('order_index');
+      const its = dedupeItems((rawIts || []) as any[]);
       if (cancelled) return;
 
       const list = ((its || []) as unknown as ScheduleItem[])

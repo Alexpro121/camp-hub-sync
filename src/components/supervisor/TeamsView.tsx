@@ -156,6 +156,13 @@ const TeamsView = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [children, myTeam]);
 
+  // Знімок присутності на момент вибору сортування — картка не «тікає» з-під пальця під час переклички.
+  const presentSnap = useRef<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    presentSnap.current = new Map(children.map((c) => [c.id, !!c.is_present]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortMode]);
+  const snapPresent = (c: Child) => presentSnap.current.get(c.id) ?? !!c.is_present;
   const sortKids = (kids: Child[]): Child[] => {
     const arr = [...kids];
     const hasNote = (c: Child) => Boolean((c.supervisor_notes && c.supervisor_notes.trim()) || (c.note_from_table && c.note_from_table.trim()));
@@ -167,7 +174,7 @@ const TeamsView = ({
       case 'has_notes':
         return arr.sort((a, b) => Number(hasNote(b)) - Number(hasNote(a)) || (a.row_number ?? 0) - (b.row_number ?? 0));
       case 'present_first':
-        return arr.sort((a, b) => Number(b.is_present) - Number(a.is_present) || (a.row_number ?? 0) - (b.row_number ?? 0));
+        return arr.sort((a, b) => Number(snapPresent(b)) - Number(snapPresent(a)) || (a.row_number ?? 0) - (b.row_number ?? 0));
       default:
         return arr.sort((a, b) => (a.row_number ?? 0) - (b.row_number ?? 0) || a.full_name.localeCompare(b.full_name));
     }

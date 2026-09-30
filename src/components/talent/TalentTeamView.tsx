@@ -1,3 +1,4 @@
+import { getSessionMeta } from '@/lib/session';
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,8 +25,9 @@ const TalentTeamView = ({ myTeam = null }: Props) => {
 
 
   const load = async () => {
-    const { data: evs } = await supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(1);
-    const ev = (evs?.[0] as TalentEvent) || null;
+    const { data: evs } = await supabase.from('talent_events').select('*').order('created_at', { ascending: false }).limit(20);
+    const myShift = getSessionMeta()?.shiftId ?? null;
+    const ev = ((evs || []).find((e: any) => !myShift || !e.shift_id || e.shift_id === myShift) as TalentEvent) || null;
     setEvent(ev);
     if (ev) {
       const { data } = await supabase.from('talent_entries').select('*').eq('event_id', ev.id).order('order_index');

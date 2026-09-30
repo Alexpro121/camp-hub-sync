@@ -264,7 +264,9 @@ const TalentAdmin = () => {
 
   const persistOrder = async (list: TalentEntry[]) => {
     setEntries(list);
-    await Promise.all(list.map((e, i) => supabase.from('talent_entries').update({ order_index: i }).eq('id', e.id)));
+    // Один виклик — порядок записується атомарно, без перемішування.
+    const { error } = await (supabase as any).rpc('set_talent_order', { p_ordered_ids: list.map((e) => e.id) });
+    if (error) toast.error('Не вдалося зберегти порядок');
   };
 
   const generate = async () => {
