@@ -31,7 +31,7 @@ export async function parseExcelFile(file: File | ArrayBuffer): Promise<ParsedRo
   if (!wb.SheetNames.length) return [];
 
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
 
   if (matrix.length === 0) return [];
 

@@ -1170,7 +1170,7 @@ const StatsTab = () => {
   const load = async () => {
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('*').order('team_number'),
+      supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number'),
       supabase.from('transfers').select('child_id'),
     ]);
 
@@ -1201,7 +1201,7 @@ const StatsTab = () => {
       iron: orphanKids.reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0),
     } : null);
 
-    setChildren((kids || []) as Child[]);
+    setChildren((kids || []) as unknown as Child[]);
     setRows(stats);
     setLoading(false);
   };

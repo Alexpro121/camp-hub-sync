@@ -79,7 +79,7 @@ async function shiftTeams(svc: any, shift: any) {
   ]);
   const counts = new Map<number, number>();
   for (const k of kids ?? []) if (Number.isInteger(k.team_number) && k.team_number > 0) counts.set(k.team_number, (counts.get(k.team_number) ?? 0) + 1);
-  const base = counts.size ? [...counts.keys()] : (shift.assigned_teams ?? []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0);
+  const base = [...new Set([...counts.keys(), ...(shift.assigned_teams ?? []).map(Number)])].filter((n: number) => Number.isInteger(n) && n > 0);
   return [...new Set<number>(base)].sort((a, b) => a - b).map((team) => ({
     team,
     children: counts.get(team) ?? 0,
@@ -422,7 +422,11 @@ Deno.serve(async (req) => {
     if (action === 'shift_invite_create') {
       const shiftId = String(body?.shift_id ?? '');
       const shift = await loadInviteShift(svc, shiftId);
-      if (!shift || !(shift.assigned_teams ?? []).length) return json({ error: 'shift_needs_teams' });
+      if (!shift) return json({ error: 'shift_needs_teams' });
+      if (!(shift.assigned_teams ?? []).length) {
+        const { data: anyKid } = await svc.from('children').select('id').eq('shift_id', shiftId).is('deleted_at', null).limit(1);
+        if (!anyKid?.length) return json({ error: 'shift_needs_teams' });
+      }
       const { data: current } = await svc.from('staff_invites').select('*')
         .eq('shift_id', shiftId).eq('revoked', false).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (current && (current.max_uses == null || current.uses < current.max_uses)) return json({ invite: current });

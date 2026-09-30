@@ -1258,6 +1258,7 @@ export type Database = {
           team_number: number
         }[]
       }
+      shift_schedule_items: { Args: { p_items: Json }; Returns: number }
       verify_stage_password: {
         Args: { p_password: string; p_shift_id: string }
         Returns: boolean

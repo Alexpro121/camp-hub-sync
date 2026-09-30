@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { Radio, ShoppingBag, Users } from 'lucide-react';
 
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
-import { sentenceCase } from '@/lib/scheduleCategories';
+import { sentenceCase, toMinutes } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
 import { isEventLive, isFairEvent } from '@/lib/fair-resolver';
 
@@ -16,11 +16,7 @@ const ACCENT: Record<string, string> = {
   general: 'border-l-slate-500',
 };
 
-const toMin = (t?: string | null): number | null => {
-  if (!t) return null;
-  const [h, m] = String(t).split(':').map(Number);
-  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
-};
+const toMin = (t?: string | null): number | null => toMinutes(t);
 
 /**
  * A sub-slot is only valid when its time sits inside [time_start .. time_end]
