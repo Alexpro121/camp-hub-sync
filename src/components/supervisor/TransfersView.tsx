@@ -29,8 +29,8 @@ const TransfersView = ({ myTeam }: Props) => {
   // Swap state
   const [swapA, setSwapA] = useState<Child | null>(null);
   const [swapQuery, setSwapQuery] = useState('');
-  const [swapB, setSwapB] = useState<{ id: string; full_name: string; team_number: number } | null>(null);
-  const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number }[]>([]);
+  const [swapB, setSwapB] = useState<{ id: string; full_name: string; team_number: number; gender?: string | null } | null>(null);
+  const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number; gender?: string | null }[]>([]);
   const [availableTeams, setAvailableTeams] = useState<number[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -81,7 +81,7 @@ const TransfersView = ({ myTeam }: Props) => {
       });
       if (cancelled) return;
       if (error) { setSwapMatches([]); return; }
-      setSwapMatches((data || []) as { id: string; full_name: string; team_number: number }[]);
+      setSwapMatches((data || []) as { id: string; full_name: string; team_number: number; gender?: string | null }[]);
     }, 250);
     return () => { cancelled = true; clearTimeout(t); };
   }, [swapQuery, shiftId, myTeam]);
@@ -97,32 +97,39 @@ const TransfersView = ({ myTeam }: Props) => {
     }
     setLoading(true);
     const fromTeam = selected.team_number;
-    const { error } = await supabase.rpc('execute_child_transfer', {
-      p_child_id: selected.id,
-      p_target_team: tn,
-      p_performed_by: `Команда #${myTeam}`,
+    const { data, error } = await (supabase as any).rpc('request_child_move', {
+      p_kind: 'transfer', p_child_1_id: selected.id, p_child_2_id: null,
+      p_target_team: tn, p_performed_by: `Команда #${myTeam}`,
     });
     if (error) { toast.error('Помилка переведення'); setLoading(false); return; }
-    toast.success('Переведено');
-    pushIsland(`${selected.full_name}: #${fromTeam} → #${tn}`, 'success', 'Переведення');
+    if (data?.status === 'done') {
+      toast.success('Переведено');
+      pushIsland(`${selected.full_name}: #${fromTeam} → #${tn}`, 'success', 'Переведення');
+    } else toast.info(data?.status === 'already_pending' ? 'Запит уже чекає підтвердження' : 'Надіслано адміну на підтвердження');
     setSelected(null); setTargetTeam(''); setCustomTeam(''); setAllowCustomTeam(false);
     setLoading(false);
   };
 
   /* ---- SWAP ---- */
+  const genderMismatch = !!swapA && !!swapB
+    && ['boy', 'girl'].includes((swapA as any).gender) && ['boy', 'girl'].includes(swapB.gender || '')
+    && (swapA as any).gender !== swapB.gender;
+
   const performSwap = async () => {
     if (!swapA || !swapB) { toast.error('Обери обох дітей'); return; }
     if (swapA.team_number === swapB.team_number) { toast.error('Та сама команда'); return; }
+    if (genderMismatch && !window.confirm('Увага: у дітей різна стать (дівчинка ⇄ хлопець). Точно виконати заміну?')) return;
     setLoading(true);
     const teamA = swapA.team_number, teamB = swapB.team_number;
-    const { error } = await supabase.rpc('execute_child_swap', {
-      p_child_1_id: swapA.id,
-      p_child_2_id: swapB.id,
-      p_performed_by: `Заміна · #${myTeam}`,
+    const { data, error } = await (supabase as any).rpc('request_child_move', {
+      p_kind: 'swap', p_child_1_id: swapA.id, p_child_2_id: swapB.id,
+      p_target_team: null, p_performed_by: `Заміна · #${myTeam}`,
     });
     if (error) { toast.error('Помилка заміни'); setLoading(false); return; }
-    toast.success('Заміна виконана');
-    pushIsland(`${swapA.full_name} (#${teamA}) ⇄ ${swapB.full_name} (#${teamB})`, 'success', 'Заміна');
+    if (data?.status === 'done') {
+      toast.success('Заміна виконана');
+      pushIsland(`${swapA.full_name} (#${teamA}) ⇄ ${swapB.full_name} (#${teamB})`, 'success', 'Заміна');
+    } else toast.info(data?.status === 'already_pending' ? 'Запит уже чекає підтвердження' : 'Надіслано адміну на підтвердження');
     setSwapA(null); setSwapB(null); setSwapQuery(''); setSwapMatches([]);
     setLoading(false);
   };
