@@ -25,7 +25,7 @@ export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
     setError(false);
     if (!shift) return () => { active = false; };
     setLoading(true);
-    supabase.from('children').select('id', { count: 'exact', head: true }).eq('shift_id', shift.id).then(({ count, error: requestError }) => {
+    supabase.from('children').select('id', { count: 'exact', head: true }).eq('shift_id', shift.id).is('deleted_at', null).then(({ count, error: requestError }) => {
       if (!active) return;
       setLoading(false);
       if (requestError) { setError(true); return; }

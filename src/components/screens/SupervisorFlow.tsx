@@ -491,6 +491,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
                 editChild={editChild}
                 onEditChildChange={(c) => { if (tourOpen && !c) return; setEditChild(c); }}
                 onFirstTeamChild={setFirstTeamChild}
+                shiftId={cabinetMode ? (getSessionMeta()?.shiftId ?? null) : null}
               />
             </TabsContent>
 

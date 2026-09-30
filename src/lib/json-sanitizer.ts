@@ -202,6 +202,7 @@ function repairRelaxedJson(str: string): string {
   let out = str;
 
   // Заміна одинарних лапок на подвійні: 'text' -> "text"
+  out = out.replace(/(?<=\p{L})['’](?=\p{L})/gu, 'ʼ');
   out = out.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, '"$1"');
 
   // Лапкування ключів без лапок: { time: "10:00", event_name: "Обід" } -> { "time": "10:00", "event_name": "Обід" }

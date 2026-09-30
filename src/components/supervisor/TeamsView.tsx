@@ -22,6 +22,8 @@ interface Props {
   onEditChildChange?: (child: Child | null) => void;
   /** Reports the first child of the supervisor's own team (tour demo target). */
   onFirstTeamChild?: (child: Child | null) => void;
+  /** Shift explicitly chosen in the staff cabinet; overrides date-based pick. */
+  shiftId?: string | null;
 }
 
 type SortMode = 'default' | 'iron_desc' | 'iron_asc' | 'has_notes' | 'present_first';
@@ -41,6 +43,7 @@ const TeamsView = ({
   editChild: editChildProp,
   onEditChildChange,
   onFirstTeamChild,
+  shiftId: forcedShiftId = null,
 }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +95,8 @@ const TeamsView = ({
         .select('*')
         .order('start_date', { ascending: false });
       const { pickActiveShift } = await import('@/lib/shift');
-      const active = pickActiveShift((shifts || []) as any);
+      const forced = forcedShiftId ? (shifts || []).find((s: any) => s.id === forcedShiftId && !s.deleted_at) : null;
+      const active = forced ?? pickActiveShift((shifts || []) as any);
       const activeShiftId = active?.id ?? null;
 
       let query = supabase.from('children').select('*').order('team_number').order('row_number');
