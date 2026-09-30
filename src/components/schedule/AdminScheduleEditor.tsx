@@ -269,28 +269,28 @@ const AdminScheduleEditor = () => {
     }));
 
   return (
-    <Card className="p-4 bg-gradient-card space-y-3">
-      <div className="flex items-center gap-2">
+    <Card className="min-w-0 space-y-3 overflow-hidden bg-gradient-card p-3 sm:p-4">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:flex">
         <CalendarDays className="w-4 h-4 text-primary" strokeWidth={1.75} />
         <h3 className="font-bold uppercase text-sm tracking-wide">Редактор дня</h3>
-        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9 w-[150px] text-xs ml-auto" />
+        <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="col-span-2 h-10 w-full text-xs sm:col-span-1 sm:ml-auto sm:w-[150px]" />
       </div>
 
       {/* Date navigation */}
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" className="h-9 flex-1 text-[11px]" onClick={() => setDate(shiftISODate(date, -1))}>
-          <ChevronLeft className="w-4 h-4 mr-1" /> Попередній
+      <div className="grid grid-cols-3 items-center gap-1.5 sm:gap-2">
+        <Button aria-label="Попередній день" variant="outline" size="sm" className="h-10 min-w-0 px-1 text-[10px] sm:text-[11px]" onClick={() => setDate(shiftISODate(date, -1))}>
+          <ChevronLeft className="size-4 shrink-0 sm:mr-1" /> <span className="hidden min-[390px]:inline">Попередній</span>
         </Button>
         <Button
           size="sm"
           variant={date === todayISO() ? 'default' : 'secondary'}
-          className="h-9 flex-1 text-[11px] font-bold uppercase"
+          className="h-10 min-w-0 px-1 text-[10px] font-bold uppercase sm:text-[11px]"
           onClick={() => setDate(todayISO())}
         >
-          <CalendarDays className="w-4 h-4 mr-1" /> Сьогодні
+          <CalendarDays className="size-4 shrink-0 min-[390px]:mr-1" /> Сьогодні
         </Button>
-        <Button variant="outline" size="sm" className="h-9 flex-1 text-[11px]" onClick={() => setDate(shiftISODate(date, 1))}>
-          Наступний <ChevronRight className="w-4 h-4 ml-1" />
+        <Button aria-label="Наступний день" variant="outline" size="sm" className="h-10 min-w-0 px-1 text-[10px] sm:text-[11px]" onClick={() => setDate(shiftISODate(date, 1))}>
+          <span className="hidden min-[390px]:inline">Наступний</span> <ChevronRight className="size-4 shrink-0 min-[390px]:ml-1" />
         </Button>
       </div>
 
@@ -409,7 +409,7 @@ const AdminScheduleEditor = () => {
 
       {/* Full-day wipe confirmation */}
       <Dialog open={confirmWipe} onOpenChange={setConfirmWipe}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-sm overflow-y-auto">
           <DialogHeader><DialogTitle>Видалити розклад на {humanDate(date)}?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
             Буде видалено всі події цього дня ({sorted.length} шт) та всі пакети розкладу ({schedules.length} шт).
@@ -440,8 +440,8 @@ const AdminScheduleEditor = () => {
                 </Label>
                 <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Велика зала" className="h-10 text-sm" />
               </div>
-              <div className="flex gap-2">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="min-w-0 space-y-1.5">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Початок</Label>
                   <Input
                     value={form.time_start}
@@ -451,17 +451,17 @@ const AdminScheduleEditor = () => {
                       setForm((p) => p && { ...p, time_start: start ?? p.time_start, time_end: end ?? p.time_end });
                     }}
                     placeholder="18:00 або 18.00"
-                    className="h-10 w-[96px] text-sm tabular-nums"
+                    className="h-10 w-full min-w-0 text-sm tabular-nums"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1.5">
                   <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Кінець</Label>
                   <Input
                     value={form.time_end}
                     onChange={(e) => setForm({ ...form, time_end: e.target.value })}
                     onBlur={(e) => setForm((p) => p && { ...p, time_end: normalizeTime(e.target.value) ?? p.time_end })}
                     placeholder="19:00 або 19.00"
-                    className="h-10 w-[96px] text-sm tabular-nums"
+                    className="h-10 w-full min-w-0 text-sm tabular-nums"
                   />
                 </div>
               </div>
