@@ -1,0 +1,2 @@
+- Staff profile photos are stored as compressed ≤85KB data URLs in staff_members.avatar_url (no storage bucket) — tiny, no extra access rules needed.
+- Staff light theme: token override via .staff-light class; the team panel (hardcoded dark colours) uses html.staff-invert filter — avoids rewriting every panel screen.
