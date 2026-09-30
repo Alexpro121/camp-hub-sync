@@ -260,6 +260,7 @@ const AdminFlow = ({ onBack }: Props) => {
 const ShiftsTab = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [formOpen, setFormOpen] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<ShiftType>('long');
   const [start, setStart] = useState('');
@@ -493,11 +494,16 @@ const ShiftsTab = () => {
         </Button>
       </div>
       <div className="space-y-2">
-        {shifts.length === 0 ? (
+        {shifts.filter(s => !s.deleted_at).length === 0 ? (
           <p className="py-5 text-sm text-muted-foreground">Немає зареєстрованих змін</p>
-        ) : shifts.filter(s => !s.deleted_at).map(s => (
+        ) : shifts.filter(s => !s.deleted_at && (showPast || shiftStatus(s) !== 'finished')).map(s => (
           <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} />
         ))}
+        {shifts.some(s => !s.deleted_at && shiftStatus(s) === 'finished') && (
+          <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => setShowPast(v => !v)}>
+            <ChevronDown className={showPast ? 'rotate-180' : ''} /> {showPast ? 'Сховати минулі' : `Минулі зміни (${shifts.filter(s => !s.deleted_at && shiftStatus(s) === 'finished').length})`}
+          </Button>
+        )}
       </div>
       {formOpen && (
       <Card className="p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-3xl space-y-3 shadow-xl">
