@@ -91,6 +91,7 @@ const AdminNotificationsView = lazyRetry(() => import('@/components/admin/AdminN
 const ImportPreviewDialog = lazyRetry(() => import('@/components/admin/ImportPreviewDialog'));
 const MultiFileShiftModal = lazyRetry(() => import('@/components/admin/MultiFileShiftModal'));
 const TeamTagInput = lazyRetry(() => import('@/components/admin/TeamTagInput'));
+const ShiftEditDialog = lazyRetry(() => import('@/components/admin/ShiftEditDialog'));
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {
@@ -539,7 +540,7 @@ const ShiftsTab = () => {
         {shifts.filter(s => !s.deleted_at).length === 0 ? (
           <p className="py-5 text-sm text-muted-foreground">Немає зареєстрованих змін</p>
         ) : shifts.filter(s => !s.deleted_at && (showPast || shiftStatus(s) !== 'finished')).map(s => (
-          <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} />
+          <ShiftRow key={`${s.id}-${s.updated_at}`} shift={s} onDelete={() => remove(s.id)} onChanged={load} />
         ))}
         {shifts.some(s => !s.deleted_at && shiftStatus(s) === 'finished') && (
           <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => setShowPast(v => !v)}>
@@ -706,9 +707,10 @@ const ShiftsTab = () => {
   );
 };
 
-const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }) => {
+const ShiftRow = ({ shift: s, onDelete, onChanged }: { shift: Shift; onDelete: () => void; onChanged: () => void }) => {
   const [count, setCount] = useState<number | null>(null);
   const [copyingInvite, setCopyingInvite] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   useEffect(() => {
     (async () => {
       const { count: c } = await supabase.from('children').select('id', { count: 'exact', head: true }).eq('shift_id', s.id);
@@ -758,10 +760,14 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
         </p>
       </div>
 
-      <div className="col-span-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-white/10 pt-3">
-        <Button variant="secondary" className="min-w-0 justify-center" disabled={copyingInvite} onClick={copyStaffInvite}>
-          {copyingInvite ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />} Додати супровід
+      <div className="col-span-3 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2 border-t border-white/10 pt-3">
+        <Button variant="secondary" className="min-w-0 justify-center" onClick={() => setEditOpen(true)}>
+          <Wand2 className="size-4" /> Редагувати
         </Button>
+        <Button variant="secondary" className="min-w-0 justify-center" disabled={copyingInvite} onClick={copyStaffInvite}>
+          {copyingInvite ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />} <span className="truncate">Супровід</span>
+        </Button>
+        {editOpen && <Suspense fallback={null}><ShiftEditDialog shift={s} open={editOpen} onOpenChange={setEditOpen} onSaved={onChanged} /></Suspense>}
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-400">
