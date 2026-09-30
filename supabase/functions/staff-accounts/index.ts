@@ -39,11 +39,11 @@ Deno.serve(async (req) => {
     if (action === 'login') {
       const login = normLogin(body?.login);
       const password = typeof body?.password === 'string' ? body.password : '';
-      if (!login || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 401);
+      if (!login || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 200);
 
       const rl = clientKey(req, `staffacc:${login}`);
       const before = peek(rl);
-      if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
+      if (before.hits > 10) return json({ error: 'too_many_attempts' }, 200);
       if (before.hits >= 3) await sleep(1000 * Math.min(before.hits, 5));
 
       const { data: member } = await svc.from('staff_members').select('user_id, full_name, is_active').eq('login', login).maybeSingle();
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
         : { data: null as any };
       if (!signIn?.session) {
         recordFailure(rl, { slowAfter: 3 });
-        return json({ error: 'invalid_credentials' }, 401);
+        return json({ error: 'invalid_credentials' }, 200);
       }
       resetFailures(rl);
       // Без прив'язки до команди, доки супровід не обере зміну в кабінеті.
