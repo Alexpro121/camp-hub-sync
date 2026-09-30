@@ -60,7 +60,7 @@ const AdminNotificationsView = () => {
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
-      .in('type', ['transfer', 'swap'])
+      .in('type', ['transfer', 'swap', 'approval'])
       .order('created_at', { ascending: false })
       .limit(200);
     if (!error) setItems((data || []) as AppNotification[]);

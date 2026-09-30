@@ -113,12 +113,12 @@ export function applyTeamMapping(
   }
 
   return rows.map((r) => {
-    let finalTeam = r.team_number || 0;
+    let finalTeam = Number(r.team_number) || 0;
 
     if (customMap && customMap[finalTeam] !== undefined) {
-      finalTeam = customMap[finalTeam];
-    } else if (offset > 0) {
-      finalTeam = finalTeam + offset;
+      finalTeam = Number(customMap[finalTeam]) || 0;
+    } else if (Number(offset) > 0) {
+      finalTeam = finalTeam + Number(offset);
     }
 
     return {

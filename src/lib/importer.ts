@@ -211,7 +211,13 @@ export function extractLineDetails(raw: string): {
 
   // Витягуємо примітку: " - ГОТЕЛЬ", "(ГОТЕЛЬ)", "[Київ]"
   const noteMatch = s.match(/[\s\t]+[-–—]\s+([^\-]+)$/) || s.match(/[\s\t]*\(([^\)]+)\)$/) || s.match(/[\s\t]*\[([^\]]+)\]$/);
-  if (noteMatch && noteMatch[1]) {
+  // Подвійне прізвище "Шевченко - Бондаренко Олена" — не примітка
+  const dashTail = noteMatch && /^[\s\t]+[-–—]/.test(noteMatch[0]) ? noteMatch[1].trim() : '';
+  const isNamePart = !!dashTail && /^[А-ЯІЇЄҐA-Z][а-яіїєґʼ'’a-z]+(\s+[А-ЯІЇЄҐA-Z][а-яіїєґʼ'’a-z]+){0,2}$/.test(dashTail)
+    && !/^[А-ЯІЇЄҐA-Z\s]+$/.test(dashTail) && isLikelyPersonName(`${s.split(/\s+[-–—]\s+/)[0]} ${dashTail}`);
+  if (isNamePart) {
+    s = s.replace(/\s+[-–—]\s+(?=[^-–—]*$)/, '-');
+  } else if (noteMatch && noteMatch[1]) {
     note = noteMatch[1].trim();
     s = s.slice(0, s.lastIndexOf(noteMatch[0])).trim();
   }
