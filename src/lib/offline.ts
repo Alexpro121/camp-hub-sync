@@ -11,6 +11,8 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
 import { networkPulse } from '@/lib/networkEngine';
+import { runExclusive } from '@/lib/syncLock';
+import { outbox } from '@/lib/outboxEngine';
 import {
   acquireFlushLease,
   backoffDelay,
@@ -141,7 +143,15 @@ export function onQueueChange(fn: QueueListener) {
   return () => listeners.delete(fn);
 }
 
+/** Новіша зміна з картки дитини перекриває старішу незавершену дію з переклички. */
+function supersedeOutbox(action: Omit<QueuedAction, 'id' | 'created_at'>) {
+  if (action.table !== 'children' || action.op !== 'update' || !action.matchId) return;
+  if ('supervisor_notes' in action.values) outbox.dropPending('NOTE', action.matchId);
+  if ('is_present' in action.values) outbox.dropPending('PRESENCE', action.matchId);
+}
+
 function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {
+  supersedeOutbox(action);
   const q = [...cache];
 
   const idx = q.findIndex(
@@ -251,8 +261,9 @@ export async function queuedWrite(
     idempotencyKey: action.op === 'rpc' ? (action.idempotencyKey ?? safeUUID()) : action.idempotencyKey,
   };
 
+  supersedeOutbox(prepared);
   try {
-    await run({ ...prepared, id: 'live', created_at: Date.now() });
+    await runExclusive(() => run({ ...prepared, id: 'live', created_at: Date.now() }));
     return { queued: false };
   } catch (error) {
     if (isPermanentError(error)) {
@@ -285,7 +296,12 @@ export async function queuedIronDollarChange(opts: {
   });
 }
 
-export async function flushQueue(): Promise<{ done: number; failed: number }> {
+export function flushQueue(): Promise<{ done: number; failed: number }> {
+  if (syncing) return Promise.resolve({ done: 0, failed: cache.length });
+  return runExclusive(flushQueueInner);
+}
+
+async function flushQueueInner(): Promise<{ done: number; failed: number }> {
   await ready;
 
   if (syncing || isDeviceOffline() || !cache.length) {

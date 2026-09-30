@@ -30,8 +30,8 @@ export function useOfflineSync(): OfflineSyncState {
 
     const sync = () => {
       if (isOffline()) return;
-      void kickFlush().catch(() => {});
-      void outbox.kick().catch(() => {});
+      // Послідовно: спершу дії з картки дитини, потім перекличка (спільний замок у syncLock)
+      void kickFlush().catch(() => {}).then(() => outbox.kick()).catch(() => {});
     };
 
     const goOnline = () => { setOnline(true); sync(); };

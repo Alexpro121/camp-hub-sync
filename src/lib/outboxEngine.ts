@@ -14,6 +14,7 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
 import { networkPulse } from '@/lib/networkEngine';
+import { runExclusive } from '@/lib/syncLock';
 import {
   acquireFlushLease,
   backoffDelay,
@@ -322,7 +323,19 @@ class OutboxManager {
     return this.flush();
   }
 
-  async flush(): Promise<{ done: number; failed: number }> {
+  /** Прибирає ще не відправлену дію, яку перекрила новіша зміна з іншої черги. */
+  dropPending(type: OutboxType, entityId: string) {
+    const before = this.queue.length;
+    this.queue = this.queue.filter((i) => !(i.type === type && i.entityId === entityId));
+    if (this.queue.length !== before) void this.persist();
+  }
+
+  flush(): Promise<{ done: number; failed: number }> {
+    if (this.syncing) return Promise.resolve({ done: 0, failed: this.queue.length });
+    return runExclusive(() => this.flushInner());
+  }
+
+  private async flushInner(): Promise<{ done: number; failed: number }> {
     await this.ready;
     if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
     // Відправляємо, доки пристрій не втратив мережу за сигналом ОС:
