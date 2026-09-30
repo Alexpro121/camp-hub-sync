@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { useHaptics } from '@/hooks/useHaptics';
 import { TourTouchRipple, TourDemoStage, type TourDemo } from './TourDemoOverlays';
 
