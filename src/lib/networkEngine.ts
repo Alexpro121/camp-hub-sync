@@ -169,7 +169,7 @@ export class NetworkPulse {
 
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health?_p=${Date.now()}`, {
-        method: 'HEAD',
+        method: 'GET',
         cache: 'no-store',
         redirect: 'manual',
         headers: { Accept: '*/*', apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
@@ -195,7 +195,8 @@ export class NetworkPulse {
         });
       }
 
-      if (res.ok || res.status === 304 || res.status === 204) {
+      // Будь-яка відповідь нашого сервера (навіть 4xx) означає, що інтернет є.
+      if (res.status > 0 && res.status < 500) {
         this.consecutiveSuccesses++;
         this.consecutiveFailures = 0;
 
