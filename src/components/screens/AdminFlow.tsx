@@ -86,7 +86,6 @@ const TrainTab = lazy(() => import('@/components/admin/TrainTab'));
 const TalentAdmin = lazy(() => import('@/components/talent/TalentAdmin'));
 const AdminStaffAccounts = lazy(() => import('@/components/admin/AdminStaffAccounts'));
 const AdminNotificationsView = lazy(() => import('@/components/admin/AdminNotificationsView'));
-const AdminAlumniBroadcast = lazy(() => import('@/components/alumni/AdminAlumniBroadcast'));
 const ImportPreviewDialog = lazy(() => import('@/components/admin/ImportPreviewDialog'));
 const MultiFileShiftModal = lazy(() => import('@/components/admin/MultiFileShiftModal'));
 const TeamTagInput = lazy(() => import('@/components/admin/TeamTagInput'));
@@ -188,7 +187,7 @@ const AdminFlow = ({ onBack }: Props) => {
               variant="ghost"
               onClick={() => setTab(value)}
               aria-current={active ? 'page' : undefined}
-              className={`h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] font-medium ${active ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+              className={`h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] font-medium transition-[color,background-color,transform] duration-150 active:scale-95 motion-reduce:transition-none ${active ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
             >
               <Icon className="size-5 shrink-0" />
               <span className="block w-full truncate px-0.5">{label}</span>
@@ -201,7 +200,7 @@ const AdminFlow = ({ onBack }: Props) => {
               type="button"
               variant="ghost"
               aria-label="Інші розділи"
-              className={`relative h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] ${moreTabs.some(item => item.value === tab) ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+              className={`relative h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] transition-[color,background-color,transform] duration-150 active:scale-95 motion-reduce:transition-none ${moreTabs.some(item => item.value === tab) ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
             >
               <Menu className="size-5 shrink-0" />
               <span className="block w-full truncate px-0.5">{moreTabs.find(item => item.value === tab)?.label ?? 'Ще'}</span>
@@ -270,17 +269,17 @@ const AdminFlow = ({ onBack }: Props) => {
             </TabsList>
           </div>
 
-          <TabsContent value="overview" className="mt-0 min-w-0"><AdminOverview onNavigate={setTab} unread={unreadTransfers} /></TabsContent>
+           <TabsContent value="overview" className="mt-0 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminOverview onNavigate={setTab} unread={unreadTransfers} /></TabsContent>
           <Suspense fallback={<div className="mt-5 space-y-3" aria-label="Завантаження розділу"><div className="h-16 rounded-md bg-muted animate-pulse" /><div className="h-40 rounded-md bg-muted animate-pulse" /></div>}>
-          <TabsContent value="shifts" className="mt-3 min-w-0 animate-fade-in"><ShiftsTab /></TabsContent>
-          <TabsContent value="schedule" className="mt-3 min-w-0 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
-          <TabsContent value="talent" className="mt-3 min-w-0 animate-fade-in"><TalentAdmin /></TabsContent>
-          <TabsContent value="notifications" className="mt-3 min-w-0 space-y-3 animate-fade-in"><AdminAlumniBroadcast /><AdminNotificationsView /></TabsContent>
-          {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 min-w-0 animate-fade-in"><TrainTab /></TabsContent>)}
-          {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 min-w-0 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
-          <TabsContent value="stats" className="mt-3 min-w-0 animate-fade-in"><StatsTab /></TabsContent>
-          <TabsContent value="staff" className="mt-3 min-w-0 animate-fade-in"><AdminStaffAccounts /></TabsContent>
-          <TabsContent value="data" className="mt-3 min-w-0 animate-fade-in"><DataTab /></TabsContent>
+           <TabsContent value="shifts" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><ShiftsTab /></TabsContent>
+           <TabsContent value="schedule" className="mt-3 min-w-0 space-y-4 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminScheduleEditor /></TabsContent>
+           <TabsContent value="talent" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TalentAdmin /></TabsContent>
+           <TabsContent value="notifications" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminNotificationsView /></TabsContent>
+           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TrainTab /></TabsContent>)}
+           {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminPrintQRCodes /></TabsContent>)}
+           <TabsContent value="stats" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><StatsTab /></TabsContent>
+           <TabsContent value="staff" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminStaffAccounts /></TabsContent>
+           <TabsContent value="data" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><DataTab /></TabsContent>
           </Suspense>
         </Tabs>
         {mobileNavigation}
@@ -1180,13 +1179,21 @@ const StatsTab = () => {
   };
 
   useEffect(() => {
-    load();
+    void load();
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => { void load(); }, 300);
+    };
     const ch = supabase.channel('stats-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transfers' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transfers' }, scheduleReload)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      void supabase.removeChannel(ch);
+    };
   }, []);
 
   if (loading) {
