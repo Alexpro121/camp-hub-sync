@@ -49,13 +49,14 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
   // Після вводу ПІБ тихо перевіряємо, чи є в дитини номер у списку
   useEffect(() => {
     const name = fullName.trim();
-    if (name.split(/\s+/).filter(Boolean).length < 2) { setHasPhone(null); return; }
     const seq = ++checkSeq.current;
+    setHasPhone(null);
+    if (name.split(/\s+/).filter(Boolean).length < 2) return;
     const t = setTimeout(() => {
       supabase.functions.invoke('parent-login', { body: { action: 'check', fullName: name } })
         .then(({ data }) => { if (seq === checkSeq.current) setHasPhone(!!data?.has_phone); })
         .catch(() => {});
-    }, 500);
+    }, 800);
     return () => clearTimeout(t);
   }, [fullName]);
 
@@ -120,7 +121,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
               </label>
             )}
             {error && <p className="text-sm text-red-400 leading-snug">{error}</p>}
-            <button type="submit" disabled={loading || !fullName.trim() || (!noPhone && !phone.trim())}
+            <button type="submit" disabled={loading || !fullName.trim() || (hasPhone === null && !phone.trim()) || (!noPhone && !phone.trim())}
               className="h-12 mt-1 rounded-2xl bg-[#FA5A15] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : noPhone ? (
                 <><ShieldCheck className="w-4 h-4" /> Підтверджую, що я батьки дитини</>

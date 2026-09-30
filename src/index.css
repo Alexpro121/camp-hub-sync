@@ -879,7 +879,7 @@
 .tour-confetti { animation: tourConfetti 1.6s ease-in infinite; will-change: transform, opacity; }
 
 /* ============ Staff light theme ============ */
-.staff-light {
+.staff-light, #supervisor-flow-root.theme-light {
   --background: 220 20% 97%;
   --foreground: 222 40% 12%;
   --card: 0 0% 100%;
