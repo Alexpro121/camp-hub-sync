@@ -74,13 +74,13 @@ const StaffRegister = () => {
     { ok: f.full_name.trim().split(/\s+/).length >= 2, label: 'Прізвище та імʼя' },
     { ok: f.phone.replace(/\D/g, '').length >= 9, label: 'Телефон' },
     { ok: /^[a-z0-9._-]{3,40}$/.test(f.login.trim().toLowerCase()), label: 'Логін латиницею' },
-    { ok: f.password.length >= 8, label: 'Пароль від 8 символів' },
+    { ok: f.password.length >= 6, label: 'Пароль від 6 символів' },
   ];
   const ready = checks.every((c) => c.ok);
 
   // Неблокуюча перевірка надійності пароля: лише попередження, реєстрація не блокується.
   const pw = f.password;
-  const pwWeak = pw.length > 0 && pw.length >= 8 && (() => {
+  const pwWeak = pw.length >= 6 && (() => {
     const lower = pw.toLowerCase();
     const hasDigit = /\d/.test(pw);
     const hasUpper = /[A-ZА-ЯІЇЄҐ]/.test(pw);
@@ -88,7 +88,7 @@ const StaffRegister = () => {
     const common = ['password', 'qwerty', '12345678', '11111111', 'abcdefgh', 'iloveyou'].some((c) => lower.includes(c));
     const onlyOneKind = !(hasDigit && hasLetter);
     const sequential = /(?:0123|1234|2345|3456|4567|5678|6789)/.test(pw);
-    return common || onlyOneKind || sequential || (!hasUpper && !hasDigit);
+    return pw.length < 8 || common || onlyOneKind || sequential;
   })();
 
   const submit = async () => {
