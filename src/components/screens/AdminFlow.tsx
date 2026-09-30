@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
 import { 
   ArrowLeft, 
   Upload, 
@@ -27,7 +27,9 @@ import {
   RefreshCw,
   KeyRound,
   Bell,
-  Check
+  Check,
+  LayoutDashboard,
+  Menu
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -38,6 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { clearSavedSession, saveSession } from '@/lib/session';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import type { Child, Shift, ShiftType } from '@/types/app';
@@ -70,20 +73,23 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
-import AdminPrintQRCodes from '@/components/fair/AdminPrintQRCodes';
-import AdminScheduleEditor from '@/components/schedule/AdminScheduleEditor';
-import TrainTab from '@/components/admin/TrainTab';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { backfillGenders } from '@/lib/gender';
-import TalentAdmin from '@/components/talent/TalentAdmin';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
-import AdminStaffAccounts from '@/components/admin/AdminStaffAccounts';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
-import AdminNotificationsView, { getSeenAt } from '@/components/admin/AdminNotificationsView';
-import AdminAlumniBroadcast from '@/components/alumni/AdminAlumniBroadcast';
+import { getSeenAt } from '@/components/admin/AdminNotificationsView';
+import AdminOverview from '@/components/admin/AdminOverview';
+
+const AdminPrintQRCodes = lazy(() => import('@/components/fair/AdminPrintQRCodes'));
+const AdminScheduleEditor = lazy(() => import('@/components/schedule/AdminScheduleEditor'));
+const TrainTab = lazy(() => import('@/components/admin/TrainTab'));
+const TalentAdmin = lazy(() => import('@/components/talent/TalentAdmin'));
+const AdminStaffAccounts = lazy(() => import('@/components/admin/AdminStaffAccounts'));
+const AdminNotificationsView = lazy(() => import('@/components/admin/AdminNotificationsView'));
+const AdminAlumniBroadcast = lazy(() => import('@/components/alumni/AdminAlumniBroadcast'));
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {
@@ -151,6 +157,21 @@ const AdminFlow = ({ onBack }: Props) => {
   useEffect(() => { void backfillGenders(); }, []);
   useEffect(() => { saveSession('admin'); }, []);
   const unreadTransfers = useUnreadTransfers();
+  const [tab, setTab] = useState('overview');
+  const primaryTabs = [
+    { value: 'overview', label: 'Огляд', icon: LayoutDashboard },
+    { value: 'shifts', label: 'Зміни', icon: Calendar },
+    { value: 'schedule', label: 'Розклад', icon: CalendarDays },
+    { value: 'staff', label: 'Супровід', icon: Users },
+  ];
+  const moreTabs = [
+    { value: 'talent', label: 'Таланти', icon: Mic2 },
+    { value: 'notifications', label: 'Сповіщення', icon: Bell },
+    ...(TRAIN_FEATURE_ENABLED ? [{ value: 'coupes', label: 'Потяг', icon: Train }] : []),
+    ...(FAIR_FEATURE_ENABLED ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag }] : []),
+    { value: 'stats', label: 'Статистика', icon: BarChart3 },
+    { value: 'data', label: 'База', icon: Database },
+  ];
 
 
   const handleExit = async () => {
@@ -161,20 +182,19 @@ const AdminFlow = ({ onBack }: Props) => {
 
   return (
     <ActiveShiftProvider>
-      <div className="min-h-[100dvh] max-w-3xl mx-auto pb-24 safe-bottom select-none bg-[#07090E] text-slate-100">
-        <header className="px-4 py-3 safe-top border-b border-white/10 bg-[#0F1523]/80 backdrop-blur-xl sticky top-0 z-30">
+      <div className="min-h-[100dvh] max-w-5xl mx-auto pb-28 sm:pb-16 select-none bg-background text-foreground">
+        <header className="px-4 py-3 safe-top border-b border-border bg-background/95 backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center justify-between">
-            <button 
+            <Button variant="ghost"
               onClick={handleExit} 
-              className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors min-h-[40px] pr-2"
+              className="gap-2 px-2 text-sm text-muted-foreground"
             >
-              <ArrowLeft className="w-4 h-4 text-[#FA5A15]" /> 
+              <ArrowLeft className="w-4 h-4 text-primary" /> 
               <span>Вийти</span>
-            </button>
+            </Button>
             <div className="flex items-center gap-2">
-              <span className="text-xl">👑</span>
-              <p className="text-base sm:text-lg font-black uppercase text-[#FA5A15] tracking-wide">
-                Штаб Адміністратора
+              <p className="text-sm sm:text-lg font-bold text-foreground">
+                Адмін-панель
               </p>
             </div>
           </div>
@@ -183,45 +203,40 @@ const AdminFlow = ({ onBack }: Props) => {
           </div>
         </header>
 
-        <Tabs defaultValue="shifts" className="w-full px-3 pt-2">
-          <div className="sticky top-[108px] z-20 -mx-3 px-3 py-2 bg-[#07090E]/95 overflow-x-auto no-scrollbar overscroll-x-contain">
-            <TabsList className="flex h-auto w-max min-w-full p-1 gap-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md">
-              <TabsTrigger value="shifts" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <Calendar className="w-4 h-4" /> <span>Зміни</span>
-              </TabsTrigger>
-              <TabsTrigger value="schedule" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <CalendarDays className="w-4 h-4" /> <span>Розклад</span>
-              </TabsTrigger>
-              <TabsTrigger value="talent" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <Mic2 className="w-4 h-4" /> <span>Таланти</span>
-              </TabsTrigger>
-              <TabsTrigger value="notifications" className="relative flex-col gap-0.5 min-w-[90px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <Bell className="w-4 h-4" /> <span>Сповіщення</span>
-                {unreadTransfers > 0 && (
-                  <span className="absolute top-1 right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#FA5A15] text-white text-[9px] font-black font-mono tabular-nums flex items-center justify-center">
-                    {unreadTransfers > 99 ? '99+' : unreadTransfers}
-                  </span>
-                )}
-              </TabsTrigger>
-              {TRAIN_FEATURE_ENABLED && (
-                <TabsTrigger value="coupes" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                  <Train className="w-4 h-4" /> <span>Потяг</span>
+        <Tabs value={tab} onValueChange={setTab} className="w-full px-4 pt-2">
+          <div className="hidden sm:block sticky top-[108px] z-20 -mx-4 px-4 py-2 bg-background/95 overflow-x-auto no-scrollbar">
+            <TabsList className="flex h-auto w-max min-w-full p-1 gap-1 bg-muted border border-border rounded-md">
+              {[...primaryTabs, ...moreTabs].map(({ value, label, icon: Icon }) => (
+                <TabsTrigger key={value} value={value} className="relative gap-1.5 min-h-11 flex-1 text-xs font-semibold">
+                  <Icon className="w-4 h-4" /> <span>{label}</span>
+                  {value === 'notifications' && unreadTransfers > 0 && <span className="rounded-full bg-primary text-primary-foreground px-1 text-[10px]">{unreadTransfers > 99 ? '99+' : unreadTransfers}</span>}
                 </TabsTrigger>
-              )}
-              {FAIR_FEATURE_ENABLED && (
-                <TabsTrigger value="fair" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                  <ShoppingBag className="w-4 h-4" /> <span>Ярмарок</span>
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="stats" className="flex-col gap-0.5 min-w-[80px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <BarChart3 className="w-4 h-4" /> <span>Статистика</span>
-              </TabsTrigger>
-              <TabsTrigger value="data" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
-                <Database className="w-4 h-4" /> <span>База</span>
-              </TabsTrigger>
+              ))}
             </TabsList>
           </div>
 
+          <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]" aria-label="Розділи адміністратора">
+            <TabsList className="grid grid-cols-5 h-16 w-full rounded-none bg-transparent p-1">
+              {primaryTabs.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger key={value} value={value} className="flex-col gap-1 min-w-0 h-14 px-0 text-[10px] font-medium data-[state=active]:text-primary data-[state=active]:bg-muted">
+                  <Icon className="w-5 h-5" /><span className="truncate max-w-full">{label}</span>
+                </TabsTrigger>
+              ))}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" aria-label="Інші розділи" className={`flex flex-col gap-1 min-w-0 h-14 px-0 text-[10px] ${moreTabs.some(item => item.value === tab) ? 'text-primary bg-muted' : 'text-muted-foreground'}`}>
+                    <Menu className="w-5 h-5" /><span>{moreTabs.find(item => item.value === tab)?.label ?? 'Ще'}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" className="w-52 mb-2">
+                  {moreTabs.map(({ value, label, icon: Icon }) => <DropdownMenuItem key={value} onSelect={() => setTab(value)} className="min-h-11 gap-3"><Icon className="w-4 h-4" />{label}{value === 'notifications' && unreadTransfers > 0 && <span className="ml-auto text-primary">{unreadTransfers}</span>}</DropdownMenuItem>)}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TabsList>
+          </nav>
+
+          <TabsContent value="overview" className="mt-0"><AdminOverview onNavigate={setTab} unread={unreadTransfers} /></TabsContent>
+          <Suspense fallback={<div className="mt-5 space-y-3" aria-label="Завантаження розділу"><div className="h-16 rounded-md bg-muted animate-pulse" /><div className="h-40 rounded-md bg-muted animate-pulse" /></div>}>
           <TabsContent value="shifts" className="mt-3 animate-fade-in"><ShiftsTab /></TabsContent>
           <TabsContent value="schedule" className="mt-3 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
           <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
@@ -229,7 +244,9 @@ const AdminFlow = ({ onBack }: Props) => {
           {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
           {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
           <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
-          <TabsContent value="data" className="mt-3 space-y-3 animate-fade-in"><AdminStaffAccounts /><DataTab /></TabsContent>
+          <TabsContent value="staff" className="mt-3 animate-fade-in"><AdminStaffAccounts /></TabsContent>
+          <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
+          </Suspense>
         </Tabs>
 
       </div>
