@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
       if (password.length < 6 || password.length > 72) return json({ error: 'weak_password' });
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' });
-      // Для посилання конкретної зміни місце витрачається лише після вибору команди.
+      // Місце витрачається під час реєстрації; вибір команди за цим же посиланням уже не списує ще одне.
       {
         const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
           .eq('id', inv.id).eq('uses', inv.uses).select('id');
