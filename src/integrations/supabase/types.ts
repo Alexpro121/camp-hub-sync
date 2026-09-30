@@ -693,6 +693,7 @@ export type Database = {
           label: string | null
           max_uses: number | null
           revoked: boolean
+          shift_id: string | null
           token: string
           uses: number
         }
@@ -705,6 +706,7 @@ export type Database = {
           label?: string | null
           max_uses?: number | null
           revoked?: boolean
+          shift_id?: string | null
           token: string
           uses?: number
         }
@@ -717,10 +719,19 @@ export type Database = {
           label?: string | null
           max_uses?: number | null
           revoked?: boolean
+          shift_id?: string | null
           token?: string
           uses?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "staff_invites_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "shifts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       staff_members: {
         Row: {
