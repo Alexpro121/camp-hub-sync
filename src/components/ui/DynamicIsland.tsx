@@ -100,6 +100,7 @@ const DynamicIsland = () => {
 
   // Жест свайпу вгору (Swipe Up to Dismiss)
   const touchStartY = useRef<number | null>(null);
+  const swipedAt = useRef(0);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY;
@@ -113,6 +114,7 @@ const DynamicIsland = () => {
       // Якщо свайпнули вгору на 24px і більше — закриваємо острівець
       if (diffY > 24) {
         haptics.impact('light');
+        swipedAt.current = Date.now();
         hide();
       }
     }
@@ -180,6 +182,7 @@ const DynamicIsland = () => {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onClick={() => {
+          if (Date.now() - swipedAt.current < 400) return;
           if (state === 'HIDDEN' || state === 'EXCEL_IMPORT' || state === 'LOADING_ONLY') return;
           haptics.impact('light');
           if (state === 'EVENT_ALERT') toggleExpanded();

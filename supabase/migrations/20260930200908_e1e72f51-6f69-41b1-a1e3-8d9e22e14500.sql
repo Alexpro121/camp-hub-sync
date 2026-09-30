@@ -1,0 +1,1 @@
+ALTER FUNCTION private.norm_apos(text) SET search_path = public;

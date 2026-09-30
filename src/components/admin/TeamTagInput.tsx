@@ -16,7 +16,7 @@ const TeamTagInput = ({ value, onChange, placeholder = 'Введи номер і
     const nums = raw
       .split(/[,;\s]+/)
       .flatMap((chunk) => {
-        const range = chunk.match(/^(\d{1,4})[-–](\d{1,4})$/);
+        const range = chunk.match(/^(\d{1,4})[-–—](\d{1,4})$/);
         if (range) {
           const a = parseInt(range[1], 10);
           const b = parseInt(range[2], 10);

@@ -75,10 +75,14 @@ function MainTab({ shift, onSaved }: { shift: Shift; onSaved: () => void }) {
     if (!name.trim() || !start || !end) return toast.error('Заповніть назву та дати');
     if (end < start) return toast.error('Кінець раніше за початок');
     setBusy(true);
-    const next = new Date(start); next.setDate(next.getDate() + 1);
+    // Зберігаємо налаштовані дати дороги/готелю; якщо змінили старт — зсуваємо їх на ту саму кількість днів.
+    const dayMs = 864e5;
+    const diff = Math.round((Date.parse(start) - Date.parse(shift.start_date)) / dayMs);
+    const move = (d?: string | null) => (d ? new Date(Date.parse(d) + diff * dayMs).toISOString().slice(0, 10) : null);
+    const fallbackHotel = new Date(Date.parse(start) + dayMs).toISOString().slice(0, 10);
     const { error } = await supabase.from('shifts').update({
       name: name.trim(), shift_type: type, shift_category: type, start_date: start, end_date: end,
-      travel_start_date: start, hotel_start_date: next.toISOString().slice(0, 10),
+      travel_start_date: move((shift as any).travel_start_date) ?? start, hotel_start_date: move((shift as any).hotel_start_date) ?? fallbackHotel,
       assigned_teams: [...new Set(teams)].sort((a, b) => a - b),
     }).eq('id', shift.id);
     setBusy(false);

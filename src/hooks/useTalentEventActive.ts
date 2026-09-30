@@ -1,3 +1,4 @@
+import { getSessionMeta } from '@/lib/session';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { pushIsland } from '@/lib/islandBus';
@@ -18,11 +19,12 @@ export const useTalentEventActive = () => {
     const load = async (announce = false) => {
       const { data } = await supabase
         .from('talent_events')
-        .select('id, created_at')
+        .select('id, created_at, shift_id')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(20);
       if (!mounted) return;
-      const ev = data?.[0];
+      const myShift = getSessionMeta()?.shiftId ?? null;
+      const ev = (data || []).find((e: any) => !myShift || !e.shift_id || e.shift_id === myShift);
       setActive(!!ev);
       if (ev) {
         const seen = localStorage.getItem(SEEN_KEY);
@@ -45,10 +47,12 @@ export const useTalentEventActive = () => {
     setIsNew(false);
     const { data } = await supabase
       .from('talent_events')
-      .select('id')
+      .select('id, shift_id')
       .order('created_at', { ascending: false })
-      .limit(1);
-    if (data?.[0]) localStorage.setItem(SEEN_KEY, data[0].id);
+      .limit(20);
+    const myShift = getSessionMeta()?.shiftId ?? null;
+    const ev = (data || []).find((e: any) => !myShift || !e.shift_id || e.shift_id === myShift);
+    if (ev) localStorage.setItem(SEEN_KEY, ev.id);
   };
 
   return { active, isNew, markSeen };

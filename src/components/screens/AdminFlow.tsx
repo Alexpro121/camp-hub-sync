@@ -1,3 +1,4 @@
+import { copyText } from '@/lib/clipboard';
 import { lazyRetry } from '@/lib/lazyRetry';
 import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -725,7 +726,7 @@ const ShiftRow = ({ shift: s, onDelete, onChanged }: { shift: Shift; onDelete: (
     setCopyingInvite(true);
     try {
       const { invite } = await staffCall<{ invite: { token: string } }>({ action: 'shift_invite_create', shift_id: s.id });
-      await navigator.clipboard.writeText(`${window.location.origin}/staff/join/${invite.token}`);
+      await copyText(`${window.location.origin}/staff/join/${invite.token}`);
       toast.success('Посилання для супроводу скопійовано');
     } catch (error) {
       toast.error(staffErr(error));
@@ -847,7 +848,7 @@ const DataTab = () => {
     if (!passwords?.length) return;
     const text = passwords.map((p) => `Команда №${p.team}: ${p.password}`).join('\n');
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       haptics.impact('light');
       toast.success('Усі паролі скопійовано в буфер');
     } catch {
@@ -856,7 +857,7 @@ const DataTab = () => {
   };
 
   const copySingle = (p: { team: number; password: string }) => {
-    navigator.clipboard.writeText(p.password);
+    copyText(p.password).catch(() => {});
     haptics.impact('light');
     toast.success(`Пароль для команди №${p.team} скопійовано`);
   };
@@ -975,7 +976,7 @@ const DataTab = () => {
               <Button
                 onClick={() => {
                   const pass = generateMemorablePassword();
-                  navigator.clipboard.writeText(pass);
+                  copyText(pass).catch(() => {});
                   haptics.impact('light');
                   toast.success(`Згенеровано приклад: ${pass} (скопійовано)`);
                 }}
