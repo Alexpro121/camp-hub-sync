@@ -402,14 +402,14 @@ const MemberSheet = ({ member, onClose, asg, shifts, shiftName, run }: {
                 <p className="font-mono font-bold text-foreground">{newPass}</p>
               </button>
             )}
-            <div className="grid grid-cols-3 gap-2">
-              <Button variant="secondary" className="rounded-xl text-xs" onClick={async () => {
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Button variant="secondary" className="min-w-0 text-xs" onClick={async () => {
                 const p = genPass(); if (await run({ action: 'set_password', user_id: member.user_id, password: p }, 'Пароль змінено')) setNewPass(p);
               }}><KeyRound className="w-4 h-4 mr-1" /> Пароль</Button>
-              <Button variant="secondary" className="rounded-xl text-xs" onClick={() => run({ action: 'set_active', user_id: member.user_id, is_active: !member.is_active }, member.is_active ? 'Вимкнено' : 'Увімкнено')}>
+              <Button variant="secondary" className="min-w-0 text-xs" onClick={() => run({ action: 'set_active', user_id: member.user_id, is_active: !member.is_active }, member.is_active ? 'Вимкнено' : 'Увімкнено')}>
                 <Power className="w-4 h-4 mr-1" /> {member.is_active ? 'Вимкнути' : 'Увімкнути'}
               </Button>
-              <Button variant="secondary" className="rounded-xl text-xs text-destructive" onClick={async () => {
+              <Button variant="secondary" className="col-span-2 sm:col-span-1 min-w-0 text-xs text-destructive" onClick={async () => {
                 if (window.confirm(`Видалити акаунт ${member.full_name}? Це не можна скасувати.`)) {
                   if (await run({ action: 'delete', user_id: member.user_id }, 'Видалено')) onClose();
                 }
