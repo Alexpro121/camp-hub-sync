@@ -5,8 +5,8 @@ import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared
 /** Логін: латиниця/цифри/._- , 3..40 символів, нижній регістр */
 function normLogin(s: unknown): string | null {
   // Прощаємо типові помилки: "@", пробіли, набір в українській розкладці
-  const UA = 'йцукенгшщзхїфівапролджєячсмитьбю.ґ';
-  const EN = 'qwertyuiop[]asdfghjkl;\'zxcvbnm,./`';
+  const UA = 'йцукенгшщзхїфівапролджєячсмитьбюґ';
+  const EN = 'qwertyuiop[]asdfghjkl;\'zxcvbnm,.`';
   const v = String(s ?? '').normalize('NFC').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '')
     .split('').map((ch) => { const i = UA.indexOf(ch); return i >= 0 ? EN[i] : ch; }).join('')
     .replace(/[,]/g, '.');
