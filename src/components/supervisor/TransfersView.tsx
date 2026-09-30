@@ -29,8 +29,8 @@ const TransfersView = ({ myTeam }: Props) => {
   // Swap state
   const [swapA, setSwapA] = useState<Child | null>(null);
   const [swapQuery, setSwapQuery] = useState('');
-  const [swapB, setSwapB] = useState<{ id: string; full_name: string; team_number: number } | null>(null);
-  const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number }[]>([]);
+  const [swapB, setSwapB] = useState<{ id: string; full_name: string; team_number: number; gender?: string | null } | null>(null);
+  const [swapMatches, setSwapMatches] = useState<{ id: string; full_name: string; team_number: number; gender?: string | null }[]>([]);
   const [availableTeams, setAvailableTeams] = useState<number[]>([]);
 
   const [loading, setLoading] = useState(false);
@@ -81,7 +81,7 @@ const TransfersView = ({ myTeam }: Props) => {
       });
       if (cancelled) return;
       if (error) { setSwapMatches([]); return; }
-      setSwapMatches((data || []) as { id: string; full_name: string; team_number: number }[]);
+      setSwapMatches((data || []) as { id: string; full_name: string; team_number: number; gender?: string | null }[]);
     }, 250);
     return () => { cancelled = true; clearTimeout(t); };
   }, [swapQuery, shiftId, myTeam]);
