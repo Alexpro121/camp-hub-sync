@@ -87,6 +87,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
 
   useEffect(() => {
     localStorage.setItem('helpsuprov:staff-theme', isDark ? 'dark' : 'light');
+    window.dispatchEvent(new Event('staff-theme-change'));
     if (isDark) {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
