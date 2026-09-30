@@ -357,9 +357,10 @@ export function subscribeAlumniBroadcast(
       if (last) q = q.gt('created_at', last);
       const { data } = await q;
       const rows = (data as Row[]) ?? [];
-      // Показуємо лише найсвіжішу, решту позначаємо переглянутими
-      rows.slice(0, -1).forEach((r) => markSeen(r.id, r.created_at));
-      const latest = rows[rows.length - 1];
+      // Показуємо найсвіжішу, адресовану саме цьому випускнику (з урахуванням року)
+      const relevant = rows.filter((r) => !(r.target_year && opts.year && r.target_year !== opts.year));
+      const latest = relevant[relevant.length - 1];
+      rows.forEach((r) => { if (r.id !== latest?.id) markSeen(r.id, r.created_at); });
       if (latest) deliver(latest);
     } catch { /* офлайн — спробуємо наступного разу */ }
   })();
