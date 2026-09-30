@@ -426,7 +426,7 @@ const AdminScheduleEditor = () => {
       </Dialog>
 
       <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-sm overflow-y-auto">
           <DialogHeader><DialogTitle>{form?.id ? 'Редагувати подію' : 'Нова подія'}</DialogTitle></DialogHeader>
           {form && (
             <div className="space-y-3">
