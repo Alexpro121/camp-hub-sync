@@ -220,11 +220,6 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                 <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="tg" className="text-slate-300">Telegram</Label>
-                <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
-              </div>
-
               <div data-tour="step-4-notes" className="space-y-2">
                 <Label htmlFor="notes" className="text-slate-300">Замітки</Label>
                 <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
