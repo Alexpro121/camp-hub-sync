@@ -54,3 +54,9 @@ export function resetFailures(key: string) {
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Сьогоднішня дата в Києві (YYYY-MM-DD) — сервер працює в UTC. */
+export function kyivDate(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}

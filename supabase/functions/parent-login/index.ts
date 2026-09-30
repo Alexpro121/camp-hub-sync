@@ -1,5 +1,5 @@
 import { admin, corsHeaders, issueSession, json, requireUser } from '../_shared/accounts.ts';
-import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
+import { clientKey, kyivDate, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 /** Вхід для батьків: ПІБ дитини + номер телефону, записаний у списку. */
 function normalizeName(s: string | null | undefined): string {
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     const phone = phoneKey(body?.phone);
     if (fullName.split(/\s+/).filter(Boolean).length < 2 || fullName.length > 120) return json({ error: 'invalid_name' }, 400);
 
-    const rlKey = clientKey(req, 'parent');
+    const rlKey = clientKey(req, `parent:${sortedTokens(fullName)}`);
     const RL = { slowAfter: 8, blockAfter: 20 };
     const before = peek(rlKey, 60_000, RL);
     if (before.blocked) return json({ error: 'too_many_attempts' }, 429);
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
 
     const svc = admin();
     // Доступ і під час зміни, і ще 14 днів після її завершення.
-    const today = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+    const today = kyivDate(-14);
     const { data: shifts } = await svc.from('shifts').select('id, start_date, end_date').is('deleted_at', null);
     const live = (shifts || []).filter((s: any) => s.end_date >= today).map((s: any) => s.id);
     if (!live.length) return json({ error: 'not_found' }, 404);
@@ -91,15 +91,16 @@ Deno.serve(async (req) => {
       return json({ has_phone: !!(unique && phoneKey(unique.phone).length >= 9) });
     }
 
-    const matches = byName.filter((c: any) => phoneKey(c.phone).length >= 9
-      ? phoneKey(c.phone) === phone
-      : body?.confirmParent === true);
+    // Вхід лише з номером телефону, що збігається з базою. Без номера — ні.
+    if (byName.length === 1 && phoneKey(byName[0].phone).length < 9) {
+      recordFailure(rlKey, RL);
+      return json({ error: 'phone_missing' }, 200);
+    }
+    const matches = byName.filter((c: any) => phone.length >= 9 && phoneKey(c.phone) === phone);
 
     if (matches.length !== 1) {
       const after = recordFailure(rlKey, RL);
       if (after.blocked) return json({ error: 'too_many_attempts' }, 429);
-      const noPhoneMatch = byName.length === 1 && phoneKey(byName[0].phone).length < 9;
-      if (noPhoneMatch && body?.confirmParent !== true) return json({ error: 'confirm_required' }, 400);
       return json({ error: matches.length > 1 ? 'ambiguous' : 'not_found' }, 404);
     }
     resetFailures(rlKey);

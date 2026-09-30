@@ -21,7 +21,7 @@ async function verifyTicket(childId: string, ticket: string): Promise<boolean> {
   for (let i = 0; i < sig.length; i++) d |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
   return d === 0;
 }
-import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
+import { clientKey, kyivDate, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 
 /* ---------- name matching (mirrors src/lib/normalize.ts) ---------- */
 function normalizeName(s: string | null | undefined): string {
@@ -110,7 +110,7 @@ function score(query: string, name: string): number {
 function pickActiveShift(shifts: any[]): any | null {
   const live = shifts.filter((s) => !s.deleted_at);
   if (!live.length) return null;
-  const t = new Date().toISOString().slice(0, 10);
+  const t = kyivDate();
   const current = live.find((s) => s.start_date <= t && t <= s.end_date);
   if (current) return current;
   const upcoming = live.filter((s) => s.start_date > t).sort((a, b) => a.start_date.localeCompare(b.start_date))[0];
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
       .is('deleted_at', null)
       .order('start_date', { ascending: false });
     // Паралельні зміни: усі зміни, що йдуть сьогодні, доступні для входу одночасно.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = kyivDate();
     const liveNow = (shifts || []).filter((s: any) => s.start_date <= today && today <= s.end_date).map((s: any) => s.id);
     const fallback = pickActiveShift(shifts || []);
     const liveIds: string[] = liveNow.length ? liveNow : (fallback?.id ? [fallback.id] : []);
@@ -151,9 +151,10 @@ Deno.serve(async (req) => {
       if (!team || team < 1 || team > 999) return json({ error: 'invalid_team' }, 400);
 
       // [H-2] Brute-force protection: 5 misses in a minute start stalling, 10 block.
-      const rlKey = clientKey(req, `child:${team}`);
-      // Уся команда сидить на одному Wi-Fi табору з однаковим Telegram — ліміт м'якший.
-      const RL = { slowAfter: 15, blockAfter: 40 };
+      // Ліміт рахується окремо для кожного введеного ПІБ: спільний Wi-Fi табору
+      // не блокує всю команду, а перебір одного імені все одно гальмується.
+      const rlKey = clientKey(req, `child:${team}:${normalizeName(fullName)}`);
+      const RL = { slowAfter: 5, blockAfter: 12 };
       const before = peek(rlKey, 60_000, RL);
       if (before.blocked) return json({ error: 'too_many_attempts' }, 429);
       if (before.slowDown) await sleep(1500);
