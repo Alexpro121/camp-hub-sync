@@ -89,6 +89,7 @@ const TrainTab = lazyRetry(() => import('@/components/admin/TrainTab'));
 const TalentAdmin = lazyRetry(() => import('@/components/talent/TalentAdmin'));
 const AdminStaffAccounts = lazyRetry(() => import('@/components/admin/AdminStaffAccounts'));
 const AdminNotificationsView = lazyRetry(() => import('@/components/admin/AdminNotificationsView'));
+const AdminTransferApprovals = lazyRetry(() => import('@/components/admin/AdminTransferApprovals'));
 const ImportPreviewDialog = lazyRetry(() => import('@/components/admin/ImportPreviewDialog'));
 const MultiFileShiftModal = lazyRetry(() => import('@/components/admin/MultiFileShiftModal'));
 const TeamTagInput = lazyRetry(() => import('@/components/admin/TeamTagInput'));
@@ -278,7 +279,7 @@ const AdminFlow = ({ onBack }: Props) => {
            <TabsContent value="shifts" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><ShiftsTab /></TabsContent>
            <TabsContent value="schedule" className="mt-3 min-w-0 space-y-4 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminScheduleEditor /></TabsContent>
            <TabsContent value="talent" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TalentAdmin /></TabsContent>
-           <TabsContent value="notifications" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminNotificationsView /></TabsContent>
+           <TabsContent value="notifications" className="mt-3 min-w-0 space-y-3 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminTransferApprovals /><AdminNotificationsView /></TabsContent>
            {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TrainTab /></TabsContent>)}
            {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminPrintQRCodes /></TabsContent>)}
            <TabsContent value="stats" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><StatsTab /></TabsContent>
