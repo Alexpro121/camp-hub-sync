@@ -52,6 +52,12 @@ export async function derivePassword(identity: string): Promise<string> {
  */
 async function findUserIdByEmail(svc: ReturnType<typeof admin>, email: string): Promise<string | null> {
   const target = email.toLowerCase();
+  // Швидкий шлях: прямий пошук у базі одним запитом.
+  try {
+    const { data, error } = await (svc as any).rpc('lookup_user_id_by_email', { p_email: target });
+    if (!error && data) return data as string;
+    if (!error) return null;
+  } catch { /* fallback нижче */ }
   // Посторінковий пошук: раніше дивились лише перші 1000 акаунтів — після кількох змін вхід ламався.
   for (let page = 1; page <= 50; page++) {
     const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 1000 });

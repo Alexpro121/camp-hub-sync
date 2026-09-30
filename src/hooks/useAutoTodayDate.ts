@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 /** Local ISO date ("2026-08-09") — avoids UTC shifting of toISOString(). */
+/** Сьогоднішня дата за Києвом — незалежно від часового поясу телефону. */
+export const kyivISO = (d: Date = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(d);
+
 export const localISO = (d: Date = new Date()) => {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
