@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Loader2, Eye, EyeOff, Sun, Moon, Check, CalendarDays, Users } from 'lucide-react';
+import { Loader2, Eye, EyeOff, Sun, Moon, Check, CalendarDays, Users, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,6 +77,19 @@ const StaffRegister = () => {
     { ok: f.password.length >= 8, label: 'Пароль від 8 символів' },
   ];
   const ready = checks.every((c) => c.ok);
+
+  // Неблокуюча перевірка надійності пароля: лише попередження, реєстрація не блокується.
+  const pw = f.password;
+  const pwWeak = pw.length > 0 && pw.length >= 8 && (() => {
+    const lower = pw.toLowerCase();
+    const hasDigit = /\d/.test(pw);
+    const hasUpper = /[A-ZА-ЯІЇЄҐ]/.test(pw);
+    const hasLetter = /[a-zа-яіїєґ]/.test(lower);
+    const common = ['password', 'qwerty', '12345678', '11111111', 'abcdefgh', 'iloveyou'].some((c) => lower.includes(c));
+    const onlyOneKind = !(hasDigit && hasLetter);
+    const sequential = /(?:0123|1234|2345|3456|4567|5678|6789)/.test(pw);
+    return common || onlyOneKind || sequential || (!hasUpper && !hasDigit);
+  })();
 
   const submit = async () => {
     setBusy(true); setError(null);
@@ -189,6 +202,12 @@ const StaffRegister = () => {
                     {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {pwWeak && (
+                  <p role="status" className="mt-2 flex items-start gap-1.5 text-xs text-amber-500">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    Пароль простий — його легко вгадати. Радимо додати цифри, великі літери або символи, але реєстрація все одно доступна.
+                  </p>
+                )}
               </Fld>
             </div>
 
