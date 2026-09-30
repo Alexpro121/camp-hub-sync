@@ -21,6 +21,7 @@ export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
   useEffect(() => {
     let active = true;
     setSummary(null);
+    setUpdatedAt(null);
     setError(false);
     if (!shift) return () => { active = false; };
     setLoading(true);
