@@ -184,18 +184,18 @@ const AdminFlow = ({ onBack }: Props) => {
         </header>
 
         <Tabs defaultValue="shifts" className="w-full px-3 pt-2">
-          <div className="sticky top-[108px] z-20 px-1 py-2 bg-[#07090E]/90 backdrop-blur-md">
-            <TabsList className="grid grid-cols-4 auto-rows-[46px] h-auto w-full p-1 gap-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md">
-              <TabsTrigger value="shifts" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+          <div className="sticky top-[108px] z-20 -mx-3 px-3 py-2 bg-[#07090E]/95 overflow-x-auto no-scrollbar overscroll-x-contain">
+            <TabsList className="flex h-auto w-max min-w-full p-1 gap-1 bg-[#0F1523] border border-white/10 rounded-2xl shadow-md">
+              <TabsTrigger value="shifts" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <Calendar className="w-4 h-4" /> <span>Зміни</span>
               </TabsTrigger>
-              <TabsTrigger value="schedule" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+              <TabsTrigger value="schedule" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <CalendarDays className="w-4 h-4" /> <span>Розклад</span>
               </TabsTrigger>
-              <TabsTrigger value="talent" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+              <TabsTrigger value="talent" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <Mic2 className="w-4 h-4" /> <span>Таланти</span>
               </TabsTrigger>
-              <TabsTrigger value="notifications" className="relative flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+              <TabsTrigger value="notifications" className="relative flex-col gap-0.5 min-w-[90px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <Bell className="w-4 h-4" /> <span>Сповіщення</span>
                 {unreadTransfers > 0 && (
                   <span className="absolute top-1 right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-[#FA5A15] text-white text-[9px] font-black font-mono tabular-nums flex items-center justify-center">
@@ -204,19 +204,19 @@ const AdminFlow = ({ onBack }: Props) => {
                 )}
               </TabsTrigger>
               {TRAIN_FEATURE_ENABLED && (
-                <TabsTrigger value="coupes" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <TabsTrigger value="coupes" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                   <Train className="w-4 h-4" /> <span>Потяг</span>
                 </TabsTrigger>
               )}
               {FAIR_FEATURE_ENABLED && (
-                <TabsTrigger value="fair" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+                <TabsTrigger value="fair" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                   <ShoppingBag className="w-4 h-4" /> <span>Ярмарок</span>
                 </TabsTrigger>
               )}
-              <TabsTrigger value="stats" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+              <TabsTrigger value="stats" className="flex-col gap-0.5 min-w-[80px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <BarChart3 className="w-4 h-4" /> <span>Статистика</span>
               </TabsTrigger>
-              <TabsTrigger value="data" className="flex-col gap-0.5 h-full text-[10px] sm:text-[11px] leading-none font-semibold">
+              <TabsTrigger value="data" className="flex-col gap-0.5 min-w-[72px] min-h-12 flex-1 text-xs leading-none font-semibold">
                 <Database className="w-4 h-4" /> <span>База</span>
               </TabsTrigger>
             </TabsList>
