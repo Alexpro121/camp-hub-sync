@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' }, 409);
       const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
-      if (error || !created.user) return json({ error: 'create_failed' }, 500);
+      if (error || !created.user) return json({ error: 'create_failed', detail: error?.message }, 500);
       await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login });
       await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
       return json({ ok: true });
