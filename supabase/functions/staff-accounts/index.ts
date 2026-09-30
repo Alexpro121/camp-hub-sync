@@ -30,6 +30,12 @@ async function loadInvite(svc: any, token: string) {
   return data;
 }
 
+async function loadInviteShift(svc: any, shiftId: string | null) {
+  if (!shiftId) return null;
+  const { data } = await svc.from('shifts').select('id, name, start_date, end_date, assigned_teams, deleted_at').eq('id', shiftId).maybeSingle();
+  return data && !data.deleted_at ? data : null;
+}
+
 async function authUser(req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -80,7 +86,10 @@ Deno.serve(async (req) => {
     // ---------- РЕЄСТРАЦІЯ ЗА ПОСИЛАННЯМ ----------
     if (action === 'invite_check') {
       const inv = await loadInvite(svc, String(body?.token ?? ''));
-      return json(inv ? { ok: true, kind: inv.kind, label: inv.label } : { error: 'invite_invalid' });
+      if (!inv) return json({ error: 'invite_invalid' });
+      const shift = await loadInviteShift(svc, inv.shift_id ?? null);
+      if (inv.shift_id && !shift) return json({ error: 'invite_invalid' });
+      return json({ ok: true, kind: inv.kind, label: inv.label, shift });
     }
 
     if (action === 'register') {
@@ -101,13 +110,15 @@ Deno.serve(async (req) => {
       if (password.length < 8 || password.length > 72) return json({ error: 'weak_password' });
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' });
-      // Бронюємо місце (оптимістичне блокування від гонки)
-      const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
-        .eq('id', inv.id).eq('uses', inv.uses).select('id');
-      if (!claimed?.length) return json({ error: 'invite_busy' });
+      // Для посилання конкретної зміни місце витрачається лише після вибору команди.
+      if (!inv.shift_id) {
+        const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
+          .eq('id', inv.id).eq('uses', inv.uses).select('id');
+        if (!claimed?.length) return json({ error: 'invite_busy' });
+      }
       const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
       if (error || !created.user) {
-        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        if (!inv.shift_id) await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
         const weak = /weak|pwned|guess/i.test(error?.message ?? '');
         return json({ error: weak ? 'weak_password' : 'create_failed' });
       }
@@ -120,6 +131,29 @@ Deno.serve(async (req) => {
 
     const user = await authUser(req);
     if (!user) return json({ error: 'unauthorized' }, 401);
+
+    // ---------- САМОПРИЗНАЧЕННЯ ЗА ПОСИЛАННЯМ ЗМІНИ ----------
+    if (action === 'join_shift') {
+      const inv = await loadInvite(svc, String(body?.token ?? ''));
+      const shift = inv ? await loadInviteShift(svc, inv.shift_id ?? null) : null;
+      const team = Math.floor(Number(body?.team_number));
+      if (!inv || !shift) return json({ error: 'invite_invalid' });
+      const allowedTeams = (shift.assigned_teams ?? []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0);
+      if (!allowedTeams.includes(team)) return json({ error: 'invalid_team' });
+      const { data: member } = await svc.from('staff_members').select('user_id, is_active').eq('user_id', user.id).maybeSingle();
+      if (!member?.is_active) return json({ error: 'not_staff' }, 403);
+      const { data: existingShift } = await svc.from('staff_assignments').select('id, team_number').eq('staff_user_id', user.id).eq('shift_id', shift.id).limit(1).maybeSingle();
+      if (existingShift) return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: existingShift.team_number, already_assigned: true });
+      const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
+        .eq('id', inv.id).eq('uses', inv.uses).select('id');
+      if (!claimed?.length) return json({ error: 'invite_busy' });
+      const { error } = await svc.from('staff_assignments').insert({ staff_user_id: user.id, shift_id: shift.id, team_number: team });
+      if (error) {
+        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        return json({ error: 'assign_failed' }, 500);
+      }
+      return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: team });
+    }
 
     // ---------- КАБІНЕТ ----------
     if (action === 'cabinet') {
@@ -300,6 +334,24 @@ Deno.serve(async (req) => {
       const { data, error } = await svc.from('staff_invites').insert({
         token, kind, max_uses, label: clean(body?.label, 80) || null, created_by: user.id,
         expires_at: hours === null ? null : new Date(Date.now() + hours * 3600e3).toISOString(),
+      }).select('*').single();
+      return error ? json({ error: 'failed' }, 500) : json({ invite: data });
+    }
+
+    if (action === 'shift_invite_create') {
+      const shiftId = String(body?.shift_id ?? '');
+      const shift = await loadInviteShift(svc, shiftId);
+      if (!shift || !(shift.assigned_teams ?? []).length) return json({ error: 'shift_needs_teams' });
+      const { data: current } = await svc.from('staff_invites').select('*')
+        .eq('shift_id', shiftId).eq('revoked', false).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (current && (current.max_uses == null || current.uses < current.max_uses)) return json({ invite: current });
+      const bytes = crypto.getRandomValues(new Uint8Array(18));
+      const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const expiresAt = new Date(`${shift.end_date}T23:59:59+03:00`);
+      if (expiresAt.getTime() < Date.now() + 864e5) expiresAt.setTime(Date.now() + 7 * 864e5);
+      const { data, error } = await svc.from('staff_invites').insert({
+        token, kind: 'supervisor', shift_id: shiftId, max_uses: 500,
+        label: `Супровід · ${shift.name}`, created_by: user.id, expires_at: expiresAt.toISOString(),
       }).select('*').single();
       return error ? json({ error: 'failed' }, 500) : json({ invite: data });
     }

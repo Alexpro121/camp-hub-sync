@@ -5,3 +5,4 @@
 - [ ] Verify signed-in admin interactions on mobile and desktop (blocked: preview is signed out and no requesting-user app account is available).
 - [x] Stabilize the admin viewport, bottom navigation, sheets, dialogs, and narrow forms on phones.
 - [x] Smooth admin transitions, add overview utilities, debounce live statistics, and hide alumni broadcasts.
+- [x] Add shift-scoped staff invitation links with existing-account login, registration, team choice, and 5-second confirmation.

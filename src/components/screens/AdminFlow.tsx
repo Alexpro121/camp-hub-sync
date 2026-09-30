@@ -79,6 +79,7 @@ import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
 import { getSeenAt } from '@/components/admin/AdminNotificationsView';
 import AdminOverview from '@/components/admin/AdminOverview';
+import { staffCall, staffErr } from '@/lib/staffApi';
 
 const AdminPrintQRCodes = lazy(() => import('@/components/fair/AdminPrintQRCodes'));
 const AdminScheduleEditor = lazy(() => import('@/components/schedule/AdminScheduleEditor'));
@@ -706,6 +707,7 @@ const ShiftsTab = () => {
 
 const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }) => {
   const [count, setCount] = useState<number | null>(null);
+  const [copyingInvite, setCopyingInvite] = useState(false);
   useEffect(() => {
     (async () => {
       const { count: c } = await supabase.from('children').select('id', { count: 'exact', head: true }).eq('shift_id', s.id);
@@ -714,6 +716,18 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
   }, [s.id]);
 
   const status = shiftStatus(s);
+  const copyStaffInvite = async () => {
+    setCopyingInvite(true);
+    try {
+      const { invite } = await staffCall<{ invite: { token: string } }>({ action: 'shift_invite_create', shift_id: s.id });
+      await navigator.clipboard.writeText(`${window.location.origin}/staff/join/${invite.token}`);
+      toast.success('Посилання для супроводу скопійовано');
+    } catch (error) {
+      toast.error(staffErr(error));
+    } finally {
+      setCopyingInvite(false);
+    }
+  };
   const statusMeta: Record<typeof status, { label: string; cls: string }> = {
     active:   { label: 'Активна',   cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
     upcoming: { label: 'Майбутня',  cls: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
@@ -721,7 +735,7 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
   };
 
   return (
-    <Card className="p-3.5 flex items-center gap-3 bg-[#0F1523]/80 border border-white/10 rounded-2xl shadow-sm">
+    <Card className="p-3.5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 bg-[#0F1523]/80 border border-white/10 rounded-2xl shadow-sm">
       <div className="w-10 h-10 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
         <Calendar className="w-4 h-4 text-[#FA5A15]" />
       </div>
@@ -743,6 +757,10 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
         </p>
       </div>
 
+      <div className="col-span-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-white/10 pt-3">
+        <Button variant="secondary" className="min-w-0 justify-center" disabled={copyingInvite} onClick={copyStaffInvite}>
+          {copyingInvite ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />} Додати супровід
+        </Button>
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button size="icon" variant="ghost" className="shrink-0 text-slate-400 hover:text-rose-400">
@@ -767,6 +785,7 @@ const ShiftRow = ({ shift: s, onDelete }: { shift: Shift; onDelete: () => void }
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </Card>
   );
 };
