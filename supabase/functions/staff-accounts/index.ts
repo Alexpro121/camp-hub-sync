@@ -144,16 +144,13 @@ Deno.serve(async (req) => {
       if (!member?.is_active) return json({ error: 'not_staff' }, 403);
       const { data: existingShift } = await svc.from('staff_assignments').select('id, team_number').eq('staff_user_id', user.id).eq('shift_id', shift.id).limit(1).maybeSingle();
       if (existingShift) return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: existingShift.team_number, already_assigned: true });
-      const existing = null;
-      if (!existing) {
-        const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
-          .eq('id', inv.id).eq('uses', inv.uses).select('id');
-        if (!claimed?.length) return json({ error: 'invite_busy' });
-        const { error } = await svc.from('staff_assignments').insert({ staff_user_id: user.id, shift_id: shift.id, team_number: team });
-        if (error) {
-          await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
-          return json({ error: 'assign_failed' }, 500);
-        }
+      const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
+        .eq('id', inv.id).eq('uses', inv.uses).select('id');
+      if (!claimed?.length) return json({ error: 'invite_busy' });
+      const { error } = await svc.from('staff_assignments').insert({ staff_user_id: user.id, shift_id: shift.id, team_number: team });
+      if (error) {
+        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        return json({ error: 'assign_failed' }, 500);
       }
       return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: team });
     }
