@@ -49,7 +49,21 @@ const MIME_MAP: Record<string, string> = {
 export function getFileExt(name: string): string {
   if (!name || typeof name !== 'string') return '';
   const parts = name.trim().split('.');
-  return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
+  if (parts.length < 2) return '';
+  const ext = parts.pop()!.toLowerCase();
+  // «гурт.океан.ельзи_мінус» — остання частина не є розширенням
+  return ext in MIME_MAP ? ext : '';
+}
+
+/** Розширення з назви, а якщо його немає (Telegram/iOS) — з MIME-типу файлу. */
+export function fileExtOf(file: { name: string; type?: string }): string {
+  const byName = getFileExt(file.name);
+  if (byName) return byName;
+  const mime = (file.type || '').toLowerCase().split(';')[0];
+  if (mime === 'audio/mp3' || mime === 'audio/x-mpeg') return 'mp3';
+  if (mime === 'audio/x-m4a') return 'm4a';
+  if (mime === 'audio/x-wav' || mime === 'audio/wave') return 'wav';
+  return Object.keys(MIME_MAP).find((k) => MIME_MAP[k] === mime) ?? '';
 }
 
 export function detectFileKind(ext: string): TalentFileKind {
@@ -155,8 +169,8 @@ export async function uploadTalentFile(
   teamNumber: number, 
   label: string
 ): Promise<UploadResult> {
-  const ext = getFileExt(file.name);
-  if (!ext) return { error: 'Файл без розширення не підтримується' };
+  const ext = fileExtOf(file);
+  if (!ext) return { error: 'Не вдалося визначити формат файлу' };
 
   const kind = detectFileKind(ext);
   const rule = TALENT_MEDIA_RULES[kind];
@@ -168,7 +182,7 @@ export async function uploadTalentFile(
   }
 
   const id = crypto.randomUUID();
-  const rawBaseName = file.name.replace(/\.[^.]+$/, '');
+  const rawBaseName = getFileExt(file.name) ? file.name.replace(/\.[^.]+$/, '') : file.name;
   const cleanBaseName = safeNamePart(translit(rawBaseName), 28) || 'media';
   const storagePath = `team-${teamNumber}/${id}_${cleanBaseName}.${ext}`;
 

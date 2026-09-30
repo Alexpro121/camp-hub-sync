@@ -82,7 +82,8 @@ export async function ensureRole(
       (r.child_id ?? null) === (extra.child_id ?? null),
   );
 
-  const staleIds = (existing ?? []).filter((r) => r.id !== match?.id).map((r) => r.id);
+  // Прибираємо лише застарілі записи тієї ж ролі — інші ролі (напр. admin) не чіпаємо.
+  const staleIds = (existing ?? []).filter((r) => r.role === role && r.id !== match?.id).map((r) => r.id);
   if (staleIds.length) await svc.from('user_roles').delete().in('id', staleIds);
 
   if (!match) {

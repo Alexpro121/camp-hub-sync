@@ -1,11 +1,14 @@
 import type { Shift } from '@/types/app';
 
+/** Local (Kyiv) calendar date, not UTC — avoids showing «yesterday» between 00:00 and 03:00. */
+const localISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 /**
  * Determines if a shift is currently active based on real date,
  * regardless of the `is_active` DB flag.
  */
 export function isShiftCurrent(s: Shift, today = new Date()): boolean {
-  const t = today.toISOString().slice(0, 10);
+  const t = localISO(today);
   return s.start_date <= t && t <= s.end_date;
 }
 
@@ -17,7 +20,7 @@ export function isShiftCurrent(s: Shift, today = new Date()): boolean {
  */
 export function pickActiveShift(shifts: Shift[], today = new Date()): Shift | null {
   if (!shifts.length) return null;
-  const t = today.toISOString().slice(0, 10);
+  const t = localISO(today);
   const current = shifts.find((s) => s.start_date <= t && t <= s.end_date);
   if (current) return current;
   const upcoming = shifts
@@ -30,7 +33,7 @@ export function pickActiveShift(shifts: Shift[], today = new Date()): Shift | nu
 }
 
 export function shiftStatus(s: Shift, today = new Date()): 'active' | 'upcoming' | 'finished' {
-  const t = today.toISOString().slice(0, 10);
+  const t = localISO(today);
   if (t < s.start_date) return 'upcoming';
   if (t > s.end_date) return 'finished';
   return 'active';

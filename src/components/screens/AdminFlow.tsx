@@ -74,6 +74,7 @@ import { FullScreenLoader } from '@/components/ui/loader';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { backfillGenders } from '@/lib/gender';
+import { normalizeName } from '@/lib/normalize';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
@@ -462,12 +463,12 @@ const ShiftsTab = () => {
       const { data: existing } = await supabase
         .from('children').select('id, full_name, team_number').eq('shift_id', shift.id);
       const map = new Map<string, string>();
-      (existing || []).forEach((c: any) => map.set(`${c.team_number}|${(c.full_name || '').toLowerCase().trim()}`, c.id));
+      (existing || []).forEach((c: any) => map.set(`${c.team_number}|${normalizeName(c.full_name || '')}`, c.id));
 
       const toInsert: any[] = [];
       let processed = 0;
       for (const r of dbRows) {
-        const id = map.get(`${r.team_number}|${r.full_name.toLowerCase().trim()}`);
+        const id = map.get(`${r.team_number}|${normalizeName(r.full_name)}`);
         if (id) {
           await supabase.from('children').update({
             is_present: r.is_present, row_number: r.row_number, phone: r.phone,

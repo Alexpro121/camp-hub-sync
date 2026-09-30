@@ -20,6 +20,7 @@ const ERRORS: Record<string, string> = {
   not_found: 'Не знайшли дитину з таким ПІБ і номером. Перевірте дані або зверніться до супроводу',
   ambiguous: 'Знайдено кілька збігів. Зверніться до супроводу',
   too_many_attempts: 'Забагато спроб. Спробуйте за хвилину',
+  phone_missing: 'У списку немає номера телефону цієї дитини. Попросіть супровід додати ваш номер',
 };
 
 const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' }) : '');
@@ -69,7 +70,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
     setLoading(true);
     try {
       const { data, error: fnErr } = await supabase.functions.invoke('parent-login', {
-        body: { fullName, phone, confirmParent: hasPhone === false },
+        body: { fullName, phone },
       });
       let code = data?.error as string | undefined;
       if (fnErr) {
@@ -105,7 +106,7 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
           <h1 className="text-2xl font-black text-white tracking-tight">Вхід для батьків</h1>
           <p className="text-sm text-slate-400 mt-2 leading-relaxed">
             {noPhone
-              ? 'У цієї дитини в списку немає номера телефону. Просто підтвердіть, що ви її батьки.'
+              ? 'У цієї дитини в списку немає номера телефону, тому вхід поки недоступний. Попросіть супровід команди додати ваш номер — після цього ви зможете увійти.'
               : 'Введіть ПІБ дитини та номер телефону, вказаний у заявці.'}
           </p>
           <form onSubmit={submit} className="mt-7 flex flex-col gap-4">
@@ -124,10 +125,10 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
               </label>
             )}
             {error && <p className="text-sm text-red-400 leading-snug">{error}</p>}
-            <button type="submit" disabled={loading || !fullName.trim() || (hasPhone === null && !phone.trim()) || (!noPhone && !phone.trim())}
+            <button type="submit" disabled={loading || noPhone || !fullName.trim() || !phone.trim()}
               className="h-12 mt-1 rounded-2xl bg-[#FA5A15] text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : noPhone ? (
-                <><ShieldCheck className="w-4 h-4" /> Підтверджую, що я батьки дитини</>
+                <><ShieldCheck className="w-4 h-4" /> Потрібен номер у списку</>
               ) : 'Увійти'}
             </button>
           </form>

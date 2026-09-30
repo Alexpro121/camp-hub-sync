@@ -26,6 +26,36 @@ const normTg = (v: unknown) => { const t = String(v ?? '').trim().replace(/^http
 const okAvatar = (v: unknown) => typeof v === 'string' && /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 90000;
 const KINDS = ['supervisor', 'duckling'];
 
+// Фото супроводу зберігаються у сховищі, у базі — лише короткий шлях "storage:<path>".
+const AVATAR_BUCKET = 'staff-avatars';
+async function storeAvatar(svc: any, uid: string, dataUrl: string): Promise<string | null> {
+  const m = /^data:(image\/(?:jpeg|webp|png));base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+  const ext = m[1].split('/')[1];
+  const path = `${uid}/${Date.now()}.${ext}`;
+  const { error } = await svc.storage.from(AVATAR_BUCKET).upload(path, bytes, { contentType: m[1], upsert: true });
+  if (error) return null;
+  const { data: old } = await svc.storage.from(AVATAR_BUCKET).list(uid);
+  const stale = (old ?? []).map((f: any) => `${uid}/${f.name}`).filter((p: string) => p !== path);
+  if (stale.length) await svc.storage.from(AVATAR_BUCKET).remove(stale);
+  return `storage:${path}`;
+}
+/** Перетворює збережені шляхи на тимчасові посилання; старі data-URL переносить у сховище. */
+async function resolveAvatars<T extends { user_id?: string; avatar_url: string | null }>(svc: any, rows: T[], uidOf: (r: T) => string): Promise<T[]> {
+  for (const r of rows) {
+    if (r.avatar_url?.startsWith('data:')) {
+      const ref = await storeAvatar(svc, uidOf(r), r.avatar_url);
+      if (ref) { await svc.from('staff_members').update({ avatar_url: ref }).eq('user_id', uidOf(r)); r.avatar_url = ref; }
+    }
+  }
+  const paths = rows.map((r) => r.avatar_url).filter((a): a is string => !!a?.startsWith('storage:')).map((a) => a.slice(8));
+  if (!paths.length) return rows;
+  const { data } = await svc.storage.from(AVATAR_BUCKET).createSignedUrls(paths, 60 * 60 * 24 * 7);
+  const map = new Map<string, string>((data ?? []).filter((d: any) => d.signedUrl).map((d: any) => [d.path, d.signedUrl]));
+  return rows.map((r) => (r.avatar_url?.startsWith('storage:') ? { ...r, avatar_url: map.get(r.avatar_url.slice(8)) ?? null } : r));
+}
+
 async function loadInvite(svc: any, token: string) {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   const { data } = await svc.from('staff_invites').select('*').eq('token', token).maybeSingle();
@@ -224,7 +254,8 @@ Deno.serve(async (req) => {
           },
         };
       }));
-      return json({ full_name: member.full_name, login: member.login, kind: member.kind, phone: member.phone, telegram: member.telegram, avatar_url: member.avatar_url, assignments: items });
+      const [withAvatar] = await resolveAvatars(svc, [{ ...member }], () => user.id);
+      return json({ full_name: member.full_name, login: member.login, kind: member.kind, phone: member.phone, telegram: member.telegram, avatar_url: withAvatar.avatar_url, assignments: items });
     }
 
     // ---------- ВХІД У ЗМІНУ ----------
@@ -241,7 +272,11 @@ Deno.serve(async (req) => {
       const patch: Record<string, unknown> = {};
       if ('avatar_url' in body) {
         if (body.avatar_url === null) patch.avatar_url = null;
-        else if (okAvatar(body.avatar_url)) patch.avatar_url = body.avatar_url;
+        else if (okAvatar(body.avatar_url)) {
+          const ref = await storeAvatar(svc, user.id, body.avatar_url);
+          if (!ref) return json({ error: 'update_failed' }, 500);
+          patch.avatar_url = ref;
+        }
         else return json({ error: 'bad_avatar' });
       }
       if ('phone' in body) { const p = normPhone(body.phone); if (!p) return json({ error: 'bad_phone' }); patch.phone = p; }
@@ -262,7 +297,7 @@ Deno.serve(async (req) => {
         svc.from('staff_members').select('user_id, full_name, login, is_active, created_at, kind, phone, telegram, avatar_url').order('full_name'),
         svc.from('staff_assignments').select('id, staff_user_id, shift_id, team_number'),
       ]);
-      return json({ members: members ?? [], assignments: asg ?? [] });
+      return json({ members: await resolveAvatars(svc, (members ?? []) as any[], (m: any) => m.user_id), assignments: asg ?? [] });
     }
 
     if (action === 'create') {
