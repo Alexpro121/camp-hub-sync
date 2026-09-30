@@ -216,41 +216,6 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-slate-300">Стать</Label>
-                  <button
-                    type="button"
-                    disabled={detecting}
-                    onClick={async () => {
-                      setDetecting(true);
-                      try {
-                        const { data } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: child.id } });
-                        const g = data?.results?.[child.id] as Gender | undefined;
-                        if (g) { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
-                        else toast.error('Не вдалося визначити');
-                      } catch { toast.error('Не вдалося визначити'); }
-                      setDetecting(false);
-                    }}
-                    className="text-xs text-primary hover:underline disabled:opacity-50"
-                  >
-                    {detecting ? 'Визначаю…' : 'Визначити за ПІБ'}
-                  </button>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['boy', 'girl', 'unknown'] as Gender[]).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGender(g)}
-                      className={`h-11 rounded-xl border text-xs font-semibold transition ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                    >
-                      {GENDER_LABEL[g]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="tg" className="text-slate-300">Telegram</Label>
                 <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
               </div>
@@ -282,6 +247,40 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                   <span className="font-semibold text-slate-300">З таблиці:</span> {child.note_from_table}
                 </div>
               )}
+
+              {/* Compact gender picker — kept near the bottom of the profile */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-xs text-slate-400 shrink-0">Стать</span>
+                <div className="flex gap-1.5">
+                  {(['boy', 'girl', 'unknown'] as Gender[]).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGender(g)}
+                      className={`h-8 px-3 rounded-full border text-xs font-semibold transition active:scale-95 ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                    >
+                      {GENDER_LABEL[g]}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={detecting}
+                  onClick={async () => {
+                    setDetecting(true);
+                    try {
+                      const { data } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: child.id } });
+                      const g = data?.results?.[child.id] as Gender | undefined;
+                      if (g) { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
+                      else toast.error('Не вдалося визначити');
+                    } catch { toast.error('Не вдалося визначити'); }
+                    setDetecting(false);
+                  }}
+                  className="ml-auto text-[11px] text-primary hover:underline disabled:opacity-50 shrink-0"
+                >
+                  {detecting ? 'Визначаю…' : 'Визначити'}
+                </button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
