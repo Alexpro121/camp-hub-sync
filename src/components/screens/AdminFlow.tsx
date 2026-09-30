@@ -1201,7 +1201,7 @@ const StatsTab = () => {
       iron: orphanKids.reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0),
     } : null);
 
-    setChildren((kids || []) as Child[]);
+    setChildren((kids || []) as unknown as Child[]);
     setRows(stats);
     setLoading(false);
   };
