@@ -343,12 +343,14 @@ const ShiftsTab = () => {
   const analyze = async () => {
     if (!name || !start || !end) { toast.error('Заповніть назву та дати зміни'); return; }
     if (!file && !sheetUrl.trim()) { await createOnly(); return; }
-    const { parseSheetUrl } = await import('@/lib/importer');
-    if (sheetUrl.trim() && !parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
     
     setAnalyzing(true);
     island.showExcelProgress(15, file ? file.name : 'Google Sheets');
     try {
+      if (sheetUrl.trim()) {
+        const { parseSheetUrl } = await import('@/lib/importer');
+        if (!parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
+      }
       const { analyzeFile, analyzeSheetUrl } = await import('@/lib/importAnalyze');
       const res = file ? await analyzeFile(file) : await analyzeSheetUrl(sheetUrl);
       island.showExcelProgress(70, file ? file.name : 'Google Sheets');
