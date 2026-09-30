@@ -10,6 +10,7 @@ import AppUpdatePrompt from "@/components/ui/AppUpdatePrompt";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import StaffPortal from "./pages/StaffPortal.tsx";
+import StaffRegister from "./pages/StaffRegister.tsx";
 
 const queryClient = new QueryClient();
 
