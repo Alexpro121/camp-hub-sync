@@ -46,13 +46,9 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Child, Shift, ShiftType } from '@/types/app';
 import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
-import { analyzeFile, analyzeSheetUrl } from '@/lib/importAnalyze';
-import { parseSheetUrl, toDbRow, type ImportResult, type ImportRow } from '@/lib/importer';
-import ImportPreviewDialog from '@/components/admin/ImportPreviewDialog';
-import MultiFileShiftModal from '@/components/admin/MultiFileShiftModal';
+import type { ImportResult, ImportRow } from '@/lib/importer';
 import { shiftStatus } from '@/lib/shift';
 import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
-import TeamTagInput from '@/components/admin/TeamTagInput';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -90,6 +86,9 @@ const TalentAdmin = lazy(() => import('@/components/talent/TalentAdmin'));
 const AdminStaffAccounts = lazy(() => import('@/components/admin/AdminStaffAccounts'));
 const AdminNotificationsView = lazy(() => import('@/components/admin/AdminNotificationsView'));
 const AdminAlumniBroadcast = lazy(() => import('@/components/alumni/AdminAlumniBroadcast'));
+const ImportPreviewDialog = lazy(() => import('@/components/admin/ImportPreviewDialog'));
+const MultiFileShiftModal = lazy(() => import('@/components/admin/MultiFileShiftModal'));
+const TeamTagInput = lazy(() => import('@/components/admin/TeamTagInput'));
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {
@@ -344,11 +343,13 @@ const ShiftsTab = () => {
   const analyze = async () => {
     if (!name || !start || !end) { toast.error('Заповніть назву та дати зміни'); return; }
     if (!file && !sheetUrl.trim()) { await createOnly(); return; }
+    const { parseSheetUrl } = await import('@/lib/importer');
     if (sheetUrl.trim() && !parseSheetUrl(sheetUrl)) { toast.error('Некоректне посилання на Google Таблицю'); return; }
     
     setAnalyzing(true);
     island.showExcelProgress(15, file ? file.name : 'Google Sheets');
     try {
+      const { analyzeFile, analyzeSheetUrl } = await import('@/lib/importAnalyze');
       const res = file ? await analyzeFile(file) : await analyzeSheetUrl(sheetUrl);
       island.showExcelProgress(70, file ? file.name : 'Google Sheets');
       if (!res.rows.length) { 
@@ -413,6 +414,7 @@ const ShiftsTab = () => {
       // Пріоритет — рядки з вікна перегляду (ручне налаштування колонок)
       const sourceRows = overrideRows?.length ? overrideRows : preview.rows;
       const valid = sourceRows.filter(r => r.full_name && r.team_number);
+      const { toDbRow } = await import('@/lib/importer');
       const dbRows = valid.map(r => toDbRow(r, shift.id));
       island.showExcelProgress(45, sourceLabel || 'Google Sheets');
 
@@ -479,14 +481,14 @@ const ShiftsTab = () => {
     <div className="space-y-4">
       {creating && <FullScreenLoader label={preview ? 'Імпорт таблиці...' : 'Створення зміни...'} />}
       {analyzing && <FullScreenLoader label="Аналіз структури таблиці..." />}
-      <ImportPreviewDialog
+      {previewOpen && <Suspense fallback={null}><ImportPreviewDialog
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         result={preview}
         busy={creating}
         onConfirm={confirmImport}
-      />
-      <MultiFileShiftModal open={multiOpen} onOpenChange={setMultiOpen} onCreated={load} />
+      /></Suspense>}
+      {multiOpen && <Suspense fallback={null}><MultiFileShiftModal open={multiOpen} onOpenChange={setMultiOpen} onCreated={load} /></Suspense>}
       <div className="flex items-center justify-between gap-3 pt-2">
         <h2 className="text-xl font-bold">Зміни</h2>
         <Button size="sm" onClick={() => setFormOpen(v => !v)} aria-expanded={formOpen} className="shrink-0">
@@ -569,7 +571,7 @@ const ShiftsTab = () => {
 
           <div className="space-y-1.5">
             <Label className="text-xs text-slate-300">Команди зміни</Label>
-            <TeamTagInput value={teams} onChange={setTeams} />
+            <Suspense fallback={<div className="h-11 rounded-md bg-muted animate-pulse" />}><TeamTagInput value={teams} onChange={setTeams} /></Suspense>
             <Button
               type="button"
               size="sm"
