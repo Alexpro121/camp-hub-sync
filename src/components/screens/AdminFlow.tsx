@@ -259,6 +259,7 @@ const AdminFlow = ({ onBack }: Props) => {
 ========================================================================= */
 const ShiftsTab = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<ShiftType>('long');
   const [start, setStart] = useState('');
@@ -485,6 +486,20 @@ const ShiftsTab = () => {
         onConfirm={confirmImport}
       />
       <MultiFileShiftModal open={multiOpen} onOpenChange={setMultiOpen} onCreated={load} />
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <h2 className="text-xl font-bold">Зміни</h2>
+        <Button size="sm" onClick={() => setFormOpen(v => !v)} aria-expanded={formOpen} className="shrink-0">
+          {formOpen ? <ChevronDown className="rotate-180" /> : <Plus />} {formOpen ? 'Згорнути' : 'Створити'}
+        </Button>
+      </div>
+      <div className="space-y-2">
+        {shifts.length === 0 ? (
+          <p className="py-5 text-sm text-muted-foreground">Немає зареєстрованих змін</p>
+        ) : shifts.filter(s => !s.deleted_at).map(s => (
+          <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} />
+        ))}
+      </div>
+      {formOpen && (
       <Card className="p-5 bg-[#0F1523]/85 backdrop-blur-xl border border-white/10 rounded-3xl space-y-3 shadow-xl">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-bold uppercase text-xs tracking-wider text-[#FA5A15]">
@@ -638,15 +653,7 @@ const ShiftsTab = () => {
           </Button>
         </div>
       </Card>
-
-      <div className="space-y-2">
-        <h3 className="font-bold uppercase text-xs tracking-wider text-slate-400 px-1">Активні зміни проєкту</h3>
-        {shifts.length === 0 ? (
-          <Card className="p-6 text-center bg-[#0F1523]/60 border-white/10 rounded-2xl"><p className="text-sm text-slate-400">Немає зареєстрованих змін</p></Card>
-        ) : shifts.map(s => (
-          <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} />
-        ))}
-      </div>
+      )}
     </div>
   );
 };
