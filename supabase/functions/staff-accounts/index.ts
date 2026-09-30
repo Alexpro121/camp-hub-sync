@@ -36,6 +36,22 @@ async function loadInviteShift(svc: any, shiftId: string | null) {
   return data && !data.deleted_at ? data : null;
 }
 
+// Реальні команди зміни: ті, де є діти; якщо дітей ще не імпортовано — призначені адміном.
+async function shiftTeams(svc: any, shift: any) {
+  const [{ data: kids }, { data: asg }] = await Promise.all([
+    svc.from('children').select('team_number').eq('shift_id', shift.id).is('deleted_at', null).limit(5000),
+    svc.from('staff_assignments').select('team_number, staff_members(full_name, kind)').eq('shift_id', shift.id),
+  ]);
+  const counts = new Map<number, number>();
+  for (const k of kids ?? []) if (Number.isInteger(k.team_number) && k.team_number > 0) counts.set(k.team_number, (counts.get(k.team_number) ?? 0) + 1);
+  const base = counts.size ? [...counts.keys()] : (shift.assigned_teams ?? []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0);
+  return [...new Set<number>(base)].sort((a, b) => a - b).map((team) => ({
+    team,
+    children: counts.get(team) ?? 0,
+    staff: (asg ?? []).filter((a: any) => a.team_number === team && a.staff_members).map((a: any) => a.staff_members.full_name.split(' ').slice(0, 2).join(' ')),
+  }));
+}
+
 async function authUser(req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -89,7 +105,8 @@ Deno.serve(async (req) => {
       if (!inv) return json({ error: 'invite_invalid' });
       const shift = await loadInviteShift(svc, inv.shift_id ?? null);
       if (inv.shift_id && !shift) return json({ error: 'invite_invalid' });
-      return json({ ok: true, kind: inv.kind, label: inv.label, shift });
+      const teams = shift ? await shiftTeams(svc, shift) : [];
+      return json({ ok: true, kind: inv.kind, label: inv.label, shift, teams });
     }
 
     if (action === 'register') {
@@ -138,7 +155,7 @@ Deno.serve(async (req) => {
       const shift = inv ? await loadInviteShift(svc, inv.shift_id ?? null) : null;
       const team = Math.floor(Number(body?.team_number));
       if (!inv || !shift) return json({ error: 'invite_invalid' });
-      const allowedTeams = (shift.assigned_teams ?? []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0);
+      const allowedTeams = (await shiftTeams(svc, shift)).map((t) => t.team);
       if (!allowedTeams.includes(team)) return json({ error: 'invalid_team' });
       const { data: member } = await svc.from('staff_members').select('user_id, is_active').eq('user_id', user.id).maybeSingle();
       if (!member?.is_active) return json({ error: 'not_staff' }, 403);

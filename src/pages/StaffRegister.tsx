@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { KIND_LABEL, StaffKind, staffCall, staffErr } from '@/lib/staffApi';
 import { useStaffTheme } from '@/lib/staffTheme';
@@ -33,6 +32,7 @@ const StaffRegister = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [team, setTeam] = useState('');
+  const [teams, setTeams] = useState<{ team: number; children: number; staff: string[] }[]>([]);
   const [seconds, setSeconds] = useState(5);
 
   useEffect(() => {
@@ -40,6 +40,7 @@ const StaffRegister = () => {
       .then(async (d) => {
         setKind(d.kind);
         setShift(d.shift ?? null);
+        setTeams(Array.isArray(d.teams) ? d.teams : []);
         setState('ok');
         if (d.shift) {
           const { data } = await supabase.auth.getUser();
@@ -170,13 +171,24 @@ const StaffRegister = () => {
 
         {state === 'ok' && mode === 'team' && shift && (
           <div className="space-y-4 rounded-3xl border border-border bg-card p-5">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Команда</Label>
-              <Select value={team} onValueChange={setTeam}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="Оберіть свою команду" /></SelectTrigger>
-                <SelectContent>{shift.assigned_teams.map((n) => <SelectItem key={n} value={String(n)}>Команда №{n}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            <Label className="text-xs font-semibold">Команди цієї зміни</Label>
+            {teams.length === 0 ? (
+              <p className="rounded-xl bg-muted p-3 text-sm text-muted-foreground">У зміні ще немає команд. Попросіть адміністратора додати команди або імпортувати дітей.</p>
+            ) : (
+              <div role="radiogroup" className="grid grid-cols-2 gap-2">
+                {teams.map((t) => {
+                  const on = team === String(t.team);
+                  return (
+                    <button key={t.team} type="button" role="radio" aria-checked={on} onClick={() => { setError(null); setTeam(String(t.team)); }}
+                      className={cn('rounded-2xl border p-3 text-left transition-all active:scale-[0.97]', on ? 'border-primary bg-primary/10 ring-2 ring-primary/40' : 'border-border bg-background hover:border-primary/40')}>
+                      <div className="text-lg font-black">№{t.team}</div>
+                      <div className="text-[11px] text-muted-foreground">{t.children ? `${t.children} дітей` : 'Діти ще не додані'}</div>
+                      {t.staff.length > 0 && <div className="mt-1 truncate text-[11px] text-primary" title={t.staff.join(', ')}>Супровід: {t.staff.join(', ')}</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="flex items-start gap-2 rounded-xl bg-muted p-3 text-xs text-muted-foreground"><Users className="mt-0.5 size-4 shrink-0 text-primary" />Перевірте номер команди. Після підтвердження зміна з’явиться у вашому кабінеті.</div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             <Button className="h-12 w-full rounded-xl font-bold" disabled={!team || seconds > 0 || busy} onClick={joinShift}>
