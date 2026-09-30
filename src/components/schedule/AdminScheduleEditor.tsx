@@ -129,6 +129,7 @@ const AdminScheduleEditor = () => {
   const save = async () => {
     if (!form) return;
     if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
+    if (!form.time_start?.trim()) { toast.error('Вкажи час початку — без нього подія не з’явиться в розкладі'); return; }
     setBusy(true);
     try {
       const payload = {
