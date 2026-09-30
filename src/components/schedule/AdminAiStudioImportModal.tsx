@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
 import { cleanAndParseScheduleJson } from "@/lib/json-sanitizer";
 import { broadcastScheduleUpdated } from "@/lib/schedule";
-import { normalizeTime } from "@/lib/scheduleCategories";
+import { normalizeTime, normalizeCategory } from "@/lib/scheduleCategories";
 import { useActiveShift } from "@/context/ActiveShiftContext";
 
 const AI_STUDIO_URL = "https://aistudio.google.com/prompts/new_chat";

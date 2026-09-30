@@ -6,6 +6,8 @@ export type AppRole = 'child' | 'supervisor' | 'admin' | 'parent';
 const ROLE_KEY = 'helpsuprov:role';
 const SESSION_META_KEY = 'helpsuprov:session-meta';
 const CHILD_ARCHIVE_KEY = 'zz_child_persistent_passport_v1';
+const CHILD_ARCHIVE_LAST = 'zz_child_persistent_passport_v1:last';
+const archiveKey = (id: string) => `${CHILD_ARCHIVE_KEY}:${id}`;
 
 export interface SessionMeta {
   childId?: string | null;
@@ -54,7 +56,8 @@ export const saveChildArchiveSnapshot = (
       version: 2,
     };
 
-    localStorage.setItem(CHILD_ARCHIVE_KEY, JSON.stringify(payload));
+    localStorage.setItem(archiveKey(child.id), JSON.stringify(payload));
+    localStorage.setItem(CHILD_ARCHIVE_LAST, child.id);
   } catch (e: any) {
     // Якщо localStorage переповнено — зберігаємо без зайвого розкладу, зберігаючи критичні дані дитини
     console.warn('[Session] LocalStorage Quota warning, saving compact snapshot:', e);
@@ -67,7 +70,8 @@ export const saveChildArchiveSnapshot = (
         isArchived: true,
         version: 2,
       };
-      localStorage.setItem(CHILD_ARCHIVE_KEY, JSON.stringify(compactPayload));
+      localStorage.setItem(archiveKey(child.id), JSON.stringify(compactPayload));
+      localStorage.setItem(CHILD_ARCHIVE_LAST, child.id);
     } catch (criticalErr) {
       console.error('[Session] Не вдалося зберегти офлайн-паспорт:', criticalErr);
     }
@@ -75,11 +79,16 @@ export const saveChildArchiveSnapshot = (
 };
 
 /** Отримує збережений паспорт Учасника */
-export const getChildArchiveSnapshot = (): ChildArchiveData | null => {
+export const getChildArchiveSnapshot = (childId?: string | null): ChildArchiveData | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = localStorage.getItem(CHILD_ARCHIVE_KEY);
+    const id = childId || localStorage.getItem(CHILD_ARCHIVE_LAST);
+    let raw = id ? localStorage.getItem(archiveKey(id)) : null;
+    if (!raw) {
+      raw = localStorage.getItem(CHILD_ARCHIVE_KEY); // старий формат
+      if (raw && id && JSON.parse(raw)?.child?.id !== id) raw = null;
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || !parsed.child || !parsed.child.id) return null;
@@ -114,6 +123,9 @@ export const hasChildArchiveSnapshot = (): boolean => {
 /** Очищує лише збережений паспорт */
 export const clearChildArchiveSnapshot = () => {
   try {
+    const id = localStorage.getItem(CHILD_ARCHIVE_LAST);
+    if (id) localStorage.removeItem(archiveKey(id));
+    localStorage.removeItem(CHILD_ARCHIVE_LAST);
     localStorage.removeItem(CHILD_ARCHIVE_KEY);
   } catch {}
 };
