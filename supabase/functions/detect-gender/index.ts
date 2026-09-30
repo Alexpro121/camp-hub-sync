@@ -19,9 +19,11 @@ export function heuristicGender(fullName: string): Gender {
   return 'unknown';
 }
 
+let jevBlocked: number | null = null;
+
 async function askJev(names: Record<string, string>): Promise<Record<string, Gender> | null> {
   const key = Deno.env.get('LOVABLE_API_KEY');
-  if (!key) return null;
+  if (!key || jevBlocked) return null;
   const questions: Record<string, unknown> = {};
   for (const id of Object.keys(names)) {
     questions[id] = {
@@ -45,6 +47,8 @@ async function askJev(names: Record<string, string>): Promise<Record<string, Gen
     });
     if (!res.ok) {
       console.warn('jev status', res.status, (await res.text()).slice(0, 200));
+      // 400/401/402/403/404 are terminal — stop calling Jev for the rest of this request.
+      if (res.status !== 429 && res.status < 500) jevBlocked = res.status;
       return null;
     }
     const data = await res.json();
@@ -85,6 +89,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
   try {
+    jevBlocked = null;
     const auth = await requireUser(req);
     if (auth.response) return auth.response;
     const svc = admin();
@@ -113,7 +118,7 @@ Deno.serve(async (req) => {
     await Promise.all(
       Object.entries(results).map(([id, gender]) => svc.from('children').update({ gender }).eq('id', id)),
     );
-    return json({ updated: Object.keys(results).length, results });
+    return json({ updated: Object.keys(results).length, results, ai: jevBlocked ? `unavailable_${jevBlocked}` : 'ok' });
   } catch (e) {
     console.error('detect-gender failed', e instanceof Error ? e.message : e);
     return json({ error: 'detect_failed' }, 500);
