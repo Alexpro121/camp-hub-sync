@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Coins, Loader2, LogOut, Mic2, ArrowLeftRight, Users, ChevronRight, Crown, Sun, Moon, Camera, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, saveSession } from '@/lib/session';
-import SupervisorFlow from '@/components/screens/SupervisorFlow';
 import { FullScreenLoader } from '@/components/ui/loader';
 import StaffAvatar from '@/components/staff/StaffAvatar';
 import { compressAvatar, KIND_LABEL, StaffKind, staffCall as call, staffErr } from '@/lib/staffApi';
 import { useInvertedLight, useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
+
+const SupervisorFlow = lazy(() => import('@/components/screens/SupervisorFlow'));
 
 interface Assignment {
   id: string;
@@ -135,11 +136,11 @@ const StaffPortal = () => {
 
   if (inPanel) {
     return (
-      <SupervisorFlow
+          <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}><SupervisorFlow
         cabinetMode
         onBack={() => { setActiveTeam(null); loadCabinet().catch(() => {}); }}
         onAdminUnlock={() => navigate('/')}
-      />
+          /></Suspense>
     );
   }
 
@@ -203,11 +204,11 @@ const StaffPortal = () => {
               {ThemeBtn}
             </header>
 
-            <div className="flex gap-2">
-              <Button variant="secondary" className="flex-1 rounded-xl" onClick={() => setProfileOpen(true)}>
+             <div className="flex gap-2 min-w-0">
+               <Button variant="secondary" className="flex-1 min-w-0 rounded-xl" onClick={() => setProfileOpen(true)}>
                 <Pencil className="w-4 h-4 mr-1.5" /> Мої контакти
               </Button>
-              <Button variant="secondary" onClick={logout} className="flex-1 rounded-xl">
+               <Button variant="secondary" onClick={logout} className="flex-1 min-w-0 rounded-xl">
                 <LogOut className="w-4 h-4 mr-1.5" /> Вийти
               </Button>
             </div>
@@ -270,7 +271,7 @@ const Section = ({ title, items, onEnter, busy, tone }: {
     <section className="space-y-2.5">
       <h2 className="text-sm font-bold text-muted-foreground">{title} <span className="opacity-60">{items.length}</span></h2>
       {items.map((a) => (
-        <div key={a.id} className={cn('p-4 rounded-2xl bg-card border space-y-3', tone === 'live' ? 'border-primary/50' : 'border-border', tone === 'past' && 'opacity-80')}>
+        <div key={a.id} className={cn('p-4 rounded-xl bg-card border space-y-3', tone === 'live' ? 'border-primary/50' : 'border-border', tone === 'past' && 'opacity-80')}>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="font-bold truncate">{a.shift.name}</p>
@@ -281,7 +282,7 @@ const Section = ({ title, items, onEnter, busy, tone }: {
             <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap',
               tone === 'live' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>Команда №{a.team_number}</span>
           </div>
-          <div className="grid grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-2 min-[390px]:grid-cols-4 gap-2 text-center">
             <Stat icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={a.stats.children} />
             <Stat icon={<Coins className="w-3.5 h-3.5" />} label="А$" value={a.stats.iron_total} />
             <Stat icon={<ArrowLeftRight className="w-3.5 h-3.5" />} label="Трансф." value={a.stats.transfers} />

@@ -902,3 +902,43 @@
 /* Team panel has fixed dark colours, so light mode is an inverted rendering; photos are re-inverted. */
 html.staff-invert { filter: invert(0.92) hue-rotate(180deg); background: #fff; }
 html.staff-invert img, html.staff-invert video, html.staff-invert canvas { filter: invert(1) hue-rotate(180deg); }
+
+/* Static supervisor light-mode bridge; avoids reinserting a style sheet on every render. */
+#supervisor-flow-root.theme-light { color-scheme: light; }
+#supervisor-flow-root.theme-light .bg-card,
+#supervisor-flow-root.theme-light [class*="bg-card"],
+#supervisor-flow-root.theme-light [class*="bg-[#0F1523]"],
+#supervisor-flow-root.theme-light [class*="bg-[#0f1523]"],
+#supervisor-flow-root.theme-light [class*="bg-[#0A0E18]"],
+#supervisor-flow-root.theme-light [class*="bg-[#0a0e18]"] {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+#supervisor-flow-root.theme-light [class*="text-white"],
+#supervisor-flow-root.theme-light [class*="text-slate-100"],
+#supervisor-flow-root.theme-light [class*="text-slate-200"],
+#supervisor-flow-root.theme-light [class*="text-slate-300"] { color: hsl(var(--foreground)) !important; }
+#supervisor-flow-root.theme-light [class*="text-muted-foreground"],
+#supervisor-flow-root.theme-light [class*="text-slate-400"],
+#supervisor-flow-root.theme-light [class*="text-slate-500"] { color: hsl(var(--muted-foreground)) !important; }
+#supervisor-flow-root.theme-light input,
+#supervisor-flow-root.theme-light select,
+#supervisor-flow-root.theme-light [class*="bg-white/5"],
+#supervisor-flow-root.theme-light [class*="bg-surface-1"] {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+#supervisor-flow-root.theme-light [class*="border-white/5"],
+#supervisor-flow-root.theme-light [class*="border-white/10"],
+#supervisor-flow-root.theme-light [class*="border-border"] { border-color: hsl(var(--border)) !important; }
+#supervisor-flow-root.theme-light [class*="text-[#FA5A15]"] { color: hsl(var(--primary)) !important; }
+
+@media (max-width: 767px) {
+  /* Glass and large fixed blurs cost frames on budget phones. */
+  .card-hero-bg, .card-secondary { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .sky-glow { filter: blur(45px); animation: none; }
+  .fog-1, .fog-2 { animation: none; }
+  .card-hero::before { animation: none; }
+}
