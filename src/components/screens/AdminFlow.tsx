@@ -540,7 +540,7 @@ const ShiftsTab = () => {
         {shifts.filter(s => !s.deleted_at).length === 0 ? (
           <p className="py-5 text-sm text-muted-foreground">Немає зареєстрованих змін</p>
         ) : shifts.filter(s => !s.deleted_at && (showPast || shiftStatus(s) !== 'finished')).map(s => (
-          <ShiftRow key={`${s.id}-${s.updated_at}`} shift={s} onDelete={() => remove(s.id)} onChanged={load} />
+          <ShiftRow key={s.id} shift={s} onDelete={() => remove(s.id)} onChanged={load} />
         ))}
         {shifts.some(s => !s.deleted_at && shiftStatus(s) === 'finished') && (
           <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => setShowPast(v => !v)}>
