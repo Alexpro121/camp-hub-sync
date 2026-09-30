@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       if (!phone) return json({ error: 'bad_phone' });
       if (tgRaw && !telegram) return json({ error: 'bad_telegram' });
       if (!login) return json({ error: 'bad_login' });
-      if (password.length < 8 || password.length > 72) return json({ error: 'weak_password' });
+      if (password.length < 6 || password.length > 72) return json({ error: 'weak_password' });
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' });
       // Для посилання конкретної зміни місце витрачається лише після вибору команди.
