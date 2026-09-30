@@ -88,7 +88,9 @@ Deno.serve(async (req) => {
     // Не розкриваємо, чи знайдено дитину: завжди однакова відповідь.
     if (body?.action === 'check') {
       const unique = byName.length === 1 ? byName[0] : null;
-      return json({ has_phone: !!(unique && phoneKey(unique.phone).length >= 9) });
+      // Не розкриваємо, чи є така дитина в таборі: форма завжди просить телефон.
+      void unique;
+      return json({ has_phone: true });
     }
 
     // Вхід лише з номером телефону, що збігається з базою. Без номера — ні.

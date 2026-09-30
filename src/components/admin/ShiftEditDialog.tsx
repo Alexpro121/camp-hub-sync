@@ -237,11 +237,12 @@ function ImportTab({ shift, teamCounts, onDone }: { shift: Shift; teamCounts: Ma
         .map((r) => toDbRow({ ...r, team_number: Number(r.team_number) + offset }, shift.id));
       const { data: existing } = await supabase.from('children').select('id, full_name, team_number, deleted_at').eq('shift_id', shift.id).limit(5000);
       const byName = new Map<string, any>();
-      (existing ?? []).forEach((c: any) => byName.set(nameKey(c.full_name || ''), c));
+      (existing ?? []).forEach((c: any) => byName.set(`${c.team_number}|${nameKey(c.full_name || '')}`, c));
       const toInsert: any[] = []; const seen = new Set<string>();
       let updated = 0, skipped = 0;
       for (const r of rows) {
-        const k = nameKey(r.full_name);
+        // Однофамільці в різних командах — різні діти.
+        const k = `${r.team_number}|${nameKey(r.full_name)}`;
         if (seen.has(k)) { skipped++; continue; }
         seen.add(k);
         const ex = byName.get(k);

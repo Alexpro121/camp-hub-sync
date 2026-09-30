@@ -1170,7 +1170,7 @@ const StatsTab = () => {
   const load = async () => {
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('*').order('team_number'),
+      supabase.from('children').select('id, shift_id, team_number, full_name, is_present, has_logged_in, iron_dollars, gender, deleted_at, phone, row_number').order('team_number'),
       supabase.from('transfers').select('child_id'),
     ]);
 

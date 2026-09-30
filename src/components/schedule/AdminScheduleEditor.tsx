@@ -214,19 +214,18 @@ const AdminScheduleEditor = () => {
     const affected = sorted.filter((i) => (i.time_start || '') >= (from.time_start || ''));
     setBusy(true);
     try {
-      for (const i of affected) {
+      // Усі події зсуваються однією транзакцією — обрив зв'язку не розірве розклад.
+      const payload = affected.map((i) => {
         const slots = Array.isArray(i.sub_slots) ? (i.sub_slots as ScheduleSubSlot[]) : [];
-        const nextSlots = slots.map((s) => ({ ...s, time: shiftTime(s.time, delta) ?? s.time }));
-        const { error } = await supabase
-          .from('schedule_items')
-          .update({
-            time_start: shiftTime(i.time_start, delta),
-            time_end: shiftTime(i.time_end, delta),
-            sub_slots: nextSlots as unknown as any,
-          })
-          .eq('id', i.id);
-        if (error) throw error;
-      }
+        return {
+          id: i.id,
+          time_start: shiftTime(i.time_start, delta),
+          time_end: shiftTime(i.time_end, delta),
+          sub_slots: slots.map((s) => ({ ...s, time: shiftTime(s.time, delta) ?? s.time })),
+        };
+      });
+      const { error } = await (supabase as any).rpc('shift_schedule_items', { p_items: payload });
+      if (error) throw error;
       await load();
       await broadcastScheduleUpdated({ date, action: 'shift', delta });
       toast.success(`Зсув ${delta > 0 ? '+' : ''}${delta} хв для ${affected.length} подій`);
@@ -244,7 +243,8 @@ const AdminScheduleEditor = () => {
       const seen = new Set<string>();
       const trash: string[] = [];
       for (const i of sorted) {
-        const key = `${(i.time_start || '').trim()}|${(i.title || '').trim().toLowerCase()}`;
+        const teamsKey = (Array.isArray(i.target_teams) ? [...(i.target_teams as any[])] : []).map(String).sort().join(',');
+        const key = `${(i.time_start || '').trim()}|${(i.title || '').trim().toLowerCase()}|${(i.location || '').trim().toLowerCase()}|${teamsKey}`;
         if (seen.has(key)) trash.push(i.id);
         else seen.add(key);
       }

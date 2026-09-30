@@ -119,8 +119,11 @@ const CoupeManager = ({
     setBusy(true);
     try {
       const ids = rows.map((r) => r.id);
-      const { error } = await supabase.from('train_coupes').delete().in('id', ids);
-      if (error) throw error;
+      // Пачками по 50 — довгий список у адресі запиту відхиляється.
+      for (let i = 0; i < ids.length; i += 50) {
+        const { error } = await supabase.from('train_coupes').delete().in('id', ids.slice(i, i + 50));
+        if (error) throw error;
+      }
       setRows([]);
       island.showSuccess('Розселення очищено', 'Можеш імпортувати новий список');
     } catch (e: any) {

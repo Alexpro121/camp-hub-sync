@@ -349,7 +349,7 @@ async function getPdfJsLib(): Promise<any> {
 export function matrixFromCsv(csv: string): any[][] {
   const wb = XLSX.read(csv, { type: 'string', raw: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as any[][];
 }
 
 export function matrixFromRawText(text: string): any[][] {
@@ -459,7 +459,7 @@ export async function matrixFromFile(file: File): Promise<any[][]> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any[][];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as any[][];
 }
 
 export function detectHeaderIndex(matrix: any[][]): number {
