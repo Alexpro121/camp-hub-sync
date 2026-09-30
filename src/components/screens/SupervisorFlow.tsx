@@ -44,7 +44,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
-import { clearSavedSession, getSavedRole, getSavedTeam, saveSession } from '@/lib/session';
+import { clearSavedSession, getSavedRole, getSavedTeam, getSessionMeta, saveSession } from '@/lib/session';
 import SupervisorTour, { tourStorageKey } from '@/components/supervisor/SupervisorTour';
 
 interface Props {

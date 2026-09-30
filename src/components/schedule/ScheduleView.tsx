@@ -9,7 +9,6 @@ import { sentenceCase } from '@/lib/scheduleCategories';
 import {
   minutesSinceDayStart,
   normalizeScheduleItems,
-  ongoingEvents,
   shiftISODate,
   dedupeItems,
   SCHEDULE_CHANNEL,
