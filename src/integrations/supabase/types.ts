@@ -47,6 +47,24 @@ export type Database = {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       broadcasts: {
         Row: {
           color: string
@@ -982,6 +1000,69 @@ export type Database = {
           },
         ]
       }
+      transfer_requests: {
+        Row: {
+          child_1_id: string
+          child_2_id: string | null
+          created_at: string
+          gender_mismatch: boolean
+          id: string
+          kind: string
+          requested_by: string
+          requested_label: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          summary: string
+          target_team: number | null
+        }
+        Insert: {
+          child_1_id: string
+          child_2_id?: string | null
+          created_at?: string
+          gender_mismatch?: boolean
+          id?: string
+          kind: string
+          requested_by: string
+          requested_label?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          summary: string
+          target_team?: number | null
+        }
+        Update: {
+          child_1_id?: string
+          child_2_id?: string | null
+          created_at?: string
+          gender_mismatch?: boolean
+          id?: string
+          kind?: string
+          requested_by?: string
+          requested_label?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          summary?: string
+          target_team?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transfer_requests_child_1_id_fkey"
+            columns: ["child_1_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfer_requests_child_2_id_fkey"
+            columns: ["child_2_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transfers: {
         Row: {
           child_full_name: string
@@ -1143,11 +1224,26 @@ export type Database = {
         }
         Returns: Json
       }
+      request_child_move: {
+        Args: {
+          p_child_1_id: string
+          p_child_2_id: string
+          p_kind: string
+          p_performed_by: string
+          p_target_team: number
+        }
+        Returns: Json
+      }
       resolve_fair_code: { Args: { p_code: string }; Returns: Json }
+      review_transfer_request: {
+        Args: { p_approve: boolean; p_request_id: string }
+        Returns: Json
+      }
       search_child_for_transfer: {
         Args: { p_my_team: number; p_query: string; p_shift_id: string }
         Returns: {
           full_name: string
+          gender: string
           id: string
           team_number: number
         }[]
