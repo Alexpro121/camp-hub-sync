@@ -47,7 +47,7 @@ export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
       <div className="grid grid-cols-2 gap-3" aria-label="Підсумок зміни">
         <div className="border-l-2 border-primary bg-card px-4 py-4">
           <p className="text-xs text-muted-foreground">Дітей</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{loading ? '…' : error ? '—' : summary ?? 0}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{loading ? '…' : error ? '—' : summary ?? '—'}</p>
         </div>
         <div className="border-l-2 border-border bg-card px-4 py-4">
           <p className="text-xs text-muted-foreground">Команд</p>

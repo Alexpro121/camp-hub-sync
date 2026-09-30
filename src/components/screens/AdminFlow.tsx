@@ -279,6 +279,7 @@ const ShiftsTab = () => {
   const load = async () => {
     const { data } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
     setShifts((data || []) as Shift[]);
+    if (data && !data.some(s => !s.deleted_at)) setFormOpen(true);
   };
   useEffect(() => { load(); }, []);
 
