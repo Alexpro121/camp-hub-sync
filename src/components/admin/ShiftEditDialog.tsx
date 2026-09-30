@@ -248,7 +248,7 @@ function ImportTab({ shift, teamCounts, onDone }: { shift: Shift; teamCounts: Ma
         if (ex?.deleted_at) { skipped++; continue; }
         if (ex) {
           // Команду не змінюємо: її могли перевести вручну. Оновлюємо лише порожні/довідкові поля.
-          const patch: Record<string, unknown> = {};
+          const patch: { phone?: string; note_from_table?: string; team_name?: string } = {};
           if (r.phone) patch.phone = r.phone;
           if (r.note_from_table) patch.note_from_table = r.note_from_table;
           if (r.team_name) patch.team_name = r.team_name;
