@@ -386,6 +386,9 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
                     {cleanMsg}
                   </p>
                 )}
+                {typeof (n.metadata as any)?.actor === 'string' && (
+                  <p className="mt-1 text-[11px] text-slate-400">Виконав(ла): <span className="font-semibold text-slate-200">{(n.metadata as any).actor}</span></p>
+                )}
 
                 <div className="flex items-center gap-2 mt-2 pt-1 border-t border-white/5">
                   <span className="text-[10px] font-mono font-medium text-slate-500">

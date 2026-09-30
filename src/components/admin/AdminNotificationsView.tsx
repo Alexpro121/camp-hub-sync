@@ -208,6 +208,9 @@ const AdminNotificationsView = () => {
                     </span>
                   </div>
                   <p className="mt-1 text-sm font-bold text-white break-words">{n.message}</p>
+                  {typeof (n.metadata as any)?.actor === 'string' && (
+                    <p className="mt-1 text-[11px] text-slate-400">Виконав(ла): <span className="font-semibold text-slate-200">{(n.metadata as any).actor}</span></p>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {isSwap ? (
                       <>

@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Coins, Loader2, LogOut, Mic2, ArrowLeftRight, Users, ChevronRight, Crown, Sun, Moon, Camera, Pencil } from 'lucide-react';
@@ -14,7 +15,7 @@ import { compressAvatar, KIND_LABEL, StaffKind, staffCall as call, staffErr } fr
 import { useInvertedLight, useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 
-const SupervisorFlow = lazy(() => import('@/components/screens/SupervisorFlow'));
+const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 
 interface Assignment {
   id: string;
