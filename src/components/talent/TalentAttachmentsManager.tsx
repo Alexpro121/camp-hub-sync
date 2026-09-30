@@ -425,7 +425,7 @@ const TalentAttachmentsManager: React.FC<Props> = ({
           )}
 
           <p className="text-[10px] text-slate-500 px-1 leading-relaxed">
-            Аудіо до 35 МБ (mp3, wav, m4a) · Зображення до 15 МБ (jpg, png, webp) · Відео до 60 МБ (mp4, mov)
+            Аудіо до 35 МБ (mp3, wav, m4a) · Зображення до 15 МБ (jpg, png, webp) · Відео до 60 МБ (mp4, mov). Порада: знімайте відео у 720p/1080p 30fps або короткі фрагменти до 1 хв
           </p>
         </div>
       )}

@@ -447,7 +447,12 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'unassign') {
+      const { data: asg } = await svc.from('staff_assignments').select('staff_user_id, team_number').eq('id', String(body?.assignment_id)).maybeSingle();
       await svc.from('staff_assignments').delete().eq('id', String(body?.assignment_id));
+      if (asg?.staff_user_id) {
+        await svc.from('user_roles').update({ team_number: null })
+          .eq('user_id', asg.staff_user_id).eq('role', 'supervisor').eq('team_number', asg.team_number);
+      }
       return json({ ok: true });
     }
 

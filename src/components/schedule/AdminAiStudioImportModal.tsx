@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
 import { cleanAndParseScheduleJson } from "@/lib/json-sanitizer";
 import { broadcastScheduleUpdated } from "@/lib/schedule";
-import { normalizeTime } from "@/lib/scheduleCategories";
+import { normalizeTime, normalizeCategory } from "@/lib/scheduleCategories";
 import { useActiveShift } from "@/context/ActiveShiftContext";
 
 const AI_STUDIO_URL = "https://aistudio.google.com/prompts/new_chat";
@@ -170,11 +170,11 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
               location: i.location ? String(i.location).trim() : null,
               time_start: timeStart,
               time_end: normalizeTime(i.time_end || "") || null,
-              category: i.category || "general",
-              target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []) as unknown as any,
+              category: normalizeCategory(i.category),
+              target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []).map(Number).filter((n) => Number.isInteger(n) && n > 0) as unknown as any,
               order_index: baseIndex + rows.length,
               has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
-              sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []) as unknown as any,
+              sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []).map((s: any) => ({ ...s, teams: (Array.isArray(s?.teams) ? s.teams : []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0) })) as unknown as any,
             });
           });
         if (!rows.length) continue;

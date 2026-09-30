@@ -22,8 +22,15 @@ export const CATEGORY_META: Record<ScheduleCategory, CategoryMeta> = {
 
 export const CATEGORY_LIST = Object.values(CATEGORY_META);
 
-export const catMeta = (c?: string | null): CategoryMeta =>
-  CATEGORY_META[(c as ScheduleCategory) ?? 'general'] ?? CATEGORY_META.general;
+const CATEGORY_ALIASES: Record<string, ScheduleCategory> = {
+  workshop: 'gathering', activity: 'sports', routine: 'general', event: 'entertainment',
+};
+export const normalizeCategory = (c?: string | null): ScheduleCategory => {
+  const k = String(c ?? '').trim().toLowerCase();
+  if (k in CATEGORY_META) return k as ScheduleCategory;
+  return CATEGORY_ALIASES[k] ?? 'general';
+};
+export const catMeta = (c?: string | null): CategoryMeta => CATEGORY_META[normalizeCategory(c)];
 
 /**
  * Accepts any human time input — "14:25", "14.25", "14 25", "14-25", "1425",

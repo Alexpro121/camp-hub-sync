@@ -107,7 +107,7 @@ const useUnreadTransfers = () => {
       const { count: c } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
-        .in('type', ['transfer', 'swap'])
+        .in('type', ['transfer', 'swap', 'approval'])
         .gt('created_at', seen);
       if (alive) setCount(c ?? 0);
     };
@@ -922,6 +922,12 @@ const DataTab = () => {
     await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await Promise.allSettled([
+      supabase.from('train_coupes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('iron_dollar_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('uploaded_files').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+      supabase.from('transfer_requests').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
+    ]);
     haptics.notification('success');
     toast.success('Базу успішно очищено');
     load();

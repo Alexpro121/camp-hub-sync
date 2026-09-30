@@ -111,7 +111,7 @@ describe('Збереження профілю після зміни — реал
     const orig = Storage.prototype.setItem;
     let n = 0;
     Storage.prototype.setItem = function (k: string, v: string) {
-      if (k === 'zz_child_persistent_passport_v1' && n++ === 0) throw new DOMException('quota', 'QuotaExceededError');
+      if (k.startsWith('zz_child_persistent_passport_v1:') && !k.endsWith(':last') && n++ === 0) throw new DOMException('quota', 'QuotaExceededError');
       return orig.call(this, k, v);
     };
     try {

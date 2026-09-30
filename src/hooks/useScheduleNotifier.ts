@@ -11,7 +11,7 @@ const KEY = 'helpsuprov:event-reminders';
 const LEAD_MIN = 5;
 const DEFAULT_DURATION = 60;
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date());
 
 const readFired = (): Record<string, number> => {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { return {}; }
