@@ -73,16 +73,22 @@ const Index = () => {
           const { data, error } = await supabase.auth.getSession();
           if (cancelled) return;
 
-          if (!error && data?.session) {
+          // Панель адміна відкриваємо лише для справжньої сесії з роллю admin,
+          // інакше зміни розкладу відхиляються базою (permission denied).
+          let isAdmin = false;
+          const uid = !error ? data?.session?.user?.id : undefined;
+          if (uid) {
+            const { data: roles } = await supabase
+              .from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin').limit(1);
+            isAdmin = !!roles?.length;
+          }
+          if (cancelled) return;
+          if (isAdmin) {
             setScreen(savedRole);
           } else {
-            const localStaffSession = localStorage.getItem('iron_staff_session') || localStorage.getItem('helpsuprov_staff_team');
-            if (localStaffSession) {
-              setScreen(savedRole);
-            } else {
-              clearSavedSession();
-              setScreen('role');
-            }
+            clearSavedSession();
+            navigate('/staff', { replace: true });
+            return;
           }
         } else {
           clearSavedSession();
