@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ArrowLeft, 
   Upload, 
@@ -171,6 +172,50 @@ const AdminFlow = ({ onBack }: Props) => {
     { value: 'stats', label: 'Статистика', icon: BarChart3 },
     { value: 'data', label: 'База', icon: Database },
   ];
+  const mobileNavigation = typeof document === 'undefined' ? null : createPortal(
+    <nav
+      className="sm:hidden fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-xl"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="Розділи адміністратора"
+    >
+      <div className="grid h-16 w-full grid-cols-5 gap-0.5 px-1">
+        {primaryTabs.map(({ value, label, icon: Icon }) => {
+          const active = tab === value;
+          return (
+            <Button
+              key={value}
+              type="button"
+              variant="ghost"
+              onClick={() => setTab(value)}
+              aria-current={active ? 'page' : undefined}
+              className={`h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] font-medium ${active ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+            >
+              <Icon className="size-5 shrink-0" />
+              <span className="block w-full truncate px-0.5">{label}</span>
+            </Button>
+          );
+        })}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Інші розділи"
+              className={`relative h-14 min-w-0 flex-col gap-1 self-center rounded-md px-0 text-[10px] ${moreTabs.some(item => item.value === tab) ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+            >
+              <Menu className="size-5 shrink-0" />
+              <span className="block w-full truncate px-0.5">{moreTabs.find(item => item.value === tab)?.label ?? 'Ще'}</span>
+              {unreadTransfers > 0 && <span className="absolute right-1 top-1 min-w-4 rounded-full bg-primary px-1 text-[9px] text-primary-foreground">{unreadTransfers > 99 ? '99+' : unreadTransfers}</span>}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" sideOffset={8} className="w-52 max-w-[calc(100vw-1rem)]">
+            {moreTabs.map(({ value, label, icon: Icon }) => <DropdownMenuItem key={value} onSelect={() => setTab(value)} className="min-h-11 gap-3"><Icon className="size-4" />{label}{value === 'notifications' && unreadTransfers > 0 && <span className="ml-auto text-primary">{unreadTransfers}</span>}</DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </nav>,
+    document.body,
+  );
 
 
   const handleExit = async () => {
@@ -181,8 +226,9 @@ const AdminFlow = ({ onBack }: Props) => {
 
   return (
     <ActiveShiftProvider>
-      <div className="min-h-[100dvh] max-w-5xl mx-auto pb-28 sm:pb-16 select-none bg-background text-foreground">
-        <header className="px-4 py-3 safe-top border-b border-border bg-background/95 backdrop-blur-xl sticky top-0 z-30">
+      <div className="min-h-[100dvh] w-full min-w-0 overflow-x-clip bg-background pb-[calc(5rem+env(safe-area-inset-bottom))] text-foreground select-none sm:pb-16">
+        <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 px-3 py-3 backdrop-blur-xl safe-top sm:px-4">
+          <div className="mx-auto w-full max-w-5xl min-w-0">
           <div className="flex items-center justify-between">
             <Button variant="ghost"
               onClick={handleExit} 
@@ -200,9 +246,10 @@ const AdminFlow = ({ onBack }: Props) => {
           <div className="mt-2">
             <ActiveShiftSwitcher />
           </div>
+          </div>
         </header>
 
-        <Tabs value={tab} onValueChange={setTab} className="w-full px-4 pt-2">
+        <Tabs value={tab} onValueChange={setTab} className="mx-auto w-full max-w-5xl min-w-0 px-3 pt-2 sm:px-4">
           <div className="hidden sm:block sticky top-[108px] z-20 -mx-4 px-4 py-2 bg-background/95 overflow-x-auto no-scrollbar">
             <TabsList className="flex h-auto w-full p-1 gap-1 bg-muted border border-border rounded-md">
               {primaryTabs.map(({ value, label, icon: Icon }) => (
@@ -223,40 +270,20 @@ const AdminFlow = ({ onBack }: Props) => {
             </TabsList>
           </div>
 
-          <nav className="sm:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-background/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]" aria-label="Розділи адміністратора">
-            <TabsList className="grid grid-cols-5 h-16 w-full rounded-none bg-transparent p-1">
-              {primaryTabs.map(({ value, label, icon: Icon }) => (
-                <TabsTrigger key={value} value={value} className="flex-col gap-1 min-w-0 h-14 px-0 text-[10px] font-medium data-[state=active]:text-primary data-[state=active]:bg-muted">
-                  <Icon className="w-5 h-5" /><span className="truncate max-w-full">{label}</span>
-                </TabsTrigger>
-              ))}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" aria-label="Інші розділи" className={`flex flex-col gap-1 min-w-0 h-14 px-0 text-[10px] ${moreTabs.some(item => item.value === tab) ? 'text-primary bg-muted' : 'text-muted-foreground'}`}>
-                    <Menu className="w-5 h-5" /><span>{moreTabs.find(item => item.value === tab)?.label ?? 'Ще'}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="top" className="w-52 mb-2">
-                  {moreTabs.map(({ value, label, icon: Icon }) => <DropdownMenuItem key={value} onSelect={() => setTab(value)} className="min-h-11 gap-3"><Icon className="w-4 h-4" />{label}{value === 'notifications' && unreadTransfers > 0 && <span className="ml-auto text-primary">{unreadTransfers}</span>}</DropdownMenuItem>)}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TabsList>
-          </nav>
-
-          <TabsContent value="overview" className="mt-0"><AdminOverview onNavigate={setTab} unread={unreadTransfers} /></TabsContent>
+          <TabsContent value="overview" className="mt-0 min-w-0"><AdminOverview onNavigate={setTab} unread={unreadTransfers} /></TabsContent>
           <Suspense fallback={<div className="mt-5 space-y-3" aria-label="Завантаження розділу"><div className="h-16 rounded-md bg-muted animate-pulse" /><div className="h-40 rounded-md bg-muted animate-pulse" /></div>}>
-          <TabsContent value="shifts" className="mt-3 animate-fade-in"><ShiftsTab /></TabsContent>
-          <TabsContent value="schedule" className="mt-3 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
-          <TabsContent value="talent" className="mt-3 animate-fade-in"><TalentAdmin /></TabsContent>
-          <TabsContent value="notifications" className="mt-3 space-y-3 animate-fade-in"><AdminAlumniBroadcast /><AdminNotificationsView /></TabsContent>
-          {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 animate-fade-in"><TrainTab /></TabsContent>)}
-          {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
-          <TabsContent value="stats" className="mt-3 animate-fade-in"><StatsTab /></TabsContent>
-          <TabsContent value="staff" className="mt-3 animate-fade-in"><AdminStaffAccounts /></TabsContent>
-          <TabsContent value="data" className="mt-3 animate-fade-in"><DataTab /></TabsContent>
+          <TabsContent value="shifts" className="mt-3 min-w-0 animate-fade-in"><ShiftsTab /></TabsContent>
+          <TabsContent value="schedule" className="mt-3 min-w-0 space-y-4 animate-fade-in"><AdminScheduleEditor /></TabsContent>
+          <TabsContent value="talent" className="mt-3 min-w-0 animate-fade-in"><TalentAdmin /></TabsContent>
+          <TabsContent value="notifications" className="mt-3 min-w-0 space-y-3 animate-fade-in"><AdminAlumniBroadcast /><AdminNotificationsView /></TabsContent>
+          {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 min-w-0 animate-fade-in"><TrainTab /></TabsContent>)}
+          {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 min-w-0 animate-fade-in"><AdminPrintQRCodes /></TabsContent>)}
+          <TabsContent value="stats" className="mt-3 min-w-0 animate-fade-in"><StatsTab /></TabsContent>
+          <TabsContent value="staff" className="mt-3 min-w-0 animate-fade-in"><AdminStaffAccounts /></TabsContent>
+          <TabsContent value="data" className="mt-3 min-w-0 animate-fade-in"><DataTab /></TabsContent>
           </Suspense>
         </Tabs>
-
+        {mobileNavigation}
       </div>
     </ActiveShiftProvider>
   );

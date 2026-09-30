@@ -106,7 +106,7 @@ const AdminStaffAccounts = () => {
   const aliveInvites = invites.filter(inviteAlive);
 
   return (
-    <section className="space-y-4 py-3">
+    <section className="min-w-0 space-y-4 overflow-x-clip py-3">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-bold text-foreground inline-flex items-center gap-2"><UserCog className="w-4 h-4 text-primary" /> Супровід і каченята</h3>
@@ -208,16 +208,16 @@ const CreateSheet = ({ open, onClose, onSaved }: { open: boolean; onClose: () =>
   };
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[92dvh] overflow-y-auto">
+      <SheetContent side="bottom" className="max-h-[92dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-t-3xl px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6">
         <SheetHeader><SheetTitle>Новий акаунт</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-3 max-w-md mx-auto">
           <KindToggle value={f.kind} onChange={(kind) => setF({ ...f, kind })} />
           <Field label="ПІБ"><Input value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></Field>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
             <Field label="Телефон"><Input inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} placeholder="+380" /></Field>
             <Field label="Telegram"><Input value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} placeholder="@нік" /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
             <Field label="Логін"><Input value={f.login} onChange={(e) => setF({ ...f, login: e.target.value })} placeholder="olena.k" autoCapitalize="none" /></Field>
             <Field label="Пароль"><Input value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} className="font-mono" /></Field>
           </div>
@@ -256,13 +256,13 @@ const InviteSheet = ({ open, onClose, invites, onChanged }: { open: boolean; onC
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[92dvh] overflow-y-auto">
+      <SheetContent side="bottom" className="max-h-[92dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-t-3xl px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6">
         <SheetHeader><SheetTitle>Посилання на реєстрацію</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-5 max-w-md mx-auto">
           <div className="space-y-3 rounded-2xl border border-border p-3">
             <KindToggle value={kind} onChange={setKind} />
             <Field label="Назва (для себе, необовʼязково)"><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Каченята, серпень" /></Field>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
               <LimitBox on={useCount} onToggle={() => setUseCount((v) => !v)} title="Кількість">
                 <Input inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value.replace(/\D/g, ''))} className="h-9" disabled={!useCount} />
                 <span className="text-[11px] text-muted-foreground">реєстрацій</span>
@@ -346,16 +346,16 @@ const MemberSheet = ({ member, onClose, asg, shifts, shiftName, run }: {
 
   return (
     <Sheet open={!!member} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="bottom" className="rounded-t-3xl max-h-[92dvh] overflow-y-auto">
+      <SheetContent side="bottom" className="max-h-[92dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-t-3xl px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:px-6">
         <div className="max-w-md mx-auto space-y-5 pt-2">
           <div className="flex items-center gap-3">
             <StaffAvatar name={member.full_name} src={member.avatar_url} size={64} />
             <div className="min-w-0">
               <SheetTitle className="truncate text-left">{member.full_name}</SheetTitle>
               <p className="text-xs text-muted-foreground">@{member.login}{member.is_active ? '' : ', вимкнено'}</p>
-              <div className="flex gap-3 mt-1">
-                {member.phone && <a href={`tel:${member.phone}`} className="text-xs text-primary inline-flex items-center gap-1"><Phone className="w-3 h-3" />{member.phone}</a>}
-                {member.telegram && <a href={`https://t.me/${member.telegram}`} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1"><Send className="w-3 h-3" />@{member.telegram}</a>}
+              <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+                {member.phone && <a href={`tel:${member.phone}`} className="inline-flex min-w-0 items-center gap-1 break-all text-xs text-primary"><Phone className="size-3 shrink-0" />{member.phone}</a>}
+                {member.telegram && <a href={`https://t.me/${member.telegram}`} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 break-all text-xs text-primary"><Send className="size-3 shrink-0" />@{member.telegram}</a>}
               </div>
             </div>
           </div>
@@ -363,7 +363,7 @@ const MemberSheet = ({ member, onClose, asg, shifts, shiftName, run }: {
           <div className="space-y-3">
             <KindToggle value={f.kind} onChange={(kind) => setF({ ...f, kind })} />
             <Field label="ПІБ"><Input value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></Field>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
               <Field label="Телефон"><Input inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
               <Field label="Telegram"><Input value={f.telegram} onChange={(e) => setF({ ...f, telegram: e.target.value })} /></Field>
             </div>
@@ -381,13 +381,13 @@ const MemberSheet = ({ member, onClose, asg, shifts, shiftName, run }: {
                 </span>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_4rem] gap-2 min-[390px]:grid-cols-[minmax(0,1fr)_4rem_auto]">
               <select value={pick.shift} onChange={(e) => setPick({ ...pick, shift: e.target.value })}
                 className="flex-1 min-w-0 h-10 rounded-md border border-input bg-background text-foreground text-sm px-2">
                 {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               <Input inputMode="numeric" placeholder="№" value={pick.team} onChange={(e) => setPick({ ...pick, team: e.target.value.replace(/\D/g, '') })} className="w-16 h-10" />
-              <Button className="h-10" disabled={!pick.shift || !pick.team}
+              <Button className="col-span-2 h-10 min-[390px]:col-span-1" disabled={!pick.shift || !pick.team}
                 onClick={async () => { if (await run({ action: 'assign', user_id: member.user_id, shift_id: pick.shift, team_number: Number(pick.team) }, 'Призначено')) setPick({ ...pick, team: '' }); }}>
                 Додати
               </Button>
