@@ -147,10 +147,10 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
           .is("deleted_at", null);
         const dayIds = (dayScheduleRows || []).map((s) => s.id);
         const { data: existingItems } = dayIds.length
-          ? await supabase.from("schedule_items").select("title,time_start").in("schedule_id", dayIds)
-          : { data: [] as { title: string; time_start: string | null }[] };
+          ? await supabase.from("schedule_items").select("title,time_start,location,target_teams").in("schedule_id", dayIds)
+          : { data: [] as { title: string; time_start: string | null; location: string | null; target_teams: any }[] };
         const seen = new Set(
-          (existingItems || []).map((i) => `${i.time_start || ""}|${(i.title || "").trim().toLowerCase()}`),
+          (existingItems || []).map((i: any) => `${i.time_start || ""}|${(i.title || "").trim().toLowerCase()}|${(i.location || "").trim().toLowerCase()}|${JSON.stringify([...(i.target_teams || [])].sort())}`),
         );
         const baseIndex = (existingItems || []).length;
 
@@ -160,7 +160,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
           .forEach((i) => {
             const title = String(i.title).trim();
             const timeStart = normalizeTime(i.time_start || "") || null;
-            const key = `${timeStart || ""}|${title.toLowerCase()}`;
+            const key = `${timeStart || ""}|${title.toLowerCase()}|${String(i.location || "").trim().toLowerCase()}|${JSON.stringify([...((i as any).target_teams || [])].sort())}`;
             if (seen.has(key)) { skipped += 1; return; }
             seen.add(key);
             rows.push({
