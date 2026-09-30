@@ -136,11 +136,13 @@ const StaffPortal = () => {
 
   if (inPanel) {
     return (
-          <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}><SupervisorFlow
-        cabinetMode
-        onBack={() => { setActiveTeam(null); loadCabinet().catch(() => {}); }}
-        onAdminUnlock={() => navigate('/')}
-          /></Suspense>
+      <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}>
+        <SupervisorFlow
+          cabinetMode
+          onBack={() => { setActiveTeam(null); loadCabinet().catch(() => {}); }}
+          onAdminUnlock={() => navigate('/')}
+        />
+      </Suspense>
     );
   }
 
@@ -204,11 +206,11 @@ const StaffPortal = () => {
               {ThemeBtn}
             </header>
 
-             <div className="flex gap-2 min-w-0">
-               <Button variant="secondary" className="flex-1 min-w-0 rounded-xl" onClick={() => setProfileOpen(true)}>
+            <div className="flex gap-2 min-w-0">
+              <Button variant="secondary" className="flex-1 min-w-0 rounded-xl" onClick={() => setProfileOpen(true)}>
                 <Pencil className="w-4 h-4 mr-1.5" /> Мої контакти
               </Button>
-               <Button variant="secondary" onClick={logout} className="flex-1 min-w-0 rounded-xl">
+              <Button variant="secondary" onClick={logout} className="flex-1 min-w-0 rounded-xl">
                 <LogOut className="w-4 h-4 mr-1.5" /> Вийти
               </Button>
             </div>

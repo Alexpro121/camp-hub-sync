@@ -46,9 +46,9 @@ const MountainLandscape = () => {
     let width = window.innerWidth;
     let height = window.innerHeight;
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, width < 768 ? 1.5 : 2);
       width = window.innerWidth;
       height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, width < 768 ? 1.5 : 2);
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -70,8 +70,9 @@ const MountainLandscape = () => {
 
     type Meteor = { x: number; y: number; length: number; speed: number; angle: number; alpha: number; thickness: number };
     let meteors: Meteor[] = [];
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const meteorTimer = window.setInterval(() => {
-      if (document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      if (document.hidden || reducedMotion.matches) return;
       const t = themeRef.current;
       if (t !== 'deep-night' && t !== 'dusk' && t !== 'golden-hour') return;
       meteors.push({
@@ -118,7 +119,6 @@ const MountainLandscape = () => {
     let raf = 0;
     let running = false;
     let lastFrame = 0;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const render = (time: number) => {
       if (!running) return;
       if (width < 768 && time - lastFrame < 32) {
