@@ -182,7 +182,7 @@ export async function uploadTalentFile(
   }
 
   const id = crypto.randomUUID();
-  const rawBaseName = file.name.replace(/\.[^.]+$/, '');
+  const rawBaseName = getFileExt(file.name) ? file.name.replace(/\.[^.]+$/, '') : file.name;
   const cleanBaseName = safeNamePart(translit(rawBaseName), 28) || 'media';
   const storagePath = `team-${teamNumber}/${id}_${cleanBaseName}.${ext}`;
 
