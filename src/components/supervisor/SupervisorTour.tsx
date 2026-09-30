@@ -287,7 +287,7 @@ const SupervisorTour = ({
       demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
-  ] as TourStep[]).filter((s) => s.targetTab !== 'fair'), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ] as TourStep[]).filter((s) => (FAIR_FEATURE_ENABLED || s.targetTab !== 'fair') && (TRAIN_FEATURE_ENABLED || s.targetTab !== 'coupes')), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
 
   const total = steps.length;
