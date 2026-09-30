@@ -14,6 +14,22 @@ function normLogin(s: unknown): string | null {
 }
 const emailFor = (login: string) => `staff.${login}@ironhelp.local`;
 
+
+const clean = (v: unknown, max: number) => String(v ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').slice(0, max);
+const normPhone = (v: unknown) => { const d = String(v ?? '').replace(/\D/g, ''); return d.length >= 9 && d.length <= 15 ? '+' + (d.length === 9 ? '380' + d : d.length === 10 && d.startsWith('0') ? '38' + d : d) : null; };
+const normTg = (v: unknown) => { const t = String(v ?? '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@+/, ''); return /^[A-Za-z0-9_]{4,32}$/.test(t) ? t : null; };
+const okAvatar = (v: unknown) => typeof v === 'string' && /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 90000;
+const KINDS = ['supervisor', 'duckling'];
+
+async function loadInvite(svc: any, token: string) {
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
+  const { data } = await svc.from('staff_invites').select('*').eq('token', token).maybeSingle();
+  if (!data || data.revoked) return null;
+  if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) return null;
+  if (data.max_uses != null && data.uses >= data.max_uses) return null;
+  return data;
+}
+
 async function authUser(req: Request) {
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -61,12 +77,53 @@ Deno.serve(async (req) => {
       return json({ session: signIn.session, full_name: member!.full_name });
     }
 
+    // ---------- РЕЄСТРАЦІЯ ЗА ПОСИЛАННЯМ ----------
+    if (action === 'invite_check') {
+      const inv = await loadInvite(svc, String(body?.token ?? ''));
+      return json(inv ? { ok: true, kind: inv.kind, label: inv.label } : { error: 'invite_invalid' });
+    }
+
+    if (action === 'register') {
+      const rl = clientKey(req, 'staffreg');
+      if (peek(rl).hits > 15) return json({ error: 'too_many_attempts' });
+      const inv = await loadInvite(svc, String(body?.token ?? ''));
+      if (!inv) { recordFailure(rl, { slowAfter: 5 }); return json({ error: 'invite_invalid' }); }
+      const full_name = clean(body?.full_name, 120);
+      const phone = normPhone(body?.phone);
+      const tgRaw = String(body?.telegram ?? '').trim();
+      const telegram = tgRaw ? normTg(tgRaw) : null;
+      const login = normLogin(body?.login);
+      const password = String(body?.password ?? '');
+      if (full_name.split(' ').length < 2) return json({ error: 'bad_name' });
+      if (!phone) return json({ error: 'bad_phone' });
+      if (tgRaw && !telegram) return json({ error: 'bad_telegram' });
+      if (!login) return json({ error: 'bad_login' });
+      if (password.length < 8 || password.length > 72) return json({ error: 'weak_password' });
+      const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
+      if (exists) return json({ error: 'login_taken' });
+      // Бронюємо місце (оптимістичне блокування від гонки)
+      const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
+        .eq('id', inv.id).eq('uses', inv.uses).select('id');
+      if (!claimed?.length) return json({ error: 'invite_busy' });
+      const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
+      if (error || !created.user) {
+        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        const weak = /weak|pwned|guess/i.test(error?.message ?? '');
+        return json({ error: weak ? 'weak_password' : 'create_failed' });
+      }
+      await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, phone, telegram, kind: inv.kind, registered_via: inv.id });
+      await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
+      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      const { data: signIn } = await pub.auth.signInWithPassword({ email: emailFor(login), password });
+      return json({ ok: true, session: signIn?.session ?? null, full_name });
+    }
+
     const user = await authUser(req);
     if (!user) return json({ error: 'unauthorized' }, 401);
 
     // ---------- КАБІНЕТ ----------
     if (action === 'cabinet') {
-      const { data: member } = await svc.from('staff_members').select('full_name, login').eq('user_id', user.id).maybeSingle();
+      const { data: member } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
       if (!member) return json({ error: 'not_staff' }, 403);
       const { data: asg } = await svc
         .from('staff_assignments')
@@ -94,7 +151,7 @@ Deno.serve(async (req) => {
           },
         };
       }));
-      return json({ full_name: member.full_name, login: member.login, assignments: items });
+      return json({ full_name: member.full_name, login: member.login, kind: member.kind, phone: member.phone, telegram: member.telegram, avatar_url: member.avatar_url, assignments: items });
     }
 
     // ---------- ВХІД У ЗМІНУ ----------
@@ -106,12 +163,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, team: a.team_number, shift_id: a.shift_id });
     }
 
+    // ---------- СВІЙ ПРОФІЛЬ ----------
+    if (action === 'update_profile') {
+      const patch: Record<string, unknown> = {};
+      if ('avatar_url' in body) {
+        if (body.avatar_url === null) patch.avatar_url = null;
+        else if (okAvatar(body.avatar_url)) patch.avatar_url = body.avatar_url;
+        else return json({ error: 'bad_avatar' });
+      }
+      if ('phone' in body) { const p = normPhone(body.phone); if (!p) return json({ error: 'bad_phone' }); patch.phone = p; }
+      if ('telegram' in body) {
+        const raw = String(body.telegram ?? '').trim();
+        const t = raw ? normTg(raw) : null; if (raw && !t) return json({ error: 'bad_telegram' }); patch.telegram = t;
+      }
+      if (!Object.keys(patch).length) return json({ ok: true });
+      const { error } = await svc.from('staff_members').update(patch).eq('user_id', user.id);
+      return error ? json({ error: 'update_failed' }, 500) : json({ ok: true });
+    }
+
     // ---------- АДМІН ----------
     if (!(await isAdmin(user.id))) return json({ error: 'forbidden' }, 403);
 
     if (action === 'list') {
       const [{ data: members }, { data: asg }] = await Promise.all([
-        svc.from('staff_members').select('user_id, full_name, login, is_active, created_at').order('full_name'),
+        svc.from('staff_members').select('user_id, full_name, login, is_active, created_at, kind, phone, telegram, avatar_url').order('full_name'),
         svc.from('staff_assignments').select('id, staff_user_id, shift_id, team_number'),
       ]);
       return json({ members: members ?? [], assignments: asg ?? [] });
@@ -125,8 +200,9 @@ Deno.serve(async (req) => {
       const { data: exists } = await svc.from('staff_members').select('user_id').eq('login', login).maybeSingle();
       if (exists) return json({ error: 'login_taken' }, 409);
       const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
-      if (error || !created.user) return json({ error: 'create_failed', detail: error?.message }, 500);
-      await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login });
+      if (error || !created.user) return json({ error: /weak|pwned|guess/i.test(error?.message ?? '') ? 'weak_password' : 'create_failed' });
+      const kind = KINDS.includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
+      await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, kind, phone: normPhone(body?.phone), telegram: normTg(body?.telegram) });
       await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
       return json({ ok: true });
     }
@@ -135,7 +211,7 @@ Deno.serve(async (req) => {
       const password = String(body?.password ?? '');
       if (password.length < 6) return json({ error: 'invalid_input' }, 400);
       const { error } = await svc.auth.admin.updateUserById(String(body?.user_id), { password });
-      return error ? json({ error: 'update_failed' }, 500) : json({ ok: true });
+      return error ? json({ error: /weak|pwned|guess/i.test(error.message) ? 'weak_password' : 'update_failed' }) : json({ ok: true });
     }
 
     if (action === 'set_active') {
@@ -194,6 +270,43 @@ Deno.serve(async (req) => {
         report.push({ team, login, password, status });
       }
       return json({ ok: true, report });
+    }
+
+    if (action === 'update_member') {
+      const patch: Record<string, unknown> = {};
+      if ('full_name' in body) { const n = clean(body.full_name, 120); if (!n) return json({ error: 'bad_name' }); patch.full_name = n; }
+      if ('kind' in body) { if (!KINDS.includes(String(body.kind))) return json({ error: 'invalid_input' }); patch.kind = body.kind; }
+      if ('phone' in body) { const raw = String(body.phone ?? '').trim(); const p = raw ? normPhone(raw) : null; if (raw && !p) return json({ error: 'bad_phone' }); patch.phone = p; }
+      if ('telegram' in body) { const raw = String(body.telegram ?? '').trim(); const t = raw ? normTg(raw) : null; if (raw && !t) return json({ error: 'bad_telegram' }); patch.telegram = t; }
+      if ('avatar_url' in body && body.avatar_url === null) patch.avatar_url = null;
+      await svc.from('staff_members').update(patch).eq('user_id', String(body?.user_id));
+      return json({ ok: true });
+    }
+
+    if (action === 'invite_list') {
+      const { data } = await svc.from('staff_invites').select('*').order('created_at', { ascending: false }).limit(50);
+      return json({ invites: data ?? [] });
+    }
+
+    if (action === 'invite_create') {
+      const max_uses = body?.max_uses == null || body.max_uses === '' ? null : Math.floor(Number(body.max_uses));
+      const hours = body?.hours == null || body.hours === '' ? null : Number(body.hours);
+      if (max_uses !== null && !(max_uses >= 1 && max_uses <= 500)) return json({ error: 'invalid_input' });
+      if (hours !== null && !(hours > 0 && hours <= 24 * 60)) return json({ error: 'invalid_input' });
+      if (max_uses === null && hours === null) return json({ error: 'need_limit' });
+      const kind = KINDS.includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
+      const bytes = crypto.getRandomValues(new Uint8Array(18));
+      const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const { data, error } = await svc.from('staff_invites').insert({
+        token, kind, max_uses, label: clean(body?.label, 80) || null, created_by: user.id,
+        expires_at: hours === null ? null : new Date(Date.now() + hours * 3600e3).toISOString(),
+      }).select('*').single();
+      return error ? json({ error: 'failed' }, 500) : json({ invite: data });
+    }
+
+    if (action === 'invite_revoke') {
+      await svc.from('staff_invites').update({ revoked: true }).eq('id', String(body?.id));
+      return json({ ok: true });
     }
 
     if (action === 'unassign') {

@@ -683,26 +683,80 @@ export type Database = {
           },
         ]
       }
-      staff_members: {
+      staff_invites: {
         Row: {
           created_at: string
-          full_name: string
-          is_active: boolean
-          login: string
-          user_id: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          kind: string
+          label: string | null
+          max_uses: number | null
+          revoked: boolean
+          token: string
+          uses: number
         }
         Insert: {
           created_at?: string
-          full_name: string
-          is_active?: boolean
-          login: string
-          user_id: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          max_uses?: number | null
+          revoked?: boolean
+          token: string
+          uses?: number
         }
         Update: {
           created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          kind?: string
+          label?: string | null
+          max_uses?: number | null
+          revoked?: boolean
+          token?: string
+          uses?: number
+        }
+        Relationships: []
+      }
+      staff_members: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string
+          is_active: boolean
+          kind: string
+          login: string
+          phone: string | null
+          registered_via: string | null
+          telegram: string | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name: string
+          is_active?: boolean
+          kind?: string
+          login: string
+          phone?: string | null
+          registered_via?: string | null
+          telegram?: string | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
           full_name?: string
           is_active?: boolean
+          kind?: string
           login?: string
+          phone?: string | null
+          registered_via?: string | null
+          telegram?: string | null
           user_id?: string
         }
         Relationships: []
