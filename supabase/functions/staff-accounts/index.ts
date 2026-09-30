@@ -4,7 +4,12 @@ import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared
 
 /** Логін: латиниця/цифри/._- , 3..40 символів, нижній регістр */
 function normLogin(s: unknown): string | null {
-  const v = String(s ?? '').trim().toLowerCase();
+  // Прощаємо типові помилки: "@", пробіли, набір в українській розкладці
+  const UA = 'йцукенгшщзхїфівапролджєячсмитьбюґ';
+  const EN = 'qwertyuiop[]asdfghjkl;\'zxcvbnm,.`';
+  const v = String(s ?? '').normalize('NFC').trim().toLowerCase().replace(/^@+/, '').replace(/\s+/g, '')
+    .split('').map((ch) => { const i = UA.indexOf(ch); return i >= 0 ? EN[i] : ch; }).join('')
+    .replace(/[,]/g, '.');
   return /^[a-z0-9._-]{3,40}$/.test(v) ? v : null;
 }
 const emailFor = (login: string) => `staff.${login}@ironhelp.local`;
@@ -34,7 +39,7 @@ Deno.serve(async (req) => {
     if (action === 'login') {
       const login = normLogin(body?.login);
       const password = typeof body?.password === 'string' ? body.password : '';
-      if (!login || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 400);
+      if (!login || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 401);
 
       const rl = clientKey(req, `staffacc:${login}`);
       const before = peek(rl);
