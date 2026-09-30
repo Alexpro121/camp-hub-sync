@@ -79,7 +79,11 @@ interface IslandApi {
   hide: () => void;
 }
 
-const Ctx = createContext<IslandApi | null>(null);
+// Один і той самий контекст навіть після гарячого оновлення модуля,
+// інакше вже змонтований провайдер «зникає» для споживачів і екран стає білим.
+const CTX_KEY = '__ironshift_dynamic_island_ctx__';
+const Ctx: React.Context<IslandApi | null> =
+  ((globalThis as any)[CTX_KEY] ??= createContext<IslandApi | null>(null));
 
 /** Базова швидка тривалість показу за замовчуванням (3.2 секунди) */
 const AUTO_HIDE_MS = 3200;
