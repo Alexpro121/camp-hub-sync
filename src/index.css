@@ -877,3 +877,28 @@
   100% { transform: translate3d(0, 110px, 0) rotate(320deg); opacity: 0; }
 }
 .tour-confetti { animation: tourConfetti 1.6s ease-in infinite; will-change: transform, opacity; }
+
+/* ============ Staff light theme ============ */
+.staff-light {
+  --background: 220 20% 97%;
+  --foreground: 222 40% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 40% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 40% 12%;
+  --primary: 20 90% 48%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 16% 93%;
+  --secondary-foreground: 222 40% 12%;
+  --muted: 220 16% 93%;
+  --muted-foreground: 220 10% 38%;
+  --accent: 20 90% 48%;
+  --accent-foreground: 0 0% 100%;
+  --warning: 32 90% 40%;
+  --border: 220 14% 87%;
+  --input: 220 14% 85%;
+  color-scheme: light;
+}
+/* Team panel has fixed dark colours, so light mode is an inverted rendering; photos are re-inverted. */
+html.staff-invert { filter: invert(0.92) hue-rotate(180deg); background: #fff; }
+html.staff-invert img, html.staff-invert video, html.staff-invert canvas { filter: invert(1) hue-rotate(180deg); }
