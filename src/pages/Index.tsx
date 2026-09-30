@@ -1,16 +1,17 @@
-import { useEffect, useState, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RoleSelect from '@/components/screens/RoleSelect';
-import ChildFlow from '@/components/screens/ChildFlow';
-import SupervisorFlow from '@/components/screens/SupervisorFlow';
-import AdminFlow from '@/components/screens/AdminFlow';
-import ParentFlow from '@/components/screens/ParentFlow';
-import AlumniFlow from '@/components/alumni/AlumniFlow';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
+
+const ChildFlow = lazy(() => import('@/components/screens/ChildFlow'));
+const SupervisorFlow = lazy(() => import('@/components/screens/SupervisorFlow'));
+const AdminFlow = lazy(() => import('@/components/screens/AdminFlow'));
+const ParentFlow = lazy(() => import('@/components/screens/ParentFlow'));
+const AlumniFlow = lazy(() => import('@/components/alumni/AlumniFlow'));
 
 export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'parent';
 
@@ -147,6 +148,7 @@ const Index = () => {
 
       {/* Роутинг між екранами з плавною появою */}
       <div className="w-full flex-1 flex flex-col animate-fade-in">
+          <Suspense fallback={<FullScreenLoader label="Відкриваємо кабінет..." />}>
         {screen === 'role' && (
           <RoleSelect onSelect={(selectedRole) => navigateTo(selectedRole)} />
         )}
@@ -173,6 +175,7 @@ const Index = () => {
         {screen === 'alumni' && (
           <AlumniFlow onBack={() => navigateTo('role')} />
         )}
+          </Suspense>
       </div>
 
     </main>
