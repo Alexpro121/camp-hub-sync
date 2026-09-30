@@ -11,11 +11,5 @@ export function useStaffTheme(): [StaffTheme, () => void] {
   return [theme, toggle];
 }
 
-/** Вмикає світлу тему для панелі команди (інверсія всього документа). */
-export function useInvertedLight(active: boolean) {
-  useEffect(() => {
-    const el = document.documentElement;
-    el.classList.toggle('staff-invert', active);
-    return () => el.classList.remove('staff-invert');
-  }, [active]);
-}
+/** Прибирає застарілу інверсію документа (стара реалізація світлої теми). */
+export function clearLegacyInvert() { document.documentElement.classList.remove('staff-invert'); }

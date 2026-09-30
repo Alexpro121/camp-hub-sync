@@ -12,7 +12,7 @@ import { clearSavedSession, saveSession } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import StaffAvatar from '@/components/staff/StaffAvatar';
 import { compressAvatar, KIND_LABEL, StaffKind, staffCall as call, staffErr } from '@/lib/staffApi';
-import { useInvertedLight, useStaffTheme } from '@/lib/staffTheme';
+import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -43,7 +43,6 @@ const StaffPortal = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const inPanel = Boolean(cabinet && activeTeam !== null);
-  useInvertedLight(inPanel && theme === 'light');
 
   const loadCabinet = useCallback(async () => {
     const data = await call({ action: 'cabinet' });

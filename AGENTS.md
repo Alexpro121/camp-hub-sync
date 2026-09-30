@@ -1,5 +1,5 @@
 - Staff photos live in the private `staff-avatars` bucket; staff_members.avatar_url holds `storage:<path>` and staff-accounts returns signed URLs (old data URLs migrate on read) — keeps staff lists small on weak mobile networks.
-- Staff light theme: token override via .staff-light class; the team panel (hardcoded dark colours) uses html.staff-invert filter — avoids rewriting every panel screen.
+- Staff light theme: one saved choice (helpsuprov:staff-theme) shared by portal (.staff-light tokens) and team panel (theme-light class); no document inversion — filter broke fixed layers on iPhone.
 - Role screens and staff panels load on demand; mobile avoids rendering closed team lists and throttles scenery animation to keep interaction responsive.
 - Admin opens on the selected shift overview; rarely used admin sections and import tools load on demand to keep first interaction fast on phones.
 - Render fixed mobile admin navigation through a body portal; transformed role-screen ancestors otherwise shift fixed controls during transitions.

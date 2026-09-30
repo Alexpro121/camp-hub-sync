@@ -76,7 +76,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('supervisor_theme_mode');
+    const saved = localStorage.getItem('helpsuprov:staff-theme');
     return saved ? saved === 'dark' : true;
   });
   
@@ -86,7 +86,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    localStorage.setItem('supervisor_theme_mode', isDark ? 'dark' : 'light');
+    localStorage.setItem('helpsuprov:staff-theme', isDark ? 'dark' : 'light');
     if (isDark) {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');

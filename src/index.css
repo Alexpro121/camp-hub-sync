@@ -899,9 +899,6 @@
   --input: 220 14% 85%;
   color-scheme: light;
 }
-/* Team panel has fixed dark colours, so light mode is an inverted rendering; photos are re-inverted. */
-html.staff-invert { filter: invert(0.92) hue-rotate(180deg); background: #fff; }
-html.staff-invert img, html.staff-invert video, html.staff-invert canvas { filter: invert(1) hue-rotate(180deg); }
 
 /* Static supervisor light-mode bridge; avoids reinserting a style sheet on every render. */
 #supervisor-flow-root.theme-light { color-scheme: light; }
