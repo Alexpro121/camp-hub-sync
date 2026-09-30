@@ -3,3 +3,4 @@
 - Role screens and staff panels load on demand; mobile avoids rendering closed team lists and throttles scenery animation to keep interaction responsive.
 - Admin opens on the selected shift overview; rarely used admin sections and import tools load on demand to keep first interaction fast on phones.
 - Render fixed mobile admin navigation through a body portal; transformed role-screen ancestors otherwise shift fixed controls during transitions.
+- Shift staff links are reusable, shift-scoped invites; the server validates the signed-in staff member and selected shift team before assignment.
