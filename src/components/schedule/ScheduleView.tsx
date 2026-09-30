@@ -16,7 +16,7 @@ import {
   type NormalizedScheduleItem,
 } from '@/lib/schedule';
 import ScheduleCard, { slotsOf } from '@/components/schedule/ScheduleCard';
-import { localISO } from '@/hooks/useAutoTodayDate';
+import { kyivISO } from '@/hooks/useAutoTodayDate';
 import HallBookingModal from '@/components/schedule/HallBookingModal';
 import { type HallBooking } from '@/types/halls';
 import { toMinutes } from '@/lib/halls';
@@ -34,7 +34,7 @@ interface Props {
   onFairAction?: () => void;
 }
 
-const todayISO = () => localISO();
+const todayISO = () => kyivISO();
 
 const WEEKDAYS = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTHS = [

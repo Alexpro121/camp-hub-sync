@@ -376,6 +376,9 @@ export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Arra
   } else {
     arrayBuffer = fileOrBuffer;
   }
+  if (arrayBuffer.byteLength > 15 * 1024 * 1024) {
+    throw new Error('PDF завеликий (понад 15 МБ) — збережіть список як Excel або CSV');
+  }
 
   try {
     const pdfjsLib = await getPdfJsLib();

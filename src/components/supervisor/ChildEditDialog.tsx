@@ -34,7 +34,20 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   /** Last balance known to be persisted — deltas are computed against it. */
   const baseline = useRef(child.iron_dollars);
 
-  useEffect(() => { baseline.current = child.iron_dollars; }, [child.id, child.iron_dollars]);
+  const ironDirty = useRef(false);
+  // Нове значення з сервера: якщо поле ще не редагували — оновлюємо і поле, і базу.
+  // Якщо редагували — зберігаємо саме дельту, яку ввів супровід, від свіжого балансу.
+  useEffect(() => {
+    if (!ironDirty.current) {
+      baseline.current = child.iron_dollars;
+      setIron(String(child.iron_dollars));
+    } else {
+      const intended = (parseInt(iron, 10) || 0) - baseline.current;
+      baseline.current = child.iron_dollars;
+      setIron(String(child.iron_dollars + intended));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child.id, child.iron_dollars]);
 
   /** Snapshot of the row version this edit session started from (optimistic lock). */
   const clientUpdatedAt = useRef(child.updated_at ?? new Date().toISOString());
@@ -118,6 +131,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
   const adjustIron = (delta: number) => {
     haptics.impact('light');
     const cur = parseInt(iron, 10) || 0;
+    ironDirty.current = true;
     setIron(String(cur + delta));
   };
 
@@ -182,7 +196,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                     type="number"
                     inputMode="numeric"
                     value={iron}
-                    onChange={(e) => setIron(e.target.value)}
+                    onChange={(e) => { ironDirty.current = true; setIron(e.target.value); }}
                     className="h-14 text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
                   />
                   <button

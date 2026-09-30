@@ -116,13 +116,7 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
     setSaving(true);
     try {
       const teams = Array.from(new Set(rows.map((r) => r.team_number)));
-      let del = supabase.from('train_coupes').delete().eq('trip_number', SINGLE_TRIP).in('team_number', teams);
-      del = shiftId ? del.eq('shift_id', shiftId) : del.is('shift_id', null);
-      await del;
-
       const payload = rows.map((r) => ({
-        shift_id: shiftId || null,
-        trip_number: SINGLE_TRIP,
         trip_name: TRAIN_TITLE,
         team_number: r.team_number,
         coupe_number: r.coupe_number,
@@ -133,7 +127,13 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
         passenger_role: r.passenger_role ?? 'participant',
         is_staff: !r.matched,
       }));
-      const { error } = await supabase.from('train_coupes').insert(payload);
+      // Одна транзакція: якщо зв'язок обірветься, старе розселення залишиться цілим.
+      const { error } = await (supabase as any).rpc('replace_train_coupes', {
+        p_shift_id: shiftId || null,
+        p_trip_number: SINGLE_TRIP,
+        p_teams: teams,
+        p_rows: payload,
+      });
       if (error) throw error;
       const teamLabel = teams.filter(Boolean).join(', ') || '—';
       island.showSuccess(`${TRAIN_TITLE} · команда №${teamLabel}`, `${payload.length} пасажирів збережено`);

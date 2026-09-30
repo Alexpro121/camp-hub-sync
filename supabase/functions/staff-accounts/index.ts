@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'register') {
-      const rl = clientKey(req, 'staffreg');
+      const rl = clientKey(req, `staffreg:${String((body as any)?.token ?? '')}`);
       if (peek(rl).hits > 15) return json({ error: 'too_many_attempts' });
       const inv = await loadInvite(svc, String(body?.token ?? ''));
       if (!inv) { recordFailure(rl, { slowAfter: 5 }); return json({ error: 'invite_invalid' }); }

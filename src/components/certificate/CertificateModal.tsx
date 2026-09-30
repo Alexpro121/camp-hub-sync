@@ -76,6 +76,22 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
     haptics.impact('medium');
 
     const fileName = `Сертифікат_Залізна_Зміна_${name.replace(/\s+/g, '_')}.pdf`;
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.initData) {
+      // У Telegram завантаження blob-файлів заблоковане — ділимося файлом або відкриваємо окремо.
+      (async () => {
+        try {
+          const blob = await (await fetch(pdfData.pdfUrl)).blob();
+          const file = new File([blob], fileName, { type: 'application/pdf' });
+          if ((navigator as any).canShare?.({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'Сертифікат' });
+            return;
+          }
+        } catch { /* нижче */ }
+        window.open(pdfData.pdfUrl, '_blank');
+      })();
+      return;
+    }
     const link = document.createElement('a');
     link.href = pdfData.pdfUrl;
     link.download = fileName;

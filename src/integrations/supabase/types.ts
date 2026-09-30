@@ -1203,6 +1203,7 @@ export type Database = {
         Returns: number
       }
       is_fair_open_now: { Args: never; Returns: boolean }
+      lookup_user_id_by_email: { Args: { p_email: string }; Returns: string }
       pay_fair_purchase: {
         Args: {
           p_amount: number
@@ -1223,6 +1224,15 @@ export type Database = {
           p_tx_id: string
         }
         Returns: Json
+      }
+      replace_train_coupes: {
+        Args: {
+          p_rows: Json
+          p_shift_id: string
+          p_teams: number[]
+          p_trip_number: number
+        }
+        Returns: number
       }
       request_child_move: {
         Args: {
