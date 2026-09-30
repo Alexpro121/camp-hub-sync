@@ -65,7 +65,7 @@ const StaffPortal = () => {
   }, [loadCabinet]);
 
   const handleLogin = async () => {
-    if (!login.trim() || !password) { toast.error('Введіть логін та пароль'); return; }
+    if (!login.trim() || !password) { toast.error('Введіть логін або ПІБ та пароль'); return; }
     setBusy(true);
     try {
       if (adminMode) {
@@ -169,9 +169,9 @@ const StaffPortal = () => {
             <div className="p-5 space-y-4 rounded-3xl bg-card border border-border">
               {!adminMode && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="login" className="text-xs font-semibold">Логін</Label>
+                  <Label htmlFor="login" className="text-xs font-semibold">Логін або ПІБ</Label>
                   <Input id="login" autoComplete="username" autoCapitalize="none" value={login} onChange={(e) => setLogin(e.target.value)}
-                    className="h-12 rounded-xl" placeholder="напр. olena.k" />
+                    className="h-12 rounded-xl" placeholder="напр. olena.k або Коваль Олена Петрівна" />
                 </div>
               )}
               <div className="space-y-1.5">

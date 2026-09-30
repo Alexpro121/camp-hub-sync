@@ -13,6 +13,11 @@ function normLogin(s: unknown): string | null {
   return /^[a-z0-9._-]{3,40}$/.test(v) ? v : null;
 }
 const emailFor = (login: string) => `staff.${login}@ironhelp.local`;
+/** ПІБ для пошуку: нижній регістр, єдиний апостроф, одинарні пробіли */
+function normName(s: unknown): string | null {
+  const v = String(s ?? '').normalize('NFC').toLowerCase().replace(/[’ʼ`´‘"]/g, "'").replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+  return v.length >= 3 && v.length <= 120 && /\p{L}/u.test(v) ? v : null;
+}
 
 
 const clean = (v: unknown, max: number) => String(v ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -75,20 +80,37 @@ Deno.serve(async (req) => {
 
     // ---------- ВХІД СУПРОВОДУ ----------
     if (action === 'login') {
-      const login = normLogin(body?.login);
+      const raw = String(body?.login ?? '').slice(0, 160);
+      const login = normLogin(raw);
+      const nameKey = normName(raw);
       const password = typeof body?.password === 'string' ? body.password : '';
-      if (!login || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 200);
+      if ((!login && !nameKey) || !password || password.length > 200) return json({ error: 'invalid_credentials' }, 200);
 
-      const rl = clientKey(req, `staffacc:${login}`);
+      const rl = clientKey(req, `staffacc:${login ?? nameKey}`);
       const before = peek(rl);
       if (before.hits > 10) return json({ error: 'too_many_attempts' }, 200);
       if (before.hits >= 3) await sleep(1000 * Math.min(before.hits, 5));
 
-      const { data: member } = await svc.from('staff_members').select('user_id, full_name, is_active').eq('login', login).maybeSingle();
+      // Кандидати: точний логін, або ПІБ (без регістру, зайвих пробілів, різних апострофів)
+      const candidates: any[] = [];
+      if (login) {
+        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active').eq('login', login).maybeSingle();
+        if (data) candidates.push(data);
+      }
+      if (nameKey && nameKey.includes(' ')) {
+        const first = nameKey.split(' ')[0];
+        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active').ilike('full_name', `%${first.replace(/[%_]/g, '')}%`).limit(50);
+        for (const m of data ?? []) {
+          if (normName(m.full_name) === nameKey && !candidates.some((c) => c.user_id === m.user_id)) candidates.push(m);
+        }
+      }
+
       const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-      const { data: signIn } = member?.is_active
-        ? await pub.auth.signInWithPassword({ email: emailFor(login), password })
-        : { data: null as any };
+      let signIn: any = null; let member: any = null;
+      for (const c of candidates.filter((c) => c.is_active).slice(0, 5)) {
+        const { data } = await pub.auth.signInWithPassword({ email: emailFor(c.login), password });
+        if (data?.session) { signIn = data; member = c; break; }
+      }
       if (!signIn?.session) {
         recordFailure(rl, { slowAfter: 3 });
         return json({ error: 'invalid_credentials' }, 200);
@@ -96,7 +118,7 @@ Deno.serve(async (req) => {
       resetFailures(rl);
       // Без прив'язки до команди, доки супровід не обере зміну в кабінеті.
       await ensureRole(svc, signIn.user.id, 'supervisor', { team_number: null });
-      return json({ session: signIn.session, full_name: member!.full_name });
+      return json({ session: signIn.session, full_name: member.full_name });
     }
 
     // ---------- РЕЄСТРАЦІЯ ЗА ПОСИЛАННЯМ ----------
