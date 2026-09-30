@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
@@ -81,15 +82,15 @@ import { getSeenAt } from '@/components/admin/AdminNotificationsView';
 import AdminOverview from '@/components/admin/AdminOverview';
 import { staffCall, staffErr } from '@/lib/staffApi';
 
-const AdminPrintQRCodes = lazy(() => import('@/components/fair/AdminPrintQRCodes'));
-const AdminScheduleEditor = lazy(() => import('@/components/schedule/AdminScheduleEditor'));
-const TrainTab = lazy(() => import('@/components/admin/TrainTab'));
-const TalentAdmin = lazy(() => import('@/components/talent/TalentAdmin'));
-const AdminStaffAccounts = lazy(() => import('@/components/admin/AdminStaffAccounts'));
-const AdminNotificationsView = lazy(() => import('@/components/admin/AdminNotificationsView'));
-const ImportPreviewDialog = lazy(() => import('@/components/admin/ImportPreviewDialog'));
-const MultiFileShiftModal = lazy(() => import('@/components/admin/MultiFileShiftModal'));
-const TeamTagInput = lazy(() => import('@/components/admin/TeamTagInput'));
+const AdminPrintQRCodes = lazyRetry(() => import('@/components/fair/AdminPrintQRCodes'));
+const AdminScheduleEditor = lazyRetry(() => import('@/components/schedule/AdminScheduleEditor'));
+const TrainTab = lazyRetry(() => import('@/components/admin/TrainTab'));
+const TalentAdmin = lazyRetry(() => import('@/components/talent/TalentAdmin'));
+const AdminStaffAccounts = lazyRetry(() => import('@/components/admin/AdminStaffAccounts'));
+const AdminNotificationsView = lazyRetry(() => import('@/components/admin/AdminNotificationsView'));
+const ImportPreviewDialog = lazyRetry(() => import('@/components/admin/ImportPreviewDialog'));
+const MultiFileShiftModal = lazyRetry(() => import('@/components/admin/MultiFileShiftModal'));
+const TeamTagInput = lazyRetry(() => import('@/components/admin/TeamTagInput'));
 
 /** Кількість непрочитаних сповіщень про трансфери/обміни для бейджа вкладки */
 const useUnreadTransfers = () => {

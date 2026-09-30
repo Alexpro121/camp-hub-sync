@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, LogOut, User, CalendarDays, Loader2, ChevronDown, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -5,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { saveSession, getSavedRole, getSessionMeta, updateSessionMeta, clearSavedSession } from '@/lib/session';
 import { lazy, Suspense } from 'react';
 
-const ScheduleView = lazy(() => import('@/components/schedule/ScheduleView'));
+const ScheduleView = lazyRetry(() => import('@/components/schedule/ScheduleView'));
 
 interface ParentInfo {
   child: { id: string; full_name: string; team_number: number; team_name: string | null };

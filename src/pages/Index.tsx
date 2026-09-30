@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { lazy, Suspense, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import RoleSelect from '@/components/screens/RoleSelect';
@@ -7,11 +8,11 @@ import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 
-const ChildFlow = lazy(() => import('@/components/screens/ChildFlow'));
-const SupervisorFlow = lazy(() => import('@/components/screens/SupervisorFlow'));
-const AdminFlow = lazy(() => import('@/components/screens/AdminFlow'));
-const ParentFlow = lazy(() => import('@/components/screens/ParentFlow'));
-const AlumniFlow = lazy(() => import('@/components/alumni/AlumniFlow'));
+const ChildFlow = lazyRetry(() => import('@/components/screens/ChildFlow'));
+const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
+const AdminFlow = lazyRetry(() => import('@/components/screens/AdminFlow'));
+const ParentFlow = lazyRetry(() => import('@/components/screens/ParentFlow'));
+const AlumniFlow = lazyRetry(() => import('@/components/alumni/AlumniFlow'));
 
 export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'parent';
 
