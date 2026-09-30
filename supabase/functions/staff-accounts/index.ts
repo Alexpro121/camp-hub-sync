@@ -142,7 +142,9 @@ Deno.serve(async (req) => {
       if (!allowedTeams.includes(team)) return json({ error: 'invalid_team' });
       const { data: member } = await svc.from('staff_members').select('user_id, is_active').eq('user_id', user.id).maybeSingle();
       if (!member?.is_active) return json({ error: 'not_staff' }, 403);
-      const { data: existing } = await svc.from('staff_assignments').select('id').eq('staff_user_id', user.id).eq('shift_id', shift.id).eq('team_number', team).maybeSingle();
+      const { data: existingShift } = await svc.from('staff_assignments').select('id, team_number').eq('staff_user_id', user.id).eq('shift_id', shift.id).limit(1).maybeSingle();
+      if (existingShift) return json({ ok: true, shift_id: shift.id, shift_name: shift.name, team_number: existingShift.team_number, already_assigned: true });
+      const existing = null;
       if (!existing) {
         const { data: claimed } = await svc.from('staff_invites').update({ uses: inv.uses + 1 })
           .eq('id', inv.id).eq('uses', inv.uses).select('id');
