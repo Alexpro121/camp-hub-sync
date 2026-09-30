@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useActiveShift } from '@/context/ActiveShiftContext';
 import { supabase } from '@/integrations/supabase/client';
 import { shiftStatus } from '@/lib/shift';
+import { teamsOf } from '@/lib/shift-resolver';
 
 type OverviewProps = { onNavigate: (tab: string) => void; unread: number };
 
@@ -11,7 +12,7 @@ const formatDate = (date: string) => new Intl.DateTimeFormat('uk-UA', { day: 'nu
 
 export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
   const { shift, loading: shiftsLoading } = useActiveShift();
-  const [summary, setSummary] = useState<{ children: number; teams: number } | null>(null);
+  const [summary, setSummary] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -22,11 +23,11 @@ export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
     setError(false);
     if (!shift) return () => { active = false; };
     setLoading(true);
-    supabase.from('children').select('team_number').eq('shift_id', shift.id).then(({ data, error: requestError }) => {
+    supabase.from('children').select('id', { count: 'exact', head: true }).eq('shift_id', shift.id).then(({ count, error: requestError }) => {
       if (!active) return;
       setLoading(false);
       if (requestError) { setError(true); return; }
-      setSummary({ children: data?.length ?? 0, teams: new Set((data ?? []).map(row => row.team_number)).size });
+      setSummary(count ?? 0);
     });
     return () => { active = false; };
   }, [shift?.id, refresh]);
@@ -46,11 +47,11 @@ export default function AdminOverview({ onNavigate, unread }: OverviewProps) {
       <div className="grid grid-cols-2 gap-3" aria-label="Підсумок зміни">
         <div className="border-l-2 border-primary bg-card px-4 py-4">
           <p className="text-xs text-muted-foreground">Дітей</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{loading ? '…' : error ? '—' : summary?.children ?? 0}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{loading ? '…' : error ? '—' : summary ?? 0}</p>
         </div>
         <div className="border-l-2 border-border bg-card px-4 py-4">
           <p className="text-xs text-muted-foreground">Команд</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{loading ? '…' : error ? '—' : summary?.teams ?? 0}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{teamsOf(shift).length || '—'}</p>
         </div>
       </div>
       {error && <div className="flex items-center gap-2 text-sm text-destructive">Не вдалося завантажити підсумок. <Button size="sm" variant="ghost" onClick={() => setRefresh(n => n + 1)}><RefreshCw /> Повторити</Button></div>}
