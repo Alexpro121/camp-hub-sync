@@ -481,6 +481,7 @@ export type Database = {
           id: string
           message: string
           metadata: Json | null
+          shift_id: string | null
           title: string
           type: string
         }
@@ -489,6 +490,7 @@ export type Database = {
           id?: string
           message: string
           metadata?: Json | null
+          shift_id?: string | null
           title: string
           type: string
         }
@@ -497,6 +499,7 @@ export type Database = {
           id?: string
           message?: string
           metadata?: Json | null
+          shift_id?: string | null
           title?: string
           type?: string
         }
