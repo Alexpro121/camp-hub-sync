@@ -1,5 +1,4 @@
 import { copyText } from '@/lib/clipboard';
-import { lazyRetry } from '@/lib/lazyRetry';
 import { useEffect, useState } from 'react';
 import { Trash2, Wand2, Loader2, AlertTriangle, Copy, Search, Pencil, RefreshCw, KeyRound, Check } from 'lucide-react';
 
