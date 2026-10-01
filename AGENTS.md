@@ -4,3 +4,5 @@
 - Admin opens on the selected shift overview; rarely used admin sections and import tools load on demand to keep first interaction fast on phones.
 - Render fixed mobile admin navigation through a body portal; transformed role-screen ancestors otherwise shift fixed controls during transitions.
 - Shift staff links are reusable, shift-scoped invites; the server validates the signed-in staff member and selected shift team before assignment.
+
+- Admin tabs live in src/components/admin/tabs/ and are lazy-loaded by AdminFlow, which keeps only header, tab switcher and shift context — keeps the admin screen small and avoids merge conflicts.
