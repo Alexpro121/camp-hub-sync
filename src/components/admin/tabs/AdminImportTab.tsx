@@ -1,37 +1,36 @@
 import { copyText } from '@/lib/clipboard';
 import { lazyRetry } from '@/lib/lazyRetry';
-import { lazy, Suspense, useEffect, useRef, useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useState } from 'react';
 import { 
-  ArrowLeft, 
-  Upload, 
+  
+  
   Trash2, 
-  Calendar, 
-  CalendarDays, 
-  Mic2, 
+  
+  
+  
   Wand2, 
-  Plus, 
+  
   Loader2, 
-  Database, 
-  FileSpreadsheet, 
-  CheckCircle2, 
-  BarChart3, 
+  
+  
+  
+  
   AlertTriangle, 
-  Coins, 
-  Users, 
-  ArrowRightLeft, 
-  Link2, 
-  Train, 
-  ShoppingBag, 
+  
+  
+  
+  
+  
+  
   Copy, 
   Search, 
-  ChevronDown, 
+  
   Pencil,
   RefreshCw,
   KeyRound,
-  Bell,
+  
   Check,
-  LayoutDashboard,
+  
   Menu
 } from 'lucide-react';
 
@@ -39,19 +38,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { clearSavedSession, saveSession } from '@/lib/session';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import type { Child, Shift, ShiftType } from '@/types/app';
-import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
-import type { ImportResult, ImportRow } from '@/lib/importer';
-import { shiftStatus } from '@/lib/shift';
-import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -71,31 +60,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FullScreenLoader } from '@/components/ui/loader';
-import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
-import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
-import { backfillGenders } from '@/lib/gender';
-import { normalizeName } from '@/lib/normalize';
-import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
-import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { useHaptics } from '@/hooks/useHaptics';
-import { getSeenAt } from '@/components/admin/AdminNotificationsView';
-import AdminOverview from '@/components/admin/AdminOverview';
-import { staffCall, staffErr } from '@/lib/staffApi';
 
-const AdminPrintQRCodes = lazyRetry(() => import('@/components/fair/AdminPrintQRCodes'));
-const AdminScheduleEditor = lazyRetry(() => import('@/components/schedule/AdminScheduleEditor'));
-const TrainTab = lazyRetry(() => import('@/components/admin/TrainTab'));
-const TalentAdmin = lazyRetry(() => import('@/components/talent/TalentAdmin'));
-const AdminStaffAccounts = lazyRetry(() => import('@/components/admin/AdminStaffAccounts'));
-const AdminNotificationsView = lazyRetry(() => import('@/components/admin/AdminNotificationsView'));
-const AdminTransferApprovals = lazyRetry(() => import('@/components/admin/AdminTransferApprovals'));
-const ImportPreviewDialog = lazyRetry(() => import('@/components/admin/ImportPreviewDialog'));
-const MultiFileShiftModal = lazyRetry(() => import('@/components/admin/MultiFileShiftModal'));
-const TeamTagInput = lazyRetry(() => import('@/components/admin/TeamTagInput'));
-const ShiftEditDialog = lazyRetry(() => import('@/components/admin/ShiftEditDialog'));
-import { SHIFT_LABELS, generateMemorablePassword } from '@/components/admin/tabs/shared';
+import { generateMemorablePassword } from '@/components/admin/tabs/shared';
 
 /* База даних та генератор паролів супроводу */
 const DataTab = () => {
