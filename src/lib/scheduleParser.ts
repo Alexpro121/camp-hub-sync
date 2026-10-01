@@ -107,3 +107,11 @@ export function parseScheduleText(raw: string): ParsedScheduleItem[] {
 
   return items;
 }
+/** Never throws: wraps parseScheduleText in a typed Result. */
+export function safeParseScheduleText(raw: string): import('@/lib/schemas/apiSchemas').Result<ParsedScheduleItem[]> {
+  try {
+    return { ok: true, value: parseScheduleText(raw) };
+  } catch (e: any) {
+    return { ok: false, error: { code: 'schedule_text', message: e?.message || String(e) } };
+  }
+}

@@ -1,3 +1,4 @@
+import { ImportRowSchema } from '@/lib/schemas/apiSchemas';
 import * as XLSX from 'xlsx';
 import { ADMIN_TEAM, TEAM_MAX, TEAM_MIN, isValidTeamNumber, normalizeName } from '@/lib/normalize';
 
@@ -858,6 +859,12 @@ function parseClassicTable(
   return { rows, skipped };
 }
 
+/** Drops rows that fail the runtime schema instead of letting them poison the import. */
+function validateRows(rows: ImportRow[]): { rows: ImportRow[]; dropped: number } {
+  const ok = rows.filter((r) => ImportRowSchema.safeParse(r).success);
+  return { rows: ok, dropped: rows.length - ok.length };
+}
+
 /* ---------- Головна функція парсингу списків ---------- */
 
 export function buildRows(
@@ -880,7 +887,8 @@ export function buildRows(
   // 1. Спроба розпарсити блоковий/PDF список
   const blockResult = parseBlockFormat(matrix);
   if (blockResult && blockResult.rows.length >= 1) {
-    return blockResult;
+    const v = validateRows(blockResult.rows);
+    return { ...blockResult, rows: v.rows, skipped: blockResult.skipped + v.dropped, detectedTeams: detectTeams(v.rows) };
   }
 
   // 2. Класична таблиця
@@ -890,7 +898,9 @@ export function buildRows(
       ? headerMap
       : localHeaderMap((matrix[effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0] || []).map(String));
 
-  const { rows, skipped } = parseClassicTable(matrix, effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0, effectiveMap);
+  const classic = parseClassicTable(matrix, effectiveHeaderIdx >= 0 ? effectiveHeaderIdx : 0, effectiveMap);
+  const { rows, dropped } = validateRows(classic.rows);
+  const skipped = classic.skipped + dropped;
 
   return {
     rows,

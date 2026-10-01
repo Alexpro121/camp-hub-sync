@@ -1,4 +1,4 @@
-import { parseScheduleText, extractDate, extractTeams, type ParsedScheduleItem } from './scheduleParser';
+import { safeParseScheduleText, extractDate, extractTeams, type ParsedScheduleItem } from './scheduleParser';
 import { toMinutes } from './scheduleCategories';
 
 export type ScheduleCategory = 'sports' | 'meal' | 'gathering' | 'entertainment' | 'transfer' | 'fair' | 'general';
@@ -118,7 +118,8 @@ export function fallbackParse(raw: string): { items: AiScheduleItem[]; date: str
       continue;
     }
 
-    for (const it of parseScheduleText(trimmed)) {
+    const lineRes = safeParseScheduleText(trimmed);
+    for (const it of lineRes.ok ? lineRes.value : []) {
       const teams = it.target_teams.length ? it.target_teams : stickyTeams;
       const title = it.title && it.title !== 'Подія' ? it.title : (stickyActivity ?? it.title);
       parsed.push({

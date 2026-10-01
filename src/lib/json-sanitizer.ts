@@ -1,9 +1,29 @@
+import { ScheduleJsonSchema, type Result } from '@/lib/schemas/apiSchemas';
 /**
  * Інтелектуальний санітайзер та парсер JSON, згенерованого штучним інтелектом (AI Studio, ChatGPT, Claude, Groq).
  * Видаляє markdown-блоки, вступний/заключний текст, коментарі, виправляє лапки,
  * хвостові коми, сирі переноси рядків та незалапковані ключі.
  */
 export function cleanAndParseScheduleJson<T = any>(rawInput: string): T {
+  return validateScheduleJson(repairScheduleJson(rawInput)) as T;
+}
+
+/** Never throws: returns a typed Result for UI code. */
+export function safeParseScheduleJson<T = any>(rawInput: string): Result<T> {
+  try {
+    return { ok: true, value: cleanAndParseScheduleJson<T>(rawInput) };
+  } catch (e: any) {
+    return { ok: false, error: { code: 'schedule_json', message: e?.message || 'Некоректний JSON' } };
+  }
+}
+
+function validateScheduleJson(data: unknown): unknown {
+  const r = ScheduleJsonSchema.safeParse(data);
+  if (!r.success) throw new Error('JSON розкладу має бути об\'єктом або масивом днів');
+  return r.data;
+}
+
+function repairScheduleJson(rawInput: string): unknown {
   if (!rawInput || typeof rawInput !== 'string') {
     throw new Error('Вхідний текст порожній або не є рядком');
   }
@@ -25,7 +45,7 @@ export function cleanAndParseScheduleJson<T = any>(rawInput: string): T {
 
   // 3. Спроба 1: Швидкий нативний парсинг (якщо JSON уже валідний)
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(text);
   } catch {
     /* переходимо до ремонту */
   }
@@ -38,7 +58,7 @@ export function cleanAndParseScheduleJson<T = any>(rawInput: string): T {
   repaired = removeTrailingCommas(repaired);
 
   try {
-    return JSON.parse(repaired) as T;
+    return JSON.parse(repaired);
   } catch {
     /* переходимо до агресивного ремонту */
   }
@@ -47,7 +67,7 @@ export function cleanAndParseScheduleJson<T = any>(rawInput: string): T {
   repaired = repairRelaxedJson(repaired);
 
   try {
-    return JSON.parse(repaired) as T;
+    return JSON.parse(repaired);
   } catch (finalError: any) {
     console.error('JSON Repair Failed. Sanitized payload was:\n', repaired);
     throw new Error(

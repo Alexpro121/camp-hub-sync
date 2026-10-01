@@ -1,6 +1,6 @@
 import { normalizeName } from '@/lib/normalize';
 import type { PassengerRole } from '@/lib/passengerRoles';
-import { normalizeLine, parseSeatLine, parseSequentialTrainText } from '@/lib/train-parser';
+import { normalizeLine, parseSeatLine, safeParseSequentialTrainText } from '@/lib/train-parser';
 
 export const SEATS_PER_COUPE = 4;
 
@@ -82,7 +82,8 @@ export function parseCoupes(text: string, defaultTeam = 0): CoupeParseResult {
   const numbered = parseCoupesDeterministic(text, defaultTeam);
   if (numbered.passengers.length) return numbered;
 
-  const seq = parseSequentialTrainText(text);
+  const seqRes = safeParseSequentialTrainText(text);
+  const seq = seqRes.ok ? seqRes.value : [];
   const passengers: CoupePassenger[] = seq.map((p) => ({
     seat_number: p.seatNumber,
     name: p.name,
