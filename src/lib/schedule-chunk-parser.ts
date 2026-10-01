@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { ScheduleAiResponseSchema } from '@/lib/schemas/apiSchemas';
 
 export interface ChunkParseResult {
   success: boolean;
@@ -20,8 +21,12 @@ async function callScheduleEdgeFunction(rawText: string): Promise<ChunkParseResu
   try {
     await ensureSession();
     const res = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText } });
-    const data: any = res.data;
-    if (data && Array.isArray(data.items)) {
+    const parsed = ScheduleAiResponseSchema.safeParse(res.data);
+    if (!parsed.success && res.data && !res.error) {
+      return { success: false, source: 'fallback', items: [], reason: 'invalid_ai_response', error: { message: parsed.error.issues[0]?.message } };
+    }
+    if (parsed.success) {
+      const data = parsed.data;
       return {
         success: data.source === 'ai' && data.items.length > 0,
         source: data.source ?? 'fallback',
