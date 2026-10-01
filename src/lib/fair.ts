@@ -198,19 +198,20 @@ export const parseFairQr = (raw: string): FairParseResult => {
   }
 
   // 2. Динамічний QR термінала — перевірка терміну дії (2 години)
-  if (Date.now() - d.timestamp > FAIR_QR_MAX_AGE_MS) return { ok: false, reason: 'expired' };
+  const t = d as Extract<typeof d, { tx_id: string }>;
+  if (Date.now() - t.timestamp > FAIR_QR_MAX_AGE_MS) return { ok: false, reason: 'expired' };
 
   return {
     ok: true,
     payload: {
       type: FAIR_QR_TYPE,
-      tx_id: d.tx_id,
+      tx_id: t.tx_id,
       supervisor_id: d.supervisor_id ?? null,
       supervisor_team: d.supervisor_team ?? null,
       supervisor_name: d.supervisor_name ?? null,
       amount: d.amount,
-      timestamp: d.timestamp,
-      code: d.code ?? '',
+      timestamp: t.timestamp,
+      code: t.code ?? '',
     },
   };
 };
