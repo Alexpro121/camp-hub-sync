@@ -305,3 +305,16 @@ export function parseTrainTextGroupedByTeams(rawText: string): TeamTrainDisposit
       return { teamNumber, totalPassengers: passengers.length, coupes };
     });
 }
+
+type TrainResult<T> = import('@/lib/schemas/apiSchemas').Result<T>;
+const wrapTrain = <T,>(fn: () => T): TrainResult<T> => {
+  try {
+    return { ok: true, value: fn() };
+  } catch (e: any) {
+    return { ok: false, error: { code: 'train_text', message: e?.message || String(e) } };
+  }
+};
+
+/** Never-throwing variants for UI callers. */
+export const safeParseSequentialTrainText = (raw: string) => wrapTrain(() => parseSequentialTrainText(raw));
+export const safeParseTrainTextGroupedByTeams = (raw: string) => wrapTrain(() => parseTrainTextGroupedByTeams(raw));

@@ -1,3 +1,4 @@
+import { FairQrPayloadSchema } from '@/lib/schemas/apiSchemas';
 /**
  * Fair (Ярмарок) платіжні примітиви: розпізнавання розкладу, кодування QR,
  * 5-значні PIN-коди та підтримка безконтактних Air Pay запитів.
@@ -158,7 +159,6 @@ export interface FairParseOk { ok: true; payload: FairQrPayload; reason?: undefi
 export interface FairParseFail { ok: false; payload?: undefined; reason: 'invalid' | 'expired' }
 export type FairParseResult = FairParseOk | FairParseFail;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Строгий парсер сканованого QR-коду з перевіркою терміну дії */
 export const parseFairQr = (raw: string): FairParseResult => {
@@ -168,62 +168,49 @@ export const parseFairQr = (raw: string): FairParseResult => {
   } catch {
     return { ok: false, reason: 'invalid' };
   }
-  
-  if (!data || typeof data !== 'object') return { ok: false, reason: 'invalid' };
-  if (data.type !== FAIR_QR_TYPE) return { ok: false, reason: 'invalid' };
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return { ok: false, reason: 'invalid' };
 
-  // 1. Обробка багаторазового паперового цінника
-  if (data.is_reusable === true) {
-    if (typeof data.code_id !== 'string' || !UUID_RE.test(data.code_id)) {
-      return { ok: false, reason: 'invalid' };
-    }
-    const amt = Number(data.amount);
-    if (!Number.isInteger(amt) || amt < FAIR_MIN_AMOUNT || amt > FAIR_MAX_AMOUNT) {
-      return { ok: false, reason: 'invalid' };
-    }
+  const parsed = FairQrPayloadSchema(FAIR_QR_TYPE, FAIR_MIN_AMOUNT, FAIR_MAX_AMOUNT).safeParse({
+    ...data,
+    is_reusable: data.is_reusable === true,
+  });
+  if (!parsed.success) return { ok: false, reason: 'invalid' };
+  const d = parsed.data;
+
+  // 1. Багаторазовий паперовий цінник
+  if (d.is_reusable) {
     return {
       ok: true,
       payload: {
         type: FAIR_QR_TYPE,
         tx_id: randomUuid(),
-        supervisor_id: typeof data.supervisor_id === 'string' ? data.supervisor_id : null,
-        supervisor_team: Number.isFinite(Number(data.supervisor_team)) ? Number(data.supervisor_team) : null,
-        supervisor_name: typeof data.supervisor_name === 'string' ? data.supervisor_name : null,
-        amount: amt,
+        supervisor_id: d.supervisor_id ?? null,
+        supervisor_team: d.supervisor_team ?? null,
+        supervisor_name: d.supervisor_name ?? null,
+        amount: d.amount,
         timestamp: Date.now(),
         code: '',
         is_reusable: true,
-        code_id: data.code_id,
-        label: typeof data.label === 'string' ? data.label : null,
+        code_id: d.code_id,
+        label: d.label ?? null,
       },
     };
   }
 
-  // 2. Обробка динамічного QR-коду термінала
-  if (typeof data.tx_id !== 'string' || !UUID_RE.test(data.tx_id)) return { ok: false, reason: 'invalid' };
-
-  const amount = Number(data.amount);
-  if (!Number.isInteger(amount) || amount < FAIR_MIN_AMOUNT || amount > FAIR_MAX_AMOUNT) {
-    return { ok: false, reason: 'invalid' };
-  }
-  
-  const timestamp = Number(data.timestamp);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return { ok: false, reason: 'invalid' };
-  
-  // Перевірка часу дії (2 години)
-  if (Date.now() - timestamp > FAIR_QR_MAX_AGE_MS) return { ok: false, reason: 'expired' };
+  // 2. Динамічний QR термінала — перевірка терміну дії (2 години)
+  if (Date.now() - d.timestamp > FAIR_QR_MAX_AGE_MS) return { ok: false, reason: 'expired' };
 
   return {
     ok: true,
     payload: {
       type: FAIR_QR_TYPE,
-      tx_id: data.tx_id,
-      supervisor_id: typeof data.supervisor_id === 'string' ? data.supervisor_id : null,
-      supervisor_team: Number.isFinite(Number(data.supervisor_team)) ? Number(data.supervisor_team) : null,
-      supervisor_name: typeof data.supervisor_name === 'string' ? data.supervisor_name : null,
-      amount,
-      timestamp,
-      code: typeof data.code === 'string' ? data.code : '',
+      tx_id: d.tx_id,
+      supervisor_id: d.supervisor_id ?? null,
+      supervisor_team: d.supervisor_team ?? null,
+      supervisor_name: d.supervisor_name ?? null,
+      amount: d.amount,
+      timestamp: d.timestamp,
+      code: d.code ?? '',
     },
   };
 };
