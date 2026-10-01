@@ -603,6 +603,5 @@ const ShiftRow = ({ shift: s, onDelete, onChanged }: { shift: Shift; onDelete: (
   );
 };
 
-/* =========================================================================
 
 export default ShiftsTab;

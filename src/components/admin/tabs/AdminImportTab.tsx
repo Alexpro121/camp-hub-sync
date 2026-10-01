@@ -97,8 +97,7 @@ const TeamTagInput = lazyRetry(() => import('@/components/admin/TeamTagInput'));
 const ShiftEditDialog = lazyRetry(() => import('@/components/admin/ShiftEditDialog'));
 import { SHIFT_LABELS, generateMemorablePassword } from '@/components/admin/tabs/shared';
 
-   ВКЛАДКА 2: БАЗА ДАНИХ ТА ГЕНЕРАТОР ПАРОЛІВ СУПРОВОДУ
-========================================================================= */
+/* База даних та генератор паролів супроводу */
 const DataTab = () => {
   const [count, setCount] = useState(0);
   const [teamsCount, setTeamsCount] = useState(0);
