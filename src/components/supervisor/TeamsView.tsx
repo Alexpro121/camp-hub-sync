@@ -222,7 +222,11 @@ const TeamsView = ({
             <div key={tn}>
               <Card
                 data-tour={isMine ? 'step-2-my-team' : undefined}
+                role="button"
+                tabIndex={0}
+                aria-expanded={openTeam === tn}
                 onClick={() => setOpenTeam(openTeam === tn ? null : tn)}
+                onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpenTeam(openTeam === tn ? null : tn); } }}
                 className={`p-4 cursor-pointer transition-smooth active:scale-[0.99] ${isMine ? 'bg-gradient-card border-primary/40' : 'bg-card/50 border-border/50'}`}
               >
                 <div className="flex items-center gap-3">
@@ -253,7 +257,11 @@ const TeamsView = ({
                       key={c.id}
                       data-tour={isMine && ci === 0 ? 'step-4-child-card' : undefined}
                       className={`p-3.5 min-h-[60px] flex items-center gap-3 ${isMine ? 'cursor-pointer hover:border-primary/40' : 'opacity-75'} transition-smooth bg-surface-1 border-border/40`}
+                      role={isMine ? 'button' : undefined}
+                      tabIndex={isMine ? 0 : undefined}
+                      aria-label={isMine ? `Відкрити картку: ${c.full_name}` : undefined}
                       onClick={() => isMine && setEditChild(c)}
+                      onKeyDown={(e) => { if (isMine && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditChild(c); } }}
                     >
                       {isMine ? (
                         <button
