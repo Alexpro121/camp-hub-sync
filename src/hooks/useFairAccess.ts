@@ -13,6 +13,9 @@ export interface FairAccess {
   hasFairAccess: boolean;
   /** Торгівля та каса відкриті прямо зараз */
   isLiveFairRunning: boolean;
+  /** true until the first schedule load finishes — do not treat false flags as final yet */
+  loading: boolean;
+  error: string | null;
 }
 
 /**
@@ -23,6 +26,8 @@ export interface FairAccess {
 export function useFairAccess(enabled = true): FairAccess {
   const [hasFairAccess, setHasFairAccess] = useState(false);
   const [isLiveFairRunning, setIsLiveFairRunning] = useState(false);
+  const [loading, setLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
   
   const cacheRef = useRef<{ date: string; items: ScheduleItem[] }[]>([]);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,6 +39,7 @@ export function useFairAccess(enabled = true): FairAccess {
     
     setHasFairAccess(anyFair || running);
     setIsLiveFairRunning(running);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -139,7 +145,7 @@ export function useFairAccess(enabled = true): FairAccess {
     };
   }, [enabled, recompute]);
 
-  return { hasFairAccess, isLiveFairRunning };
+  return { hasFairAccess, isLiveFairRunning, loading, error };
 }
 
 export default useFairAccess;

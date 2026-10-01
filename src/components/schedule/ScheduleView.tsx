@@ -65,7 +65,7 @@ const ScheduleView = ({
   isStaff = false, 
   onFairAction 
 }: Props) => {
-  const TEAMS = useAllTeams();
+  const { data: TEAMS } = useAllTeams();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);

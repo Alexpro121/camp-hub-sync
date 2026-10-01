@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { KIND_LABEL, StaffKind, staffCall, staffErr } from '@/lib/staffApi';
+import { KIND_LABEL, StaffKind, staffCall, isAbortError, staffErr } from '@/lib/staffApi';
 import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +36,9 @@ const StaffRegister = () => {
   const [seconds, setSeconds] = useState(5);
 
   useEffect(() => {
-    staffCall({ action: 'invite_check', token })
+    const ac = new AbortController();
+    const signal = ac.signal;
+    staffCall({ action: 'invite_check', token }, { signal })
       .then(async (d) => {
         setKind(d.kind);
         setShift(d.shift ?? null);
@@ -45,11 +47,12 @@ const StaffRegister = () => {
         if (d.shift) {
           const { data } = await supabase.auth.getUser();
           if (data.user) {
-            try { await staffCall({ action: 'cabinet' }); setMode('team'); } catch { /* не акаунт супроводу */ }
+            try { await staffCall({ action: 'cabinet' }, { signal }); setMode('team'); } catch { /* не акаунт супроводу або скасовано */ }
           }
         }
       })
-      .catch(() => setState('invalid'));
+      .catch((e) => { if (!isAbortError(e)) setState('invalid'); });
+    return () => ac.abort();
   }, [token]);
 
   useEffect(() => {

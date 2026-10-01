@@ -147,20 +147,24 @@ const TeamsView = ({
 
   const teams = Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b);
 
+  // Latest callback in a ref: a new inline prop each render must not re-fire the effect.
+  const firstChildCb = useRef(onFirstTeamChild);
+  firstChildCb.current = onFirstTeamChild;
   useEffect(() => {
-    if (!onFirstTeamChild) return;
+    if (!firstChildCb.current) return;
     const mine = children
       .filter((c) => c.team_number === myTeam)
       .sort((a, b) => (a.row_number ?? 0) - (b.row_number ?? 0));
-    onFirstTeamChild(mine[0] ?? null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    firstChildCb.current(mine[0] ?? null);
   }, [children, myTeam]);
 
   // Знімок присутності на момент вибору сортування — картка не «тікає» з-під пальця під час переклички.
   const presentSnap = useRef<Map<string, boolean>>(new Map());
+  // Snapshot only when the sort mode changes; read children through a ref so roll-call taps don't re-sort.
+  const childrenRef = useRef(children);
+  childrenRef.current = children;
   useEffect(() => {
-    presentSnap.current = new Map(children.map((c) => [c.id, !!c.is_present]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    presentSnap.current = new Map(childrenRef.current.map((c) => [c.id, !!c.is_present]));
   }, [sortMode]);
   const snapPresent = (c: Child) => presentSnap.current.get(c.id) ?? !!c.is_present;
   const sortKids = (kids: Child[]): Child[] => {

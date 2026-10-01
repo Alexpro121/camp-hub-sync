@@ -17,10 +17,12 @@ async function ensureSession() {
 }
 
 /** Single-call edge invocation. Never throws — always resolves to a result shape. */
-async function callScheduleEdgeFunction(rawText: string): Promise<ChunkParseResult> {
+async function callScheduleEdgeFunction(rawText: string, signal?: AbortSignal): Promise<ChunkParseResult> {
   try {
+    if (signal?.aborted) return { success: false, source: 'fallback', items: [], reason: 'aborted' };
     await ensureSession();
-    const res = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText } });
+    const res = await supabase.functions.invoke('parse-schedule-ai', { body: { rawText }, signal });
+    if (signal?.aborted) return { success: false, source: 'fallback', items: [], reason: 'aborted' };
     const parsed = ScheduleAiResponseSchema.safeParse(res.data);
     if (!parsed.success && res.data && !res.error) {
       return { success: false, source: 'fallback', items: [], reason: 'invalid_ai_response', error: { message: parsed.error.issues[0]?.message } };
@@ -51,10 +53,10 @@ function sortAndDeduplicateItems(items: any[]) {
 }
 
 /** Splits long schedules at a logical midday boundary and parses both halves in parallel. */
-export async function parseScheduleSmartTwoPhase(rawText: string): Promise<ChunkParseResult> {
+export async function parseScheduleSmartTwoPhase(rawText: string, signal?: AbortSignal): Promise<ChunkParseResult> {
   if (!rawText?.trim()) return { success: false, source: 'fallback', items: [], reason: 'empty_input' };
 
-  if (rawText.length < 1000) return await callScheduleEdgeFunction(rawText);
+  if (rawText.length < 1000) return await callScheduleEdgeFunction(rawText, signal);
 
   const lines = rawText.split(/\r?\n/);
   let midIndex = lines.findIndex((line) => /обід|15[:.]00|14[:.]30/i.test(line));
@@ -64,10 +66,11 @@ export async function parseScheduleSmartTwoPhase(rawText: string): Promise<Chunk
   const textPhase2 = lines.slice(midIndex).join('\n');
 
   const [res1, res2] = await Promise.all([
-    callScheduleEdgeFunction(textPhase1),
-    callScheduleEdgeFunction(textPhase2),
+    callScheduleEdgeFunction(textPhase1, signal),
+    callScheduleEdgeFunction(textPhase2, signal),
   ]);
 
+  if (signal?.aborted) return { success: false, source: 'fallback', items: [], reason: 'aborted' };
   const combined = [...(res1.items ?? []), ...(res2.items ?? [])];
   if (combined.length === 0) {
     return { success: false, source: 'fallback', items: [], reason: res1.reason ?? res2.reason ?? 'empty_result', error: res1.error ?? res2.error };

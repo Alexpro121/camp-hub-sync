@@ -3,8 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 export type StaffKind = 'supervisor' | 'duckling';
 export const KIND_LABEL: Record<StaffKind, string> = { supervisor: 'Супровід', duckling: 'Каченя' };
 
-export async function staffCall<T = any>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('staff-accounts', { body }).catch((e) => ({ data: null as any, error: e }));
+export const isAbortError = (e: unknown) => (e as Error)?.name === 'AbortError' || (e as Error)?.message === 'aborted';
+
+/** Calls the staff function; pass `signal` to cancel on unmount/navigation (rejects with message 'aborted'). */
+export async function staffCall<T = any>(body: Record<string, unknown>, opts: { signal?: AbortSignal } = {}): Promise<T> {
+  if (opts.signal?.aborted) throw new Error('aborted');
+  const { data, error } = await supabase.functions
+    .invoke('staff-accounts', { body, signal: opts.signal })
+    .catch((e) => ({ data: null as any, error: e }));
+  if (opts.signal?.aborted) throw new Error('aborted');
   if (error || data?.error) throw new Error(data?.error || 'failed');
   return data as T;
 }

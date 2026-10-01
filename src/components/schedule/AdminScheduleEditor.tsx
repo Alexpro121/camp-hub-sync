@@ -38,7 +38,7 @@ interface Form {
 const emptyForm = (): Form => ({ id: null, title: '', location: '', time_start: '', time_end: '', category: 'general', target_teams: [] });
 
 const AdminScheduleEditor = () => {
-  const TEAMS = useAllTeams();
+  const { data: TEAMS } = useAllTeams();
   const { shiftId } = useActiveShift();
   const [date, setDate] = useState(todayISO());
   const [schedules, setSchedules] = useState<Schedule[]>([]);
