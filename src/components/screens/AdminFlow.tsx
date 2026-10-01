@@ -50,13 +50,6 @@ import { supabase } from '@/integrations/supabase/client';
   AlertDialogTitle, 
   AlertDialogTrigger 
 } from '@/components/ui/alert-dialog';
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { backfillGenders } from '@/lib/gender';
