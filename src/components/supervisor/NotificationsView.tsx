@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { getSessionMeta } from '@/lib/session';
 import { supabase } from '@/integrations/supabase/client';
 import type { AppNotification } from '@/types/app';
 import { Card } from '@/components/ui/card';
@@ -144,12 +145,20 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
   useEffect(() => {
     let cancelled = false;
 
+    const shiftId = getSessionMeta()?.shiftId ?? null;
+    const inShift = (n: AppNotification) => {
+      const s = (n as any).shift_id as string | null | undefined;
+      return !shiftId || !s || s === shiftId;
+    };
+
     const load = async () => {
-      const { data } = await supabase
+      let q = supabase
         .from('notifications')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(150);
+      if (shiftId) q = q.or(`shift_id.is.null,shift_id.eq.${shiftId}`);
+      const { data } = await q;
 
       if (!cancelled) {
         setItems((data || []) as AppNotification[]);
@@ -162,7 +171,9 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     const ch = supabase
       .channel('notif-stream')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (p) => {
-        setItems((prev) => [p.new as AppNotification, ...prev].slice(0, 150));
+        const n = p.new as AppNotification;
+        if (!inShift(n)) return;
+        setItems((prev) => [n, ...prev].slice(0, 150));
       })
       .subscribe();
 

@@ -174,10 +174,13 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
       const seen = localStorage.getItem(`helpsuprov:notif-seen:${authedTeam}`) || '1970-01-01T00:00:00.000Z';
       const cleared = localStorage.getItem(`helpsuprov:notif-cleared:${authedTeam}`) || '1970-01-01T00:00:00.000Z';
       const cutoff = seen > cleared ? seen : cleared;
-      const { count } = await supabase
+      const shiftId = getSessionMeta()?.shiftId ?? null;
+      let q = supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
         .gt('created_at', cutoff);
+      if (shiftId) q = q.or(`shift_id.is.null,shift_id.eq.${shiftId}`);
+      const { count } = await q;
       setUnreadCount(count ?? 0);
     };
 
