@@ -1,37 +1,6 @@
 import { lazyRetry } from '@/lib/lazyRetry';
 import { useEffect, useState } from 'react';
-import { 
-  
-  
-  
-  
-  
-  
-  
-  
-  Loader2, 
-  
-  
-  
-  BarChart3, 
-  AlertTriangle, 
-  Coins, 
-  Users, 
-  ArrowRightLeft, 
-  
-  
-  
-  
-  
-  ChevronDown, 
-  Pencil,
-  
-  
-  
-  
-  
-  Menu
-} from 'lucide-react';
+import { Loader2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, ChevronDown, Pencil } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

@@ -1,38 +1,7 @@
 import { copyText } from '@/lib/clipboard';
 import { lazyRetry } from '@/lib/lazyRetry';
 import { useEffect, useState } from 'react';
-import { 
-  
-  
-  Trash2, 
-  
-  
-  
-  Wand2, 
-  
-  Loader2, 
-  
-  
-  
-  
-  AlertTriangle, 
-  
-  
-  
-  
-  
-  
-  Copy, 
-  Search, 
-  
-  Pencil,
-  RefreshCw,
-  KeyRound,
-  
-  Check,
-  
-  Menu
-} from 'lucide-react';
+import { Trash2, Wand2, Loader2, AlertTriangle, Copy, Search, Pencil, RefreshCw, KeyRound, Check } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -41,25 +10,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle, 
-  AlertDialogTrigger 
-} from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useHaptics } from '@/hooks/useHaptics';
 
 import { generateMemorablePassword } from '@/components/admin/tabs/shared';

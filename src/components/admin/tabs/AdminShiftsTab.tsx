@@ -1,38 +1,7 @@
 import { copyText } from '@/lib/clipboard';
 import { lazyRetry } from '@/lib/lazyRetry';
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { 
-  
-  Upload, 
-  Trash2, 
-  Calendar, 
-  
-  
-  Wand2, 
-  Plus, 
-  Loader2, 
-  
-  FileSpreadsheet, 
-  CheckCircle2, 
-  
-  AlertTriangle, 
-  
-  
-  
-  Link2, 
-  
-  
-  Copy, 
-  
-  ChevronDown, 
-  
-  
-  
-  
-  
-  
-  Menu
-} from 'lucide-react';
+import { Upload, Trash2, Calendar, Wand2, Plus, Loader2, FileSpreadsheet, CheckCircle2, AlertTriangle, Link2, Copy, ChevronDown } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -47,17 +16,7 @@ import type { Shift, ShiftType } from '@/types/app';
 import type { ImportResult, ImportRow } from '@/lib/importer';
 import { shiftStatus } from '@/lib/shift';
 import { resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
-  AlertDialogFooter, 
-  AlertDialogHeader, 
-  AlertDialogTitle, 
-  AlertDialogTrigger 
-} from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { backfillGenders } from '@/lib/gender';
 import { normalizeName } from '@/lib/normalize';

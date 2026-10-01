@@ -1,38 +1,7 @@
 import { lazyRetry } from '@/lib/lazyRetry';
 import { Suspense, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  ArrowLeft, 
-  
-  
-  Calendar, 
-  CalendarDays, 
-  Mic2, 
-  
-  
-  
-  Database, 
-  
-  
-  BarChart3, 
-  
-  
-  Users, 
-  
-  
-  Train, 
-  ShoppingBag, 
-  
-  
-  
-  
-  
-  
-  Bell,
-  
-  LayoutDashboard,
-  Menu
-} from 'lucide-react';
+import { ArrowLeft, Calendar, CalendarDays, Mic2, Database, BarChart3, Users, Train, ShoppingBag, Bell, LayoutDashboard, Menu } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { clearSavedSession, saveSession } from '@/lib/session';
