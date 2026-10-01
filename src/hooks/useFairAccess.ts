@@ -13,6 +13,9 @@ export interface FairAccess {
   hasFairAccess: boolean;
   /** Торгівля та каса відкриті прямо зараз */
   isLiveFairRunning: boolean;
+  /** true until the first schedule load finishes — do not treat false flags as final yet */
+  loading: boolean;
+  error: string | null;
 }
 
 /**
