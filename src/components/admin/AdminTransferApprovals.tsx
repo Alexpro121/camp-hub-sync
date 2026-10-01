@@ -46,7 +46,12 @@ const AdminTransferApprovals = () => {
     setBusy(id);
     const { error } = await db.rpc('review_transfer_request', { p_request_id: id, p_approve: approve });
     setBusy(null);
-    if (error) { toast.error('Помилка: ' + error.message); return; }
+    if (error) {
+      if (/forbidden/i.test(error.message)) {
+        toast.error('У цьому браузері зараз активний вхід супроводу, а не адміна. Вийдіть і увійдіть як адмін ще раз.', { duration: 8000 });
+      } else toast.error('Помилка: ' + error.message);
+      return;
+    }
     toast.success(approve ? 'Підтверджено' : 'Відхилено');
     setReqs((r) => r.filter((x) => x.id !== id));
   };
