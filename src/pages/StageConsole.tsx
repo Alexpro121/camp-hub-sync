@@ -319,6 +319,7 @@ const StageConsole = () => {
           </div>
           <Input
             type="text"
+            aria-label="Пароль пульта сцени"
             value={password}
             onChange={(e) => setPassword(e.target.value.toLowerCase())}
             onKeyDown={(e) => e.key === 'Enter' && unlock()}
@@ -373,6 +374,7 @@ const StageConsole = () => {
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <Input
+              aria-label="Пошук за номером команди чи назвою"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Швидкий пошук за номером команди чи назвою..."

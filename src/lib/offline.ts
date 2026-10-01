@@ -28,11 +28,11 @@ import {
 
 export interface QueuedAction {
   id: string;
-  table: 'children' | 'iron_dollar_transactions' | 'talent_entries' | 'broadcasts' | string;
+  table: 'children' | 'iron_dollar_transactions' | 'talent_entries' | 'broadcasts';
   op: 'update' | 'insert' | 'rpc';
   matchId?: string;
   values: Record<string, any>;
-  fn?: 'increment_iron_dollars' | string;
+  fn?: 'increment_iron_dollars';
   idempotencyKey?: string;
   clientUpdatedAt?: string;
   mergeFields?: string[];
