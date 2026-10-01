@@ -12,17 +12,22 @@ const SEEN_KEY = 'helpsuprov:talent-seen';
 export const useTalentEventActive = () => {
   const [active, setActive] = useState(false);
   const [isNew, setIsNew] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     const load = async (announce = false) => {
-      const { data } = await supabase
+      const { data, error: err } = await supabase
         .from('talent_events')
         .select('id, created_at, shift_id')
         .order('created_at', { ascending: false })
         .limit(20);
       if (!mounted) return;
+      setLoading(false);
+      setError(err?.message ?? null);
+      if (err) return; // keep last known state instead of hiding the tab on a failed request
       const myShift = getSessionMeta()?.shiftId ?? null;
       const ev = (data || []).find((e: any) => !myShift || !e.shift_id || e.shift_id === myShift);
       setActive(!!ev);
@@ -55,5 +60,5 @@ export const useTalentEventActive = () => {
     if (ev) localStorage.setItem(SEEN_KEY, ev.id);
   };
 
-  return { active, isNew, markSeen };
+  return { active, isNew, markSeen, loading, error, data: active };
 };

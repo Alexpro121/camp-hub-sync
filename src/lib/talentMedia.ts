@@ -144,14 +144,14 @@ export function parseAttachments(raw: unknown): TalentAttachment[] {
 }
 
 /** Отримання свіжого підписаного URL для безпечного відтворення/скачування */
-export async function getSignedUrl(storagePath: string): Promise<string | null> {
-  if (!storagePath) return null;
+export async function getSignedUrl(storagePath: string, signal?: AbortSignal): Promise<string | null> {
+  if (!storagePath || signal?.aborted) return null;
   try {
     const { data, error } = await supabase.storage
       .from(TALENT_BUCKET)
       .createSignedUrl(storagePath, SIGNED_URL_TTL);
     
-    if (error) return null;
+    if (error || signal?.aborted) return null;
     return data?.signedUrl ?? null;
   } catch {
     return null;

@@ -59,22 +59,30 @@ const AdminStaffAccounts = () => {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const [d, s, inv] = await Promise.all([
-        staffCall({ action: 'list' }),
+        staffCall({ action: 'list' }, { signal }),
         supabase.from('shifts').select('id, name, start_date').is('deleted_at', null).order('start_date', { ascending: false }),
-        staffCall({ action: 'invite_list' }),
+        staffCall({ action: 'invite_list' }, { signal }),
       ]);
+      if (signal?.aborted) return;
       setMembers(d.members); setAsg(d.assignments); setShifts((s.data ?? []) as ShiftLite[]); setInvites(inv.invites);
-    } catch { toast.error('Не вдалося завантажити команду супроводу'); }
+    } catch (e) {
+      if (signal?.aborted) return;
+      toast.error('Не вдалося завантажити команду супроводу');
+    }
     setLoading(false);
   }, []);
-  useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
-    if (editing) setEditing(members.find((m) => m.user_id === editing.user_id) ?? null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const ac = new AbortController();
+    load(ac.signal);
+    return () => ac.abort();
+  }, [load]);
+
+  // Keep the open editor in sync with fresh data; functional update avoids a stale `editing` closure.
+  useEffect(() => {
+    setEditing((cur) => (cur ? members.find((m) => m.user_id === cur.user_id) ?? null : cur));
   }, [members]);
 
   const run = async (body: Record<string, unknown>, ok: string) => {
