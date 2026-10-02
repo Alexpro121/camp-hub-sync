@@ -140,13 +140,13 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
       <DialogContent
         className="
           fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-          w-[calc(100%-2rem)] max-w-md max-h-[90dvh] overflow-y-auto
+          !w-[calc(100dvw-1rem)] max-w-md min-w-0 max-h-[calc(100dvh-1rem)] overflow-x-hidden overflow-y-auto
           bg-[#0F1523]/95 border border-white/10 backdrop-blur-2xl
-          rounded-3xl shadow-2xl text-slate-100 p-0 gap-0
+          rounded-2xl sm:rounded-3xl shadow-2xl text-slate-100 p-0 gap-0
         "
       >
         {/* Sticky header */}
-        <DialogHeader className="sticky top-0 z-10 px-5 pt-5 pb-3 bg-[#0F1523]/95 border-b border-white/10 backdrop-blur-2xl">
+        <DialogHeader className="sticky top-0 z-20 min-w-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 bg-[#0F1523]/95 border-b border-white/10 backdrop-blur-2xl">
           <button
             type="button"
             onClick={onClose}
@@ -155,34 +155,34 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
           >
             <X className="w-5 h-5" strokeWidth={2} />
           </button>
-          <DialogTitle className="text-lg sm:text-xl font-black uppercase pr-14 leading-tight">
+          <DialogTitle className="min-w-0 break-words text-left text-lg sm:text-xl font-black uppercase pr-14 leading-tight">
             {child.full_name}
           </DialogTitle>
-          <p className="text-xs text-slate-400">
+          <p className="min-w-0 break-words pr-12 text-left text-xs text-slate-400">
             Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
           </p>
         </DialogHeader>
 
-        <Tabs defaultValue="edit" className="w-full">
-          <div className="px-5 pt-4">
+        <Tabs defaultValue="edit" className="w-full min-w-0 overflow-x-hidden">
+          <div className="px-4 sm:px-5 pt-4">
             <TabsList className="grid grid-cols-2 w-full h-11 bg-white/5 border border-white/10">
               <TabsTrigger value="edit" className="text-xs min-h-[44px] data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Дані</TabsTrigger>
-              <TabsTrigger value="history" className="text-xs min-h-[44px] data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Історія транзакцій</TabsTrigger>
+              <TabsTrigger value="history" className="min-w-0 px-2 text-xs min-h-[44px] whitespace-normal leading-tight data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Історія транзакцій</TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="history" className="mt-0 px-5 py-4 pb-32 sm:pb-5">
+          <TabsContent value="history" className="min-w-0 mt-0 px-4 sm:px-5 py-4 pb-32 sm:pb-5">
             <TransactionHistory childId={child.id} bare />
           </TabsContent>
 
-          <TabsContent value="edit" className="mt-0">
-            <div className="space-y-4 px-5 py-4 pb-32 sm:pb-5">
+          <TabsContent value="edit" className="min-w-0 mt-0">
+            <div className="min-w-0 space-y-4 px-4 sm:px-5 py-4 pb-32 sm:pb-5">
               {/* A$ balance with +/- */}
               <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
                 <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">
                   <Coins className="w-4 h-4" /> А$
                 </Label>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => adjustIron(-1)}
@@ -197,7 +197,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                     inputMode="numeric"
                     value={iron}
                     onChange={(e) => { ironDirty.current = true; setIron(e.target.value); }}
-                    className="h-14 text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
+                    className="h-14 min-w-0 text-2xl sm:text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
                   />
                   <button
                     type="button"
@@ -231,11 +231,11 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                   <Label className="text-xs uppercase tracking-wider text-primary/80">Усі поля з таблиці</Label>
                   <div className="rounded-lg border border-white/10 bg-white/5 divide-y divide-white/10">
                     {Object.entries(child.raw_data).map(([k, v]) => (
-                      <div key={k} className="flex items-start gap-3 p-2.5 text-xs">
-                        <span className="text-slate-400 min-w-[40%] truncate">
+                      <div key={k} className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-3 p-2.5 text-xs">
+                        <span className="min-w-0 truncate text-slate-400">
                           {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
                         </span>
-                        <span className="font-medium break-words flex-1 text-slate-200">{String(v)}</span>
+                        <span className="min-w-0 break-all font-medium text-slate-200">{String(v)}</span>
                       </div>
                     ))}
                   </div>
@@ -249,15 +249,15 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
               )}
 
               {/* Compact gender picker — kept near the bottom of the profile */}
-              <div className="flex items-center gap-2 pt-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
                 <span className="text-xs text-slate-400 shrink-0">Стать</span>
-                <div className="flex gap-1.5">
+                <div className="flex min-w-0 flex-wrap gap-1.5">
                   {(['boy', 'girl', 'unknown'] as Gender[]).map((g) => (
                     <button
                       key={g}
                       type="button"
                       onClick={() => setGender(g)}
-                      className={`h-8 px-3 rounded-full border text-xs font-semibold transition active:scale-95 ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
+                      className={`h-8 px-2.5 rounded-full border text-xs font-semibold transition active:scale-95 ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
                     >
                       {GENDER_LABEL[g]}
                     </button>
@@ -276,7 +276,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
                     } catch { toast.error('Не вдалося визначити'); }
                     setDetecting(false);
                   }}
-                  className="ml-auto text-[11px] text-primary hover:underline disabled:opacity-50 shrink-0"
+                  className="sm:ml-auto text-[11px] text-primary hover:underline disabled:opacity-50 shrink-0"
                 >
                   {detecting ? 'Визначаю…' : 'Визначити'}
                 </button>
@@ -286,7 +286,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
         </Tabs>
 
         {/* Sticky save bar (mobile-friendly) */}
-        <div className="sticky bottom-0 left-0 right-0 px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-[#0F1523]/95 border-t border-white/10 backdrop-blur-2xl">
+        <div className="sticky bottom-0 left-0 right-0 z-20 px-4 sm:px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-[#0F1523]/95 border-t border-white/10 backdrop-blur-2xl">
           <Button onClick={handleSave} className="w-full h-12 font-bold uppercase" disabled={saving}>
             {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Зберегти</>}
           </Button>
