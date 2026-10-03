@@ -8,6 +8,13 @@
       "when": 1791028733194,
       "tag": "0000_lock_staff_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791029047473,
+      "tag": "0001_login_attempts",
+      "breakpoints": true
     }
   ]
 }

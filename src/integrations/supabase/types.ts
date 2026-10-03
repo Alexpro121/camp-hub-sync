@@ -475,6 +475,27 @@ export type Database = {
           },
         ]
       }
+      login_attempts: {
+        Row: {
+          created_at: string
+          id: number
+          key: string
+          scope: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          key: string
+          scope: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          key?: string
+          scope?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
