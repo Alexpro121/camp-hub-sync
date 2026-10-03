@@ -169,6 +169,14 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_credentials' }, 400);
     }
 
+    // Адмін: не більше 3 спроб на хвилину з однієї IP (ключ без user-agent, щоб не обійти зміною браузера).
+    if (team === ADMIN_TEAM) {
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown';
+      const adminKey = `admin-login|${ip}`;
+      if (peek(adminKey).hits >= 3) return json({ error: 'too_many_attempts' }, 429);
+      recordFailure(adminKey);
+    }
+
     const rlKey = clientKey(req, `staff:${team}`);
     const before = peek(rlKey);
     if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
