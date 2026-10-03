@@ -169,12 +169,17 @@ Deno.serve(async (req) => {
       return json({ error: 'invalid_credentials' }, 400);
     }
 
-    // Адмін: не більше 3 спроб на хвилину з однієї IP (ключ без user-agent, щоб не обійти зміною браузера).
+    // Адмін: не більше 3 невдалих спроб на хвилину з однієї IP — лічильник у базі,
+    // тому не скидається між запусками сервера. Плюс загальна стеля 15/хв для всіх IP.
+    const adminIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown';
     if (team === ADMIN_TEAM) {
-      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown';
-      const adminKey = `admin-login|${ip}`;
-      if (peek(adminKey).hits >= 3) return json({ error: 'too_many_attempts' }, 200);
-      recordFailure(adminKey);
+      const db = adminClient();
+      const since = new Date(Date.now() - 60_000).toISOString();
+      const [{ count: mine }, { count: all }] = await Promise.all([
+        db.from('login_attempts').select('id', { count: 'exact', head: true }).eq('scope', 'admin').eq('key', adminIp).gte('created_at', since),
+        db.from('login_attempts').select('id', { count: 'exact', head: true }).eq('scope', 'admin').gte('created_at', since),
+      ]);
+      if ((mine ?? 0) >= 3 || (all ?? 0) >= 15) return json({ error: 'too_many_attempts' }, 200);
     }
 
     const rlKey = clientKey(req, `staff:${team}`);
@@ -186,6 +191,9 @@ Deno.serve(async (req) => {
     if (team === ADMIN_TEAM) {
       const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD');
       if (!adminPassword || !passwordMatches(password, adminPassword)) {
+        const db = adminClient();
+        await db.from('login_attempts').insert({ scope: 'admin', key: adminIp });
+        db.from('login_attempts').delete().lt('created_at', new Date(Date.now() - 86_400_000).toISOString()).then(() => {}, () => {});
         const v = recordFailure(rlKey, { slowAfter: 3 });
         if (v.blocked) return json({ error: 'too_many_attempts' }, 200);
         return json({ error: 'invalid_credentials' }, 200);
