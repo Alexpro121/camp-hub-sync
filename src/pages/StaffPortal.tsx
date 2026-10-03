@@ -71,8 +71,13 @@ const StaffPortal = () => {
       if (adminMode) {
         const { data, error } = await supabase.functions.invoke('staff-login', { body: { team: 99, password } }).catch((e) => ({ data: null as any, error: e }));
         if (error) {
-          const body = await (error as any)?.context?.json?.().catch(() => null);
-          throw new Error(body?.error || 'failed');
+          let code = 'failed';
+          try {
+            const ctx = (error as any)?.context;
+            if (ctx?.status === 429) code = 'too_many_attempts';
+            else if (ctx && typeof ctx.clone === 'function') code = (await ctx.clone().json())?.error || code;
+          } catch { /* тіло відповіді не JSON */ }
+          throw new Error(code);
         }
         if (data?.role !== 'admin') throw new Error();
         await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
