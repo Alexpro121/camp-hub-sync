@@ -18,7 +18,7 @@ type Mode = 'transfer' | 'swap';
 const TransfersView = ({ myTeam }: Props) => {
   const [children, setChildren] = useState<Child[]>([]);
   const [shiftId, setShiftId] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>('transfer');
+  const [mode, setMode] = useState<Mode>('swap');
 
   // Transfer state
   const [selected, setSelected] = useState<Child | null>(null);

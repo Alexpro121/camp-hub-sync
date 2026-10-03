@@ -1,7 +1,7 @@
 import { lazyRetry } from '@/lib/lazyRetry';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarDays, Coins, Loader2, LogOut, Mic2, ArrowLeftRight, Users, ChevronRight, Crown, Sun, Moon, Camera, Pencil } from 'lucide-react';
+import { CalendarDays, Coins, Loader2, LogOut, Mic2, ArrowLeftRight, Users, ChevronRight, Crown, Sun, Moon, Camera, Pencil, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,13 +63,18 @@ const StaffPortal = () => {
     })();
   }, [loadCabinet]);
 
+  const [showPass, setShowPass] = useState(false);
   const handleLogin = async () => {
     if (!login.trim() || !password) { toast.error('Введіть логін або ПІБ та пароль'); return; }
     setBusy(true);
     try {
       if (adminMode) {
         const { data, error } = await supabase.functions.invoke('staff-login', { body: { team: 99, password } }).catch((e) => ({ data: null as any, error: e }));
-        if (error || data?.role !== 'admin') throw new Error();
+        if (error) {
+          const body = await (error as any)?.context?.json?.().catch(() => null);
+          throw new Error(body?.error || 'failed');
+        }
+        if (data?.role !== 'admin') throw new Error();
         await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
         saveSession('admin');
         navigate('/');
@@ -175,9 +180,15 @@ const StaffPortal = () => {
               )}
               <div className="space-y-1.5">
                 <Label htmlFor="pass" className="text-xs font-semibold">Пароль</Label>
-                <Input id="pass" type="password" autoComplete="current-password" value={password}
-                  onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                  className="h-12 rounded-xl" placeholder="••••••••" />
+                <div className="relative">
+                  <Input id="pass" type={showPass ? 'text' : 'password'} autoComplete="current-password" value={password}
+                    onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    className="h-12 rounded-xl pr-12" placeholder="••••••••" />
+                  <button type="button" onClick={() => setShowPass((v) => !v)} aria-label={showPass ? 'Сховати пароль' : 'Показати пароль'}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground">
+                    {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
               <Button onClick={() => { if (adminMode && !login) setLogin('admin'); handleLogin(); }} disabled={busy}
                 className="w-full h-12 font-bold rounded-xl">
