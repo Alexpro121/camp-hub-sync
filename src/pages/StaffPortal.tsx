@@ -79,7 +79,7 @@ const StaffPortal = () => {
           } catch { /* тіло відповіді не JSON */ }
           throw new Error(code);
         }
-        if (data?.role !== 'admin') throw new Error();
+        if (data?.role !== 'admin') throw new Error(data?.error || 'failed');
         await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
         saveSession('admin');
         navigate('/');

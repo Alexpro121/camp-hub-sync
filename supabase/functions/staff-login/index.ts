@@ -173,13 +173,13 @@ Deno.serve(async (req) => {
     if (team === ADMIN_TEAM) {
       const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown';
       const adminKey = `admin-login|${ip}`;
-      if (peek(adminKey).hits >= 3) return json({ error: 'too_many_attempts' }, 429);
+      if (peek(adminKey).hits >= 3) return json({ error: 'too_many_attempts' }, 200);
       recordFailure(adminKey);
     }
 
     const rlKey = clientKey(req, `staff:${team}`);
     const before = peek(rlKey);
-    if (before.hits > 10) return json({ error: 'too_many_attempts' }, 429);
+    if (before.hits > 10) return json({ error: 'too_many_attempts' }, 200);
     if (before.hits >= 3) await sleep(1200 * Math.min(before.hits, 5));
 
     // Вхід адміністратора
@@ -187,8 +187,8 @@ Deno.serve(async (req) => {
       const adminPassword = Deno.env.get('STAFF_ADMIN_PASSWORD');
       if (!adminPassword || !passwordMatches(password, adminPassword)) {
         const v = recordFailure(rlKey, { slowAfter: 3 });
-        if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
-        return json({ error: 'invalid_credentials' }, 401);
+        if (v.blocked) return json({ error: 'too_many_attempts' }, 200);
+        return json({ error: 'invalid_credentials' }, 200);
       }
       resetFailures(rlKey);
       const session = await issueSession('staff-admin@ironhelp.local', 'admin', { team_number: ADMIN_TEAM });
@@ -218,8 +218,8 @@ Deno.serve(async (req) => {
 
     if (!ok) {
       const v = recordFailure(rlKey, { slowAfter: 3 });
-      if (v.blocked) return json({ error: 'too_many_attempts' }, 429);
-      return json({ error: 'invalid_credentials' }, 401);
+      if (v.blocked) return json({ error: 'too_many_attempts' }, 200);
+      return json({ error: 'invalid_credentials' }, 200);
     }
 
     resetFailures(rlKey);
