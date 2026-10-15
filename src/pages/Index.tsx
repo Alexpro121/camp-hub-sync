@@ -11,7 +11,6 @@ import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 const ChildFlow = lazyRetry(() => import('@/components/screens/ChildFlow'));
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 const AdminFlow = lazyRetry(() => import('@/components/screens/AdminFlow'));
-const ParentFlow = lazyRetry(() => import('@/components/screens/ParentFlow'));
 const AlumniFlow = lazyRetry(() => import('@/components/alumni/AlumniFlow'));
 
 export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'parent';
@@ -59,8 +58,10 @@ const Index = () => {
           return;
         }
 
+        // Батьківський вхід вимкнено: стару сесію батьків очищаємо
         if (savedRole === 'parent') {
-          if (!cancelled) { setScreen('parent'); setRestoring(false); }
+          clearSavedSession();
+          if (!cancelled) { setScreen('role'); setRestoring(false); }
           return;
         }
 
@@ -167,10 +168,6 @@ const Index = () => {
 
         {screen === 'admin' && (
           <AdminFlow onBack={goRole} />
-        )}
-
-        {screen === 'parent' && (
-          <ParentFlow onBack={goRole} />
         )}
 
         {screen === 'alumni' && (
