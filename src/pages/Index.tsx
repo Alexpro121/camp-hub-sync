@@ -90,8 +90,7 @@ const Index = () => {
             setScreen(savedRole);
           } else {
             clearSavedSession();
-            navigate('/staff', { replace: true });
-            return;
+            setScreen('role');
           }
         } else {
           clearSavedSession();
