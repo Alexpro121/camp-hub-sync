@@ -65,9 +65,9 @@ const Index = () => {
           return;
         }
 
-        // 3. Супровід тепер працює лише через окреме посилання /staff
+        // 3. Супровід працює через /staff — на головній просто показуємо вибір ролі
         if (savedRole === 'supervisor') {
-          navigate('/staff', { replace: true });
+          if (!cancelled) setRestoring(false);
           return;
         }
 
@@ -90,8 +90,7 @@ const Index = () => {
             setScreen(savedRole);
           } else {
             clearSavedSession();
-            navigate('/staff', { replace: true });
-            return;
+            setScreen('role');
           }
         } else {
           clearSavedSession();
