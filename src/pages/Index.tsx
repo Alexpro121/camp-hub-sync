@@ -59,8 +59,10 @@ const Index = () => {
           return;
         }
 
+        // Батьківський вхід вимкнено: стару сесію батьків очищаємо
         if (savedRole === 'parent') {
-          if (!cancelled) { setScreen('parent'); setRestoring(false); }
+          clearSavedSession();
+          if (!cancelled) { setScreen('role'); setRestoring(false); }
           return;
         }
 

@@ -140,19 +140,6 @@ const RoleSelect = ({ onSelect }: Props) => {
 
         </main>
 
-        {/* Вхід для батьків */}
-        <button
-          onClick={() => pick('parent')}
-          className="mt-3 w-full flex items-center justify-between gap-3 h-14 px-4 rounded-2xl border border-white/10 bg-[#0A0E18]/70 backdrop-blur-2xl text-left hover:border-white/25 transition-all duration-300"
-          aria-label="Вхід для батьків"
-        >
-          <span className="flex items-center gap-3">
-            <HeartHandshake className="w-5 h-5 text-slate-300" strokeWidth={2} />
-            <span className="text-sm font-bold text-white">Я з батьків</span>
-          </span>
-          <ArrowRight className="w-4 h-4 text-slate-400" />
-        </button>
-
         {/* Вхід для випускників минулих змін */}
         <button
           onClick={() => pick('alumni')}
