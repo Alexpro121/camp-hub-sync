@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
             note = (now ? `${now}\n— ` : '') + note;
           }
           patch.supervisor_notes = note.slice(0, 4000);
+          patch.notes_origin = 'registry';
         }
         if (!Object.keys(patch).length) return { id: it.id, status: 'ok' };
         const { data, error } = await svc.from('children').update(patch).eq('id', it.id)

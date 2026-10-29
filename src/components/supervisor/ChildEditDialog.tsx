@@ -224,7 +224,14 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
               </div>
 
               <div data-tour="step-4-notes" className="space-y-2">
-                <Label htmlFor="notes" className="text-slate-300">Замітки</Label>
+                <Label htmlFor="notes" className="flex min-w-0 flex-wrap items-center gap-2 text-slate-300">
+                  Замітки
+                  {child.notes_origin === 'registry' && (child.supervisor_notes ?? '').trim() && (
+                    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                      з реєстрації
+                    </span>
+                  )}
+                </Label>
                 <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
               </div>
 
