@@ -26,6 +26,7 @@ interface Props {
 export function ScheduleImportReview({ preview, live, newestEvent, editing, onEditingChange, onEdit }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const newest = useRef<HTMLLIElement>(null);
+  const nearBottom = useRef(true);
   const scrollToNewest = () => {
     const list = scroller.current;
     const card = newest.current;
@@ -33,8 +34,13 @@ export function ScheduleImportReview({ preview, live, newestEvent, editing, onEd
     const top = list.scrollTop + card.getBoundingClientRect().top - list.getBoundingClientRect().top - 48;
     list.scrollTo?.({ top: Math.max(0, top), behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
+  const handleScroll = () => {
+    const list = scroller.current;
+    if (!list) return;
+    nearBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 140;
+  };
   useEffect(() => {
-    if (!live || !newestEvent) return;
+    if (!live || !newestEvent || !nearBottom.current) return;
     const frame = requestAnimationFrame(scrollToNewest);
     return () => cancelAnimationFrame(frame);
   }, [live, newestEvent]);
