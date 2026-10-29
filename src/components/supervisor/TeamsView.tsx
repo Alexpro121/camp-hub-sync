@@ -123,12 +123,35 @@ const TeamsView = ({
 
     const channel = supabase
       .channel('children-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, (payload: any) => {
+        // Присутність/нотатки з реєстрації: оновлюємо одну дитину миттєво, без перезавантаження всього списку.
+        const n = payload.new;
+        if (payload.eventType === 'UPDATE' && n?.id && !n.deleted_at) {
+          let hit = false;
+          setChildren((prev) => {
+            const next = prev.map((x) => {
+              if (x.id !== n.id) return x;
+              hit = true;
+              if (x.team_number !== n.team_number) return x;
+              if ((x as any).updated_at && n.updated_at && (x as any).updated_at > n.updated_at) return x;
+              return { ...x, ...n };
+            });
+            if (hit) outbox.saveTeamsSnapshot(next);
+            return hit ? next : prev;
+          });
+          const old = payload.old;
+          if (hit && !(old?.team_number != null && old.team_number !== n.team_number)) return;
+        }
         clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => { load().catch(() => {}); }, 600);
       })
       .subscribe();
-    return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(reloadTimer); supabase.removeChannel(channel); };
+    // Пропущені за час без зв'язку/у фоні зміни — добираємо при поверненні.
+    const resync = () => { if (document.visibilityState === 'visible' && navigator.onLine) load().catch(() => {}); };
+    window.addEventListener('online', resync);
+    document.addEventListener('visibilitychange', resync);
+    return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(reloadTimer); supabase.removeChannel(channel);
+      window.removeEventListener('online', resync); document.removeEventListener('visibilitychange', resync); };
   }, []);
 
   /** Присутність: 0 мс у UI, мережа — фоном через Outbox. */

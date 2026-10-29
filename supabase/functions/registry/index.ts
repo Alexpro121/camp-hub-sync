@@ -53,6 +53,18 @@ Deno.serve(async (req) => {
 
     if (!(await valid(body.token))) return json({ error: 'unauthorized' });
 
+    // Дельта: лише діти, змінені після since — легкий запит кожні кілька секунд.
+    if (body.action === 'changes' && typeof body.since === 'string') {
+      const { data: shifts } = await svc.from('shifts').select('id').eq('is_active', true).is('deleted_at', null);
+      const ids = (shifts ?? []).map((s: any) => s.id);
+      if (!ids.length) return json({ children: [] });
+      const { data, error } = await svc.from('children')
+        .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at, deleted_at')
+        .in('shift_id', ids).gt('updated_at', body.since).order('updated_at').limit(500);
+      if (error) throw error;
+      return json({ children: data ?? [] });
+    }
+
     if (body.action === 'list') {
       const { data: shifts } = await svc.from('shifts').select('id, name')
         .eq('is_active', true).is('deleted_at', null);
