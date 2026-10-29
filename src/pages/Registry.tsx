@@ -186,29 +186,6 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const loaded = useRef(false);
   const flushing = useRef<Promise<void> | null>(null);
   const sinceRef = useRef('');
-  // Легка дельта: що змінив супровід/інший пристрій реєстрації за останні секунди.
-  const pull = useCallback(async () => {
-    if (!sinceRef.current) return;
-    await flush();
-    const d = await call({ action: 'changes', token, since: sinceRef.current }, 8_000);
-    const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
-    if (!ch.length) return;
-    sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
-    const pq = readQueue();
-    setKids((ks) => {
-      if (!ks) return ks;
-      const map = new Map(ch.map((c) => [c.id, c]));
-      const next = ks.filter((k) => !map.get(k.id)?.deleted_at).map((k) => {
-        const c = map.get(k.id); if (!c) return k;
-        const { base_note: _b, ...mine } = pq[k.id] ?? {};
-        return { ...k, ...c, ...mine };
-      });
-      const known = new Set(ks.map((k) => k.id));
-      for (const c of ch) if (!known.has(c.id) && !c.deleted_at) next.push(c);
-      return next;
-    });
-    setSyncedAt(Date.now()); setOnline(true);
-  }, [token, flush]);
 
   // Невідправлені дії накладаємо поверх свіжого списку з сервера.
   const applyQueue = (list: Kid[]) => {
@@ -238,6 +215,30 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
     })().finally(() => { flushing.current = null; setQueued(Object.keys(readQueue()).length); });
     return flushing.current;
   }, [token, onLogout]);
+
+  // Легка дельта: що змінив супровід/інший пристрій реєстрації за останні секунди.
+  const pull = useCallback(async () => {
+    if (!sinceRef.current) return;
+    await flush();
+    const d = await call({ action: 'changes', token, since: sinceRef.current }, 8_000);
+    const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
+    if (!ch.length) return;
+    sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
+    const pq = readQueue();
+    setKids((ks) => {
+      if (!ks) return ks;
+      const map = new Map(ch.map((c) => [c.id, c]));
+      const next = ks.filter((k) => !map.get(k.id)?.deleted_at).map((k) => {
+        const c = map.get(k.id); if (!c) return k;
+        const { base_note: _b, ...mine } = pq[k.id] ?? {};
+        return { ...k, ...c, ...mine };
+      });
+      const known = new Set(ks.map((k) => k.id));
+      for (const c of ch) if (!known.has(c.id) && !c.deleted_at) next.push(c);
+      return next;
+    });
+    setSyncedAt(Date.now()); setOnline(true);
+  }, [token, flush]);
 
   const load = useCallback(async () => {
     try {
