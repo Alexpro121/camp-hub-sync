@@ -87,20 +87,20 @@ PARSING RULES & SPECIAL PATTERNS:
 5. CLEAN TITLES:
    Remove raw hours, bullet points, and team prefixes from "title". Put extra logistics info into "description".`;
 
-const TIME = /^\d{1,2}:\d{2}$/;
+const TIME = /^(?:[01]?\d|2[0-3]):[0-5]\d$/;
 
 const SubSlotSchema = z.object({
   time: z.string().regex(TIME),
-  teams: z.array(z.number()).default([]),
+  teams: z.array(z.number().int().positive()).default([]),
 });
 
 const ItemSchema = z.object({
   date: z.string().nullable().optional(),
   time_start: z.string().regex(TIME).nullable().optional(),
   time_end: z.string().regex(TIME).nullable().optional(),
-  title: z.string().min(1),
+  title: z.string().trim().min(1),
   description: z.string().nullable().optional().default(null),
-  target_teams: z.array(z.number()).default([]),
+  target_teams: z.array(z.number().int().positive()).default([]),
   category: z
     .enum(['fair', 'sports', 'meal', 'gathering', 'entertainment', 'transfer', 'general'])
     .default('general'),
@@ -208,13 +208,16 @@ Deno.serve(async (req) => {
     const token = auth.replace(/^Bearer\s+/i, '');
     let authorized = false;
     if (token && token !== ANON_KEY) {
-      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false }, global: { headers: { Authorization: auth } } });
       const { data: userRes } = await pub.auth.getUser(token);
-      authorized = Boolean(userRes?.user);
+      if (userRes?.user) {
+        const { data: roles, error } = await pub.from('user_roles').select('role').eq('user_id', userRes.user.id).eq('role', 'admin').limit(1);
+        authorized = !error && Boolean(roles?.length);
+      }
     }
 
     if (!authorized) {
-      return json({ source: 'local_fallback', reason: 'unauthorized', items: [] }, 200);
+      return json({ source: 'local_fallback', reason: 'unauthorized', items: [] }, 403);
     }
 
     const parsedBody = BodySchema.safeParse(await req.json());
