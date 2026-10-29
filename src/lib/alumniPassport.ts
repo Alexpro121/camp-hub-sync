@@ -5,6 +5,8 @@
  * (IndexedDB + дзеркало в localStorage). У базі даних не створюється жодного рядка.
  */
 
+import { z } from 'zod';
+
 export const ALUMNI_SCHEMA_VERSION = '4.0.2026' as const;
 
 const DB_NAME = 'iron-alumni';
@@ -13,6 +15,7 @@ const DB_KEY = 'current';
 const LS_MIRROR_KEY = 'iron_alumni_passport_v4';
 
 export interface AlumniChildProfile {
+  child_id?: string;
   full_name: string;
   team_number: number;
   iron_dollars: number;
@@ -49,7 +52,7 @@ export function fnv1a(input: string): string {
 /** Формує канонічний рядок паспорта (без самого поля checksum) */
 function canonical(envelope: Omit<AlumniPassportEnvelope, 'checksum'>): string {
   const p = envelope.child_profile;
-  return [
+  const values = [
     envelope._schema_version,
     envelope.passport_id,
     envelope.created_at,
@@ -63,7 +66,9 @@ function canonical(envelope: Omit<AlumniPassportEnvelope, 'checksum'>): string {
     p.status,
     envelope.achievements.join('|'),
     envelope.certificate_ready ? '1' : '0',
-  ].join('::');
+  ];
+  if (p.child_id) values.push(p.child_id);
+  return values.join('::');
 }
 
 export function computeChecksum(envelope: Omit<AlumniPassportEnvelope, 'checksum'>): string {
@@ -71,6 +76,7 @@ export function computeChecksum(envelope: Omit<AlumniPassportEnvelope, 'checksum
 }
 
 export function verifyChecksum(envelope: AlumniPassportEnvelope): boolean {
+  if (!PassportSchema.safeParse(envelope).success) return false;
   const { checksum, ...rest } = envelope;
   return computeChecksum(rest) === checksum;
 }
@@ -80,6 +86,7 @@ export function verifyChecksum(envelope: AlumniPassportEnvelope): boolean {
 ========================================================================= */
 
 export interface BuildPassportInput {
+  child_id?: string;
   full_name: string;
   team_number: number;
   iron_dollars: number;
@@ -107,6 +114,7 @@ export function buildAlumniPassport(input: BuildPassportInput): AlumniPassportEn
     passport_id: input.passport_id || newId(),
     created_at: input.created_at || new Date().toISOString(),
     child_profile: {
+      ...(input.child_id ? { child_id: input.child_id } : {}),
       full_name: input.full_name,
       team_number: Number(input.team_number) || 0,
       iron_dollars: Number(input.iron_dollars) || 0,
@@ -126,13 +134,29 @@ export function buildAlumniPassport(input: BuildPassportInput): AlumniPassportEn
  * Міграція паспортів попередніх схем на актуальну версію.
  * Повертає null, якщо об'єкт неможливо розпізнати як паспорт.
  */
+const PassportSchema = z.object({
+  _schema_version: z.literal(ALUMNI_SCHEMA_VERSION),
+  passport_id: z.string().min(1), created_at: z.string().datetime(), checksum: z.string(),
+  child_profile: z.object({
+    child_id: z.string().optional(), full_name: z.string().min(1), team_number: z.number().finite(),
+    iron_dollars: z.number().finite(), avatar_id: z.number().finite(), shift_id: z.string(),
+    shift_name: z.string(), year: z.number().int(), status: z.literal('alumni'),
+  }),
+  achievements: z.array(z.string()), certificate_ready: z.boolean(),
+});
+
 export function migratePassport(raw: unknown): AlumniPassportEnvelope | null {
   if (!raw || typeof raw !== 'object') return null;
   const obj = raw as Record<string, any>;
+  if (obj._schema_version === ALUMNI_SCHEMA_VERSION) {
+    const parsed = PassportSchema.safeParse(raw);
+    return parsed.success && verifyChecksum(parsed.data) ? parsed.data : null;
+  }
 
   // Формат-джерело: офлайн-знімок Учасника ({ child: {...} })
   if (!obj.child_profile && obj.child && typeof obj.child === 'object') {
     return buildAlumniPassport({
+      child_id: typeof obj.child.id === 'string' ? obj.child.id : undefined,
       full_name: obj.child.full_name,
       team_number: obj.child.team_number,
       iron_dollars: obj.child.iron_dollars,
@@ -145,6 +169,7 @@ export function migratePassport(raw: unknown): AlumniPassportEnvelope | null {
 
   const profile = obj.child_profile as Record<string, any>;
   const migrated = buildAlumniPassport({
+    child_id: typeof profile.child_id === 'string' ? profile.child_id : undefined,
     full_name: String(profile.full_name || 'Випускник проєкту'),
     team_number: Number(profile.team_number) || 0,
     iron_dollars: Number(profile.iron_dollars) || 0,
@@ -182,9 +207,8 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 export async function saveAlumniPassport(envelope: AlumniPassportEnvelope): Promise<void> {
-  const safe: AlumniPassportEnvelope = verifyChecksum(envelope)
-    ? envelope
-    : { ...envelope, checksum: computeChecksum(envelope) };
+  if (!verifyChecksum(envelope)) throw new Error('Паспорт пошкоджено');
+  const safe = envelope;
 
   try {
     localStorage.setItem(LS_MIRROR_KEY, JSON.stringify(safe));
@@ -222,25 +246,21 @@ export async function loadAlumniPassport(): Promise<AlumniPassportEnvelope | nul
     raw = null;
   }
 
-  if (!raw) {
+  let parsed = migratePassport(raw);
+  if (!parsed) {
     try {
       const mirror = localStorage.getItem(LS_MIRROR_KEY);
       raw = mirror ? JSON.parse(mirror) : null;
     } catch {
       raw = null;
     }
+    parsed = migratePassport(raw);
   }
 
   if (!raw) return null;
 
-  const obj = raw as Record<string, any>;
-  if (obj._schema_version === ALUMNI_SCHEMA_VERSION && verifyChecksum(obj as AlumniPassportEnvelope)) {
-    return obj as AlumniPassportEnvelope;
-  }
-
-  const migrated = migratePassport(obj);
-  if (migrated) await saveAlumniPassport(migrated);
-  return migrated;
+  if (parsed) await saveAlumniPassport(parsed);
+  return parsed;
 }
 
 /** Синхронна перевірка наявності паспорта (для швидкого рендеру кнопок) */

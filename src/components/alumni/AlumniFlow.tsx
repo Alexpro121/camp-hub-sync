@@ -55,8 +55,11 @@ const AlumniFlow = ({ onBack }: Props) => {
 
       // Новіша зміна / інша дитина на цьому пристрої — паспорт треба оновити
       const stale = !!existing && !!snapshot?.child && (
+        existing.child_profile.child_id !== snapshot.child.id ||
         existing.child_profile.full_name !== snapshot.child.full_name ||
-        (existing.child_profile.shift_id || '') !== (snapshot.child.shift_id || '')
+        (existing.child_profile.shift_id || '') !== (snapshot.child.shift_id || '') ||
+        existing.child_profile.team_number !== snapshot.child.team_number ||
+        existing.child_profile.iron_dollars !== snapshot.child.iron_dollars
       ) && new Date(snapshot.savedAt).getTime() > new Date(existing.created_at).getTime();
 
       if (existing && !stale) {
@@ -67,6 +70,7 @@ const AlumniFlow = ({ onBack }: Props) => {
 
       if (snapshot?.child) {
         const built = buildAlumniPassport({
+          child_id: snapshot.child.id,
           full_name: snapshot.child.full_name,
           team_number: snapshot.child.team_number,
           iron_dollars: snapshot.child.iron_dollars,
@@ -84,7 +88,9 @@ const AlumniFlow = ({ onBack }: Props) => {
       if (!cancelled) setLoading(false);
     };
 
-    boot();
+    boot().catch(() => {
+      if (!cancelled) { setLoading(false); toast.error('Не вдалося прочитати паспорт'); }
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -174,7 +180,7 @@ const AlumniFlow = ({ onBack }: Props) => {
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FFB800]">
                 🏅 Випускник проєкту «Залізна Зміна {profile.year}»
               </p>
-              <h1 className="text-base sm:text-lg font-black text-white truncate">{profile.full_name}</h1>
+              <h1 className="text-base sm:text-lg font-black text-white break-words">{profile.full_name}</h1>
               <p className="text-[11px] text-slate-400 truncate">
                 Команда №{profile.team_number} · {profile.shift_name}
               </p>
@@ -215,13 +221,14 @@ const AlumniFlow = ({ onBack }: Props) => {
         {/* Дії */}
         <section className="mt-3 space-y-2">
           <button
+            disabled={!passport.certificate_ready}
             onClick={() => { haptics.impact('light'); setCertOpen(true); }}
             className="w-full flex items-center gap-3 p-4 rounded-2xl border border-white/10 bg-[#0A0E18]/70 backdrop-blur-2xl hover:border-[#FFB800]/40 transition-colors text-left"
           >
             <Award className="w-5 h-5 text-[#FFB800] shrink-0" />
             <span className="min-w-0">
               <span className="block text-sm font-bold text-white">Офіційний сертифікат {profile.year}</span>
-              <span className="block text-[11px] text-slate-400">Завантаження підписаного PDF з офлайн-генератора</span>
+              <span className="block text-[11px] text-slate-400">Іменний PDF · після першого завантаження доступний офлайн</span>
             </span>
           </button>
 
@@ -253,7 +260,7 @@ const AlumniFlow = ({ onBack }: Props) => {
         </p>
       </div>
 
-      <CertificateModal open={certOpen} onClose={() => setCertOpen(false)} initialName={profile.full_name} />
+      <CertificateModal key={passport.passport_id} open={certOpen} onClose={() => setCertOpen(false)} initialName={profile.full_name} year={profile.year} />
 
       <DeviceSyncModal
         open={syncOpen}

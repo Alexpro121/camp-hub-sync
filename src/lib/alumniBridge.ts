@@ -7,7 +7,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { AlumniPassportEnvelope } from '@/lib/alumniPassport';
+import { verifyChecksum, type AlumniPassportEnvelope } from '@/lib/alumniPassport';
 
 export const BRIDGE_TTL_MS = 3 * 60 * 1000; // 3 хвилини життя сесії
 export const ALUMNI_BROADCAST_CHANNEL = 'iron-alumni-broadcast';
@@ -47,7 +47,7 @@ function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
   if (typeof obj.checksum !== 'string' || !obj.checksum.trim()) return false;
   if (!obj.child_profile || typeof obj.child_profile !== 'object') return false;
   if (!obj.child_profile.full_name) return false;
-  return true;
+  return verifyChecksum(obj);
 }
 
 /* =========================================================================
@@ -130,7 +130,7 @@ export const hostPassportBridge = (
   passport: AlumniPassportEnvelope,
   callbacks: { onSent?: () => void; onExpired?: () => void; pin?: string } = {},
 ): BridgeHostHandle => {
-  const pin = callbacks.pin || passport.passport_id || generateBridgePin();
+  const pin = callbacks.pin || generateBridgePin();
   const handle = providePassportForPull(passport, pin, {
     onTransferred: callbacks.onSent,
     onExpired: callbacks.onExpired,
