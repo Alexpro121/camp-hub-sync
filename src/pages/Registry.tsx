@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Eye, EyeOff, Loader2, LogOut, Phone, Search, StickyNote, X } from 'lucide-react';
+import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Loader2, LogOut, Phone, Search, StickyNote, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
@@ -156,10 +156,11 @@ const QUEUE_KEY = 'ironshift:registry-queue';
 type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string; base_note?: string }>;
 const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
 const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-const LIST_KEY = 'ironshift:registry-list';
+// Кеш окремо для кожної зміни — офлайн-список не змішується між змінами.
+const listKey = (shiftId: string | null) => `ironshift:registry-list:${shiftId ?? 'all'}`;
 type CachedList = { at: number; children: Kid[]; shifts: Record<string, string> };
-const readList = (): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(LIST_KEY) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
-const writeList = (v: CachedList) => { try { localStorage.setItem(LIST_KEY, JSON.stringify(v)); } catch { /* quota */ } };
+const readList = (shiftId: string | null): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(listKey(shiftId)) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
+const writeList = (shiftId: string | null, v: CachedList) => { try { localStorage.setItem(listKey(shiftId), JSON.stringify(v)); } catch { /* quota */ } };
 const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'щойно' : m < 60 ? `${m} хв тому` : `${Math.round(m / 60)} год тому`; };
 
 function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
