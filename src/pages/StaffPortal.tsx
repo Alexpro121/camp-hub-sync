@@ -305,11 +305,10 @@ const Section = ({ title, items, onEnter, busy, tone }: {
             <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap',
               tone === 'live' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>Команда №{a.team_number}</span>
           </div>
-          <div className="grid grid-cols-2 min-[390px]:grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-3 gap-2 text-center">
             <Stat icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={a.stats.children} />
             <Stat icon={<Coins className="w-3.5 h-3.5" />} label="А$" value={a.stats.iron_total} />
             <Stat icon={<ArrowLeftRight className="w-3.5 h-3.5" />} label="Трансф." value={a.stats.transfers} />
-            <Stat icon={<Mic2 className="w-3.5 h-3.5" />} label="Таланти" value={a.stats.talents} />
           </div>
           {tone !== 'past' && (
             <Button onClick={() => onEnter(a)} disabled={busy} className="w-full h-11 rounded-xl font-bold">

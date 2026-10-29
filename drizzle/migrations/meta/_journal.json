@@ -36,6 +36,13 @@
       "when": 1793268952194,
       "tag": "0004_exclude_doctors_from_team_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793269170931,
+      "tag": "0005_disable_talent_evening",
+      "breakpoints": true
     }
   ]
 }
