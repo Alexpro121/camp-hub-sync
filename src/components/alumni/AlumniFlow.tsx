@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Award,
-  Gift,
   Loader2,
   Medal,
   Smartphone,
@@ -99,12 +98,13 @@ const AlumniFlow = ({ onBack }: Props) => {
   useEffect(() => {
     if (!passport) return;
     const off = subscribeAlumniBroadcast((kind, payload) => {
+      if (kind === 'alumni_raffle') return; // розіграші приховані від учасників
       setRaffleKind(kind);
       setRafflePayload(payload);
       setRaffleOpen(true);
       haptics.notification('success');
       pushIsland(
-        kind === 'alumni_raffle' ? `🎁 ${payload.title}` : `📢 ${payload.title}`,
+        `📢 ${payload.title}`,
         'gradient',
         'Штаб · випускники',
       );
@@ -233,16 +233,6 @@ const AlumniFlow = ({ onBack }: Props) => {
             </span>
           </button>
 
-          <button
-            onClick={() => { haptics.impact('light'); toast.message('Активності від Штабу приходять миттєво, коли ви онлайн'); }}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl border border-white/10 bg-[#0A0E18]/70 backdrop-blur-2xl hover:border-[#FFB800]/40 transition-colors text-left"
-          >
-            <Gift className="w-5 h-5 text-[#FFB800] shrink-0" />
-            <span className="min-w-0">
-              <span className="block text-sm font-bold text-white">Центр розіграшів та спільноти</span>
-              <span className="block text-[11px] text-slate-400">Закриті активності для випускників проєкту</span>
-            </span>
-          </button>
 
           <button
             onClick={() => { haptics.impact('light'); setSyncOpen(true); }}
