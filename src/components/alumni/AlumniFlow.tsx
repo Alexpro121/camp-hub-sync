@@ -107,7 +107,7 @@ const AlumniFlow = ({ onBack }: Props) => {
         'gradient',
         'Штаб · випускники',
       );
-    }, { year: passport.child_profile.year });
+    }, { year: passport.child_profile.year, passportId: passport.passport_id });
     return off;
   }, [passport?.passport_id, passport?.child_profile.year, haptics]);
 
