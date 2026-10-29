@@ -12,7 +12,13 @@ export async function staffCall<T = any>(body: Record<string, unknown>, opts: { 
     .invoke('staff-accounts', { body, signal: opts.signal })
     .catch((e) => ({ data: null as any, error: e }));
   if (opts.signal?.aborted) throw new Error('aborted');
-  if (error || data?.error) throw new Error(data?.error || 'failed');
+  if (error || data?.error) {
+    let code = data?.error;
+    if (!code && error?.context instanceof Response) {
+      try { code = (await error.context.clone().json())?.error; } catch { /* response has no JSON */ }
+    }
+    throw new Error(code || 'failed');
+  }
   return data as T;
 }
 
@@ -30,6 +36,7 @@ export const STAFF_ERR: Record<string, string> = {
   shift_needs_teams: 'Спочатку додайте команди до зміни',
   not_staff: 'Цей акаунт не є акаунтом супроводу',
   assign_failed: 'Не вдалося додати до команди',
+  admin_cannot_be_doctor: 'Для лікаря потрібен окремий акаунт без прав адміністратора',
   need_limit: 'Вкажіть кількість реєстрацій або термін дії',
   bad_avatar: 'Не вдалося зберегти фото',
   too_many_attempts: 'Забагато спроб. Зачекайте хвилину',

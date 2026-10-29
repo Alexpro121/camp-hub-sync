@@ -1,11 +1,11 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { staffCall } from '@/lib/staffApi';
 import { buildIndex, searchItems } from '@/lib/registrySearch';
@@ -25,10 +25,21 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
   const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
+  const loadingRef = useRef(false);
+  const revision = useRef(0);
   const load = useCallback(async (signal?: AbortSignal) => {
-    try { const d = await staffCall<DeskData>({ action: 'doctor_data' }, { signal }); if (!signal?.aborted) { setData(d); setError(false); } }
-    catch { if (!signal?.aborted) setError(true); }
-  }, []);
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    const startRevision = revision.current;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) controller.abort();
+    const timer = setTimeout(abort, 15000);
+    try { const d = await staffCall<DeskData>({ action: 'doctor_data' }, { signal: controller.signal }); if (!signal?.aborted && startRevision === revision.current) { setData(d); setError(false); } }
+    catch (e) { if (!signal?.aborted) { setError(true); if (e instanceof Error && ['forbidden', 'unauthorized'].includes(e.message)) { setData(null); setOpenId(null); onLogout(); } } }
+    finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); loadingRef.current = false; }
+  }, [onLogout]);
   useEffect(() => {
     const ac = new AbortController();
     void load(ac.signal);
@@ -49,6 +60,7 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
     if (!child) return;
     const body = MedicalDraftSchema.parse({ child_id: child.id, note, needs_attention: attention, version });
     const result = await staffCall<{ medical: MedicalNote }>({ action: 'doctor_save', ...body });
+    revision.current += 1;
     setData((d) => d ? { ...d, medical: [...d.medical.filter((n) => n.child_id !== child.id), result.medical] } : d);
     toast.success('Медичну помітку збережено'); setOpenId(null);
   };
@@ -81,14 +93,21 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
 function MedicalProfile({ child, medical, supervisors, onClose, onSave, onConflict, light }: { child: Child; medical?: MedicalNote; supervisors: string[]; onClose: () => void; onSave: (n: string, a: boolean, v: number) => Promise<void>; onConflict: () => void; light: boolean }) {
   const [note, setNote] = useState(medical?.note ?? '');
   const [attention, setAttention] = useState(medical?.needs_attention ?? false);
-  const [version] = useState(medical?.version ?? 0);
+  const [version, setVersion] = useState(medical?.version ?? 0);
+  const baseline = useRef({ note: medical?.note ?? '', attention: medical?.needs_attention ?? false });
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const dirty = note !== (medical?.note ?? '') || attention !== (medical?.needs_attention ?? false);
+  const dirty = note !== baseline.current.note || attention !== baseline.current.attention;
+  useEffect(() => {
+    if (version === (medical?.version ?? 0)) return;
+    if (note !== baseline.current.note || attention !== baseline.current.attention) { setConflict(true); return; }
+    baseline.current = { note: medical?.note ?? '', attention: medical?.needs_attention ?? false };
+    setNote(baseline.current.note); setAttention(baseline.current.attention); setVersion(medical?.version ?? 0);
+  }, [medical?.version, medical?.note, medical?.needs_attention, note, attention, version]);
   const close = () => { if (!busy && (!dirty || window.confirm('Закрити без збереження помітки?'))) onClose(); };
   const rows = [['Телефон', child.phone], ['Telegram', child.telegram_username], ['Категорія', child.team_name], ['Стать', child.gender === 'girl' ? 'Дівчинка' : child.gender === 'boy' ? 'Хлопчик' : 'Не визначено'], ['Баланс А$', String(child.iron_dollars)], ['Зі списку', child.note_from_table], ['Нотатки супроводу', child.supervisor_notes]];
   return <Dialog open onOpenChange={(v) => !v && close()}><DialogContent className={`max-w-lg w-[calc(100dvw-1rem)] max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden p-0 ${light ? 'staff-light' : ''}`}>
-    <DialogHeader className="border-b border-border p-4 pr-12 shrink-0"><DialogTitle className="break-words text-left">{child.full_name}</DialogTitle><p className="text-xs text-muted-foreground text-left">Команда {child.team_number} · {child.is_present ? 'Присутній(я)' : 'Відсутній(я)'}</p></DialogHeader>
+    <DialogHeader className="border-b border-border p-4 pr-12 shrink-0"><DialogTitle className="break-words text-left">{child.full_name}</DialogTitle><DialogDescription className="text-xs text-muted-foreground text-left">Команда {child.team_number} · {child.is_present ? 'Присутній(я)' : 'Відсутній(я)'}</DialogDescription></DialogHeader>
     <div className="min-h-0 overflow-y-auto overscroll-contain p-4 space-y-5">
       <section><h2 className="text-sm font-semibold mb-2">Супровід</h2><p className="text-sm break-words">{supervisors.join(' · ') || 'Не призначений'}</p></section>
       <dl className="space-y-3">{rows.filter(([, v]) => v).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-sm whitespace-pre-wrap break-words">{label === 'Телефон' ? <a className="text-primary" href={`tel:${value}`}>{value}</a> : value}</dd></div>)}</dl>
@@ -97,7 +116,7 @@ function MedicalProfile({ child, medical, supervisors, onClose, onSave, onConfli
         <div className="flex items-center gap-3"><Checkbox id="medical-attention" checked={attention} onCheckedChange={(v) => setAttention(v === true)} /><Label htmlFor="medical-attention">Потребує уваги супроводу</Label></div>
         <Label htmlFor="medical-note">Нотатка лікаря</Label><Textarea id="medical-note" rows={4} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} className="resize-none" />
         {medical?.needs_attention && <Button variant="outline" onClick={() => setAttention(false)}>Прибрати червоний плюсик</Button>}
-        {conflict && <p role="alert" className="text-sm text-destructive">Помітку вже змінив інший лікар. Закрийте профіль і відкрийте знову.</p>}
+        {conflict && <div role="alert" className="space-y-2"><p className="text-sm text-destructive">Помітку вже змінив інший лікар. Ваш текст залишився в полі.</p><Button variant="outline" onClick={() => { baseline.current = { note: medical?.note ?? '', attention: medical?.needs_attention ?? false }; setNote(baseline.current.note); setAttention(baseline.current.attention); setVersion(medical?.version ?? 0); setConflict(false); }}>Завантажити свіжу помітку</Button></div>}
       </section>
     </div>
     <footer className="flex gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0"><Button variant="outline" onClick={close} disabled={busy} className="flex-1 h-11">Закрити</Button><Button className="flex-1 h-11" disabled={busy || conflict} onClick={async () => { setBusy(true); try { await onSave(note, attention, version); } catch (e) { if (e instanceof Error && e.message === 'medical_note_conflict') { setConflict(true); onConflict(); } else toast.error('Не збережено. Перевірте зв’язок і повторіть.'); } finally { setBusy(false); } }}>{busy ? 'Збереження…' : 'Зберегти'}</Button></footer>

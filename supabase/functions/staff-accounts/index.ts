@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { admin, ANON_KEY, corsHeaders, ensureRole, json, SUPABASE_URL } from '../_shared/accounts.ts';
 import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 import { z } from 'npm:zod@3';
+import { canUseDoctorActions, DoctorSaveSchema, readAllPages } from './doctor-contract.ts';
 
 /** Логін: латиниця/цифри/._- , 3..40 символів, нижній регістр */
 function normLogin(s: unknown): string | null {
@@ -207,9 +208,10 @@ Deno.serve(async (req) => {
     if (actingMember?.kind === 'doctor' && ['join_shift', 'enter_shift'].includes(action)) return json({ error: 'forbidden' }, 403);
 
     if (action === 'doctor_data' || action === 'doctor_save') {
-      if (actingMember?.kind !== 'doctor' || !actingMember.is_active) return json({ error: 'forbidden' }, 403);
+      if (!canUseDoctorActions(actingMember)) return json({ error: 'forbidden' }, 403);
       if (action === 'doctor_save') {
-        const parsed = z.object({ child_id: z.string().uuid(), note: z.string().max(4000), needs_attention: z.boolean(), version: z.number().int().nonnegative() }).safeParse(body);
+        const { action: _action, ...draft } = body;
+        const parsed = DoctorSaveSchema.safeParse(draft);
         if (!parsed.success) return json({ error: 'invalid_input' }, 400);
         const token = req.headers.get('Authorization') ?? '';
         const client = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: token } }, auth: { persistSession: false } });
@@ -218,13 +220,12 @@ Deno.serve(async (req) => {
         return error ? json({ error: error.message.includes('medical_note_conflict') ? 'medical_note_conflict' : 'save_failed' }) : json({ medical: data });
       }
       const [kids, shifts, assignments, notes] = await Promise.all([
-        svc.from('children').select('*').is('deleted_at', null).order('full_name').limit(10000),
-        svc.from('shifts').select('id,name').is('deleted_at', null),
-        svc.from('staff_assignments').select('shift_id,team_number,staff_members(full_name,kind,is_active)'),
-        svc.from('child_medical_notes').select('*'),
+        readAllPages((start, end) => svc.from('children').select('*').is('deleted_at', null).order('full_name').order('id').range(start, end)),
+        readAllPages((start, end) => svc.from('shifts').select('id,name').is('deleted_at', null).order('id').range(start, end)),
+        readAllPages((start, end) => svc.from('staff_assignments').select('shift_id,team_number,staff_members(full_name,kind,is_active)').order('id').range(start, end)),
+        readAllPages((start, end) => svc.from('child_medical_notes').select('*').order('child_id').range(start, end)),
       ]);
-      if ([kids, shifts, assignments, notes].some((r) => r.error)) return json({ error: 'load_failed' }, 500);
-      return json({ children: kids.data, shifts: shifts.data, assignments: assignments.data, medical: notes.data });
+      return json({ children: kids, shifts, assignments, medical: notes });
     }
 
     // ---------- САМОПРИЗНАЧЕННЯ ЗА ПОСИЛАННЯМ ЗМІНИ ----------
@@ -261,7 +262,10 @@ Deno.serve(async (req) => {
     if (action === 'cabinet') {
       const { data: member } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
       if (!member) return json({ error: 'not_staff' }, 403);
-      if (actingMember?.kind === 'doctor') return json({ ...member, assignments: [] });
+      if (actingMember?.kind === 'doctor') {
+        const [withAvatar] = await resolveAvatars(svc, [{ ...member }], () => user.id);
+        return json({ ...withAvatar, assignments: [] });
+      }
       const { data: asg } = await svc
         .from('staff_assignments')
         .select('id, team_number, shift_id, shifts(id, name, shift_type, start_date, end_date, deleted_at)')
@@ -344,7 +348,8 @@ Deno.serve(async (req) => {
       const { data: created, error } = await svc.auth.admin.createUser({ email: emailFor(login), password, email_confirm: true });
       if (error || !created.user) return json({ error: /weak|pwned|guess/i.test(error?.message ?? '') ? 'weak_password' : 'create_failed' });
       const kind = KINDS.includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
-      await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, kind, phone: normPhone(body?.phone), telegram: normTg(body?.telegram) });
+      const { error: memberError } = await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, kind, phone: normPhone(body?.phone), telegram: normTg(body?.telegram) });
+      if (memberError) { await svc.auth.admin.deleteUser(created.user.id); return json({ error: 'create_failed' }, 500); }
       if (kind !== 'doctor') await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
       return json({ ok: true });
     }
@@ -423,6 +428,7 @@ Deno.serve(async (req) => {
       if ('avatar_url' in body && body.avatar_url === null) patch.avatar_url = null;
       const memberId = z.string().uuid().safeParse(body?.user_id);
       if (!memberId.success) return json({ error: 'invalid_input' }, 400);
+      if (patch.kind === 'doctor' && await isAdmin(memberId.data)) return json({ error: 'admin_cannot_be_doctor' }, 400);
       const { error } = await svc.from('staff_members').update(patch).eq('user_id', memberId.data);
       if (error) return json({ error: 'update_failed' }, 500);
       if (patch.kind === 'doctor') await svc.from('user_roles').delete().eq('user_id', memberId.data).eq('role', 'supervisor');

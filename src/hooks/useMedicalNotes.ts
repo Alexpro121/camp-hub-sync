@@ -6,10 +6,19 @@ export function useMedicalNotes() {
   const [notes, setNotes] = useState<Record<string, MedicalNote>>({});
   useEffect(() => {
     const controller = new AbortController();
+    let loading = false;
     const load = async () => {
-      if (!navigator.onLine || document.visibilityState === 'hidden') return;
-      const { data, error } = await supabase.from('child_medical_notes').select('child_id,note,needs_attention,version,updated_at').abortSignal(controller.signal);
-      if (!controller.signal.aborted && !error && data) setNotes(Object.fromEntries(data.map((n) => [n.child_id, n])));
+      if (loading || !navigator.onLine || document.visibilityState === 'hidden') return;
+      loading = true;
+      const request = new AbortController();
+      const abort = () => request.abort();
+      controller.signal.addEventListener('abort', abort, { once: true });
+      const timer = setTimeout(abort, 10000);
+      try {
+        const { data, error } = await supabase.from('child_medical_notes').select('child_id,note,needs_attention,version,updated_at').abortSignal(request.signal);
+        if (!controller.signal.aborted && !error && data) setNotes(Object.fromEntries(data.map((n) => [n.child_id, n])));
+        else if (!controller.signal.aborted && error?.code === '42501') setNotes({});
+      } finally { loading = false; clearTimeout(timer); controller.signal.removeEventListener('abort', abort); }
     };
     const sync = () => { void load().catch(() => {}); };
     sync();

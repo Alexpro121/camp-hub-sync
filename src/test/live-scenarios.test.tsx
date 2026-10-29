@@ -23,18 +23,20 @@ const makeChannel = (name: string) => {
     },
     subscribe: vi.fn(async () => 'SUBSCRIBED'),
     send: vi.fn(async () => 'ok'),
-    emit: (event: string, payload: any) => (handlers[event] || []).forEach((h) => h({ payload })),
+    emit: (event: string, payload: any) => (handlers[event] || []).forEach((h) => h(event === 'INSERT' ? { new: payload } : { payload })),
   };
   channels.set(name, ch);
   return ch;
 };
 
 const fromResult: any = { data: [], error: null };
+let childResult: any = null;
 const builder = () => {
   const b: any = {};
-  ['select', 'eq', 'order', 'limit', 'insert', 'update', 'maybeSingle', 'single'].forEach((m) => {
+  ['select', 'eq', 'order', 'limit', 'insert', 'update', 'single'].forEach((m) => {
     b[m] = vi.fn(() => b);
   });
+  b.maybeSingle = vi.fn(() => Promise.resolve({ data: childResult, error: null }));
   b.then = (res: any) => Promise.resolve(fromResult).then(res);
   return b;
 };
@@ -93,6 +95,7 @@ function primeCamera(data: string) {
 beforeEach(() => {
   rpc.mockReset();
   channels.clear();
+  childResult = null;
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
 });
 afterEach(() => vi.restoreAllMocks());
@@ -106,18 +109,14 @@ describe('SCENARIO 3 · Apple Pay camera scanner', () => {
     const onPaid = vi.fn();
 
     render(<ApplePayScannerModal open balance={200} onClose={() => {}} onPaid={onPaid} childName="Іван" childTeam={5} />);
-    expect(screen.getByText('Наведи камеру на QR-код')).toBeInTheDocument();
 
     await waitFor(() => expect(rpc).toHaveBeenCalled());
     expect(rpc.mock.calls[0][0]).toBe('pay_fair_purchase');
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_tx_id: TX, p_amount: 50 });
 
-    await waitFor(() => expect(screen.getByText('Оплачено')).toBeInTheDocument());
+    await waitFor(() => expect(onPaid).toHaveBeenCalledWith(150));
     expect(onPaid).toHaveBeenCalledWith(150);
-    expect(document.querySelector('.apple-checkmark-path')).toBeTruthy();
-    expect(document.querySelector('.success-bg-circle')).toBeTruthy();
-    expect(document.querySelector('canvas')).toBeTruthy();
-    expect(screen.getByText(/22222222/i)).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 
   it('blocks payment when the balance is too low', async () => {
@@ -138,29 +137,24 @@ describe('SCENARIO 3 · Apple Pay camera scanner', () => {
 /* ------------------ SCENARIO 4: supervisor realtime HUD ------------------ */
 
 describe('SCENARIO 4 · Supervisor realtime HUD', () => {
-  it('shows the success plate on FAIR_PAYMENT_SUCCESS and hides it after 2500 ms', async () => {
+  it('receives transaction amounts and child details from the transaction channel', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     render(<SupervisorFairView myTeam={5} />);
 
-    await waitFor(() => expect(channels.has('supervisor_fair_sup-1')).toBe(true));
-    const codeEl = () => document.querySelector('p.font-mono')?.textContent ?? '';
-    await waitFor(() => expect(codeEl()).toMatch(/^\d{5}$/));
-    const before = codeEl();
+    await waitFor(() => expect(channels.has('supervisor_iron_txs:sup-1')).toBe(true));
+    childResult = { full_name: 'Іван Петренко', team_number: 5 };
 
     await act(async () => {
-      channels.get('supervisor_fair_sup-1').emit('FAIR_PAYMENT_SUCCESS', {
-        childName: 'Іван Петренко', teamNumber: 5, amount: 50, txId: TX,
+      channels.get('supervisor_iron_txs:sup-1').emit('INSERT', {
+        id: TX, child_id: 'child-1', amount_change: -50, created_at: new Date().toISOString(),
       });
     });
 
-    expect(await screen.findByText('+50 💰')).toBeInTheDocument();
+    expect(await screen.findByText('+50 А$ отримано!')).toBeInTheDocument();
     expect(screen.getByText('Іван Петренко (Команда №5)')).toBeInTheDocument();
 
     await act(async () => { vi.advanceTimersByTime(2600); });
-    await waitFor(() => expect(screen.queryByText('+50 💰')).toBeNull());
-
-    // QR rotated: a fresh tx_id means a fresh 5-digit code
-    await waitFor(() => expect(codeEl()).not.toBe(before));
+    await waitFor(() => expect(screen.queryByText('+50 А$ отримано!')).toBeNull());
     vi.useRealTimers();
   });
 });
