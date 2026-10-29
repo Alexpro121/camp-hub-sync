@@ -344,6 +344,7 @@ const TeamsView = ({
       {editChild && (
         <ChildEditDialog
           child={editChild}
+          medical={medical[editChild.id]}
           open={!!editChild}
           onClose={() => setEditChild(null)}
         />

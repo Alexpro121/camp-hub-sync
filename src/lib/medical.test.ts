@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { supervisorsForChild } from './medical';
+import { MedicalDraftSchema, supervisorsForChild } from './medical';
 
 describe('doctor supervisor lookup', () => {
   it('shows only active supervisors and ducklings from the child shift and team', () => {
@@ -11,4 +11,14 @@ describe('doctor supervisor lookup', () => {
     ], 's1', 4);
     expect(result).toEqual(['Олена Коваль', 'Іра Каченя']);
   });
+});
+
+it('medical edits cannot include a presence checkbox change', () => {
+  const draft = MedicalDraftSchema.parse({ child_id: '11111111-1111-4111-8111-111111111111', note: 'Помітка лікаря', needs_attention: true, version: 0, is_present: true });
+  expect(draft).not.toHaveProperty('is_present');
+});
+
+it('supports clearing the red medical attention mark', () => {
+  const draft = MedicalDraftSchema.parse({ child_id: '11111111-1111-4111-8111-111111111111', note: '', needs_attention: false, version: 1 });
+  expect(draft.needs_attention).toBe(false);
 });
