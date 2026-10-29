@@ -272,12 +272,10 @@ Deno.serve(async (req) => {
         .eq('staff_user_id', user.id);
 
       const items = await Promise.all((asg ?? []).filter((a: any) => a.shifts && !a.shifts.deleted_at).map(async (a: any) => {
-        const [kids, transfers, talent] = await Promise.all([
+        const [kids, transfers] = await Promise.all([
           svc.from('children').select('iron_dollars').eq('shift_id', a.shift_id).eq('team_number', a.team_number).is('deleted_at', null),
           svc.from('transfers').select('id, children!inner(shift_id)', { count: 'exact', head: true })
             .eq('children.shift_id', a.shift_id).or(`from_team.eq.${a.team_number},to_team.eq.${a.team_number}`),
-          svc.from('talent_entries').select('id, talent_events!inner(shift_id)', { count: 'exact', head: true })
-            .eq('talent_events.shift_id', a.shift_id).eq('team_number', a.team_number),
         ]);
         const list = kids.data ?? [];
         return {
@@ -288,7 +286,7 @@ Deno.serve(async (req) => {
             children: list.length,
             iron_total: list.reduce((s: number, c: any) => s + (c.iron_dollars ?? 0), 0),
             transfers: transfers.count ?? 0,
-            talents: talent.count ?? 0,
+            talents: 0,
           },
         };
       }));
