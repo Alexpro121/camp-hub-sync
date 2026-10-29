@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Eye, EyeOff, Loader2, LogOut, Phone, Search, StickyNote, X } from 'lucide-react';
+import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Loader2, LogOut, Phone, Search, StickyNote, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
@@ -156,14 +156,15 @@ const QUEUE_KEY = 'ironshift:registry-queue';
 type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string; base_note?: string }>;
 const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
 const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-const LIST_KEY = 'ironshift:registry-list';
+// Кеш окремо для кожної зміни — офлайн-список не змішується між змінами.
+const listKey = (shiftId: string | null) => `ironshift:registry-list:${shiftId ?? 'all'}`;
 type CachedList = { at: number; children: Kid[]; shifts: Record<string, string> };
-const readList = (): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(LIST_KEY) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
-const writeList = (v: CachedList) => { try { localStorage.setItem(LIST_KEY, JSON.stringify(v)); } catch { /* quota */ } };
+const readList = (shiftId: string | null): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(listKey(shiftId)) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
+const writeList = (shiftId: string | null, v: CachedList) => { try { localStorage.setItem(listKey(shiftId), JSON.stringify(v)); } catch { /* quota */ } };
 const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'щойно' : m < 60 ? `${m} хв тому` : `${Math.round(m / 60)} год тому`; };
 
-function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const cached = useMemo(readList, []);
+function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shiftId: string | null; onChangeShift: () => void; onLogout: () => void }) {
+  const cached = useMemo(() => readList(shiftId), [shiftId]);
   const [kids, setKids] = useState<Kid[] | null>(() => (cached ? cached.children.map((k) => ({ ...k, ...readQueue()[k.id] })) : null));
   const [shifts, setShifts] = useState<Record<string, string>>(cached?.shifts ?? {});
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -176,7 +177,6 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [team, setTeam] = useState<number | null>(null);
-  const [shiftId, setShiftId] = useState<string | null>(null);
   const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
   const [queued, setQueued] = useState(() => Object.keys(readQueue()).length);
@@ -220,7 +220,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const pull = useCallback(async () => {
     if (!sinceRef.current) return;
     await flush();
-    const d = await call({ action: 'changes', token, since: sinceRef.current }, 8_000);
+    const d = await call({ action: 'changes', token, since: sinceRef.current, ...(shiftId ? { shift_id: shiftId } : {}) }, 8_000);
     const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
     if (!ch.length) return;
     sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
@@ -238,25 +238,25 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
       return next;
     });
     setSyncedAt(Date.now()); setOnline(true);
-  }, [token, flush]);
+  }, [token, shiftId, flush]);
 
   const load = useCallback(async () => {
     try {
       await flush();
-      const d = await call({ action: 'list', token });
+      const d = await call({ action: 'list', token, ...(shiftId ? { shift_id: shiftId } : {}) });
       const sh = Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name]));
       const children: Kid[] = d.children ?? [];
       setShifts(sh);
       setKids(applyQueue(children));
       sinceRef.current = children.reduce((m, k) => (k.updated_at && k.updated_at > m ? k.updated_at : m), '');
       const at = Date.now(); setSyncedAt(at); setOnline(true);
-      writeList({ at, children, shifts: sh });
+      writeList(shiftId, { at, children, shifts: sh });
       loaded.current = true;
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
-      else if (!loaded.current && !readList()) toast.error('Не вдалося завантажити список. Повторюю…');
+      else if (!loaded.current && !readList(shiftId)) toast.error('Не вдалося завантажити список. Повторюю…');
     }
-  }, [token, onLogout, flush]);
+  }, [token, shiftId, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
   const pullRef = useRef(pull); pullRef.current = pull;
@@ -392,10 +392,11 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
             ))}
           </div>
           {multiShift && (
-            <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
-              <button onClick={() => setShiftId(null)} className={chip(shiftId === null)}>Усі зміни</button>
-              {Object.entries(shifts).map(([id, n]) => <button key={id} onClick={() => setShiftId(id)} className={chip(shiftId === id)}>{n}</button>)}
-            </div>
+            <button onClick={onChangeShift}
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground transition-transform active:scale-[0.99]">
+              <span className="min-w-0 truncate">Зміна: <span className="font-semibold">{shiftId ? (shifts[shiftId] ?? '…') : 'Усі зміни'}</span></span>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
           )}
         </div>
       </header>
@@ -411,7 +412,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
           <>
             {searching && <p className="mb-2 text-xs text-muted-foreground">Найкращі збіги серед усіх дітей · Enter — відмітити першого</p>}
             <ul key={`${filter}|${team}|${shiftId}|${searching ? 's' : 'b'}`} className={`space-y-2 transition-opacity duration-150 ${q !== dq ? 'opacity-60' : ''}`}>
-              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift ? shifts[k.shift_id] : undefined} onToggle={onRowToggle} onOpen={onRowOpen} />)}
+              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift && !shiftId ? shifts[k.shift_id] : undefined} onToggle={onRowToggle} onOpen={onRowOpen} />)}
             </ul>
             {results.length > limit && (
               <button onClick={() => setLimit((l) => l + 100)} className="mt-3 h-11 w-full rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">
@@ -421,7 +422,59 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
           </>
         )}
       </main>
-      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
+      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
+    </div>
+  );
+}
+
+// Якщо активних змін кілька — після пароля питаємо, з якою працюємо.
+function ShiftPick({ token, onPick, onLogout }: { token: string; onPick: (id: string | null) => void; onLogout: () => void }) {
+  const [shifts, setShifts] = useState<{ id: string; name: string }[] | null>(null);
+  const [err, setErr] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    call({ action: 'shifts', token })
+      .then((d) => {
+        if (dead) return;
+        const s: { id: string; name: string }[] = d.shifts ?? [];
+        if (s.length === 1) onPick(s[0].id); // одна зміна — одразу до роботи
+        else setShifts(s);
+      })
+      .catch((e) => { if (!dead) { if (e.message === 'unauthorized') onLogout(); else setErr('Немає зв\'язку. Спробуйте ще раз.'); } });
+    return () => { dead = true; };
+  }, [token, onPick, onLogout, attempt]);
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+        <h1 className="mb-1 text-center text-xl font-bold text-foreground">Оберіть зміну</h1>
+        <p className="mb-5 text-center text-sm text-muted-foreground">Зараз активних кілька — з ким працюємо?</p>
+        {!shifts ? (
+          err ? (
+            <div className="text-center">
+              <p className="mb-3 text-sm text-destructive">{err}</p>
+              <button onClick={() => { setErr(''); setAttempt((a) => a + 1); }} className="h-11 w-full rounded-xl border border-border font-medium text-foreground">Спробувати ще</button>
+            </div>
+          ) : <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted" />)}</div>
+        ) : shifts.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">Зараз немає активних змін.</p>
+        ) : (
+          <div className="space-y-2">
+            {shifts.map((s, i) => (
+              <button key={s.id} onClick={() => onPick(s.id)} style={{ animationDelay: `${i * 60}ms` }}
+                className="flex h-14 w-full items-center justify-between gap-2 rounded-2xl border border-border bg-background px-4 font-semibold text-foreground transition-transform animate-in fade-in slide-in-from-bottom-2 fill-mode-both active:scale-[0.98]">
+                <span className="min-w-0 truncate">{s.name}</span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+            <button onClick={() => onPick(null)}
+              className="h-12 w-full rounded-2xl font-semibold text-primary-foreground transition-transform active:scale-[0.98]" style={{ background: 'var(--gradient-primary)' }}>
+              Усі зміни разом
+            </button>
+          </div>
+        )}
+        <button onClick={onLogout} className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground">Вийти</button>
+      </div>
     </div>
   );
 }
@@ -431,8 +484,12 @@ export default function Registry() {
     const t = localStorage.getItem(TOKEN_KEY);
     return t && Number(t.split('.')[0]) > Date.now() ? t : null;
   });
+  const [shiftId, setShiftId] = useState<string | null | undefined>(undefined);
   useEffect(() => { document.title = 'Реєстрація дітей'; }, []);
   const onToken = (t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); };
-  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); setToken(null); }, []);
-  return token ? <Desk token={token} onLogout={logout} /> : <Gate onToken={onToken} />;
+  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setShiftId(undefined); }, []);
+  const pick = useCallback((id: string | null) => setShiftId(id), []);
+  if (!token) return <Gate onToken={onToken} />;
+  if (shiftId === undefined) return <ShiftPick token={token} onPick={pick} onLogout={logout} />;
+  return <Desk key={shiftId ?? 'all'} token={token} shiftId={shiftId} onChangeShift={() => setShiftId(undefined)} onLogout={logout} />;
 }
