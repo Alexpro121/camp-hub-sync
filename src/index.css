@@ -450,7 +450,7 @@
 .dynamic-island-subtitle { font-size: 12px; font-weight: 400; line-height: 1.4; color: hsl(var(--island-muted)); overflow-wrap: anywhere; }
 .dynamic-island-time { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dynamic-island-control { width: 36px; height: 44px; border-radius: 50%; flex-shrink: 0; gap: 0; color: hsl(var(--island-muted)); }
-.dynamic-island-control:hover, .dynamic-island-control:focus-visible, .dynamic-island-detail-action:hover { background: hsl(var(--island-control)); color: hsl(var(--island-text)); }
+.dynamic-island-capsule .dynamic-island-control:hover, .dynamic-island-capsule .dynamic-island-control:focus-visible, .dynamic-island-capsule .dynamic-island-detail-action:hover { background: hsl(var(--island-control)); color: hsl(var(--island-text)); }
 .dynamic-island-control:focus-visible { outline: 2px solid hsl(var(--island-muted)); outline-offset: -4px; box-shadow: none; }
 .dynamic-island-control:active { transform: scale(.9); }
 .dynamic-island-details { margin-top: 5px; padding: 12px 6px 10px; border-top: 1px solid hsl(var(--island-line)); display: grid; gap: 8px; font-size: 13px; max-height: min(280px, 55dvh); overflow-y: auto; overscroll-behavior: contain; animation: island-details-in 220ms var(--island-ease); }

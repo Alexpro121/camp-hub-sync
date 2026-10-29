@@ -67,7 +67,7 @@ const DynamicIsland = () => {
             </>}
           </div>
           {view.state === 'EXCEL_IMPORT' && <div role="progressbar" aria-label="Імпорт таблиці" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="dynamic-island-progress"><div style={{ width: `${progress}%` }} /></div>}
-          {view.expanded && <div className="dynamic-island-details">
+          {view.expanded && (event || view.payload.errorDetails) && <div className="dynamic-island-details">
             {event && <>
               <p className="dynamic-island-subtitle">{view.payload.phase === 'pre' ? 'Незабаром' : 'Подія починається'}</p>
               {(view.payload.myTime || view.payload.range) && <p className="flex flex-wrap items-center gap-2"><Clock className="h-4 w-4" /><span className="dynamic-island-time">{view.payload.myTime ?? view.payload.range}</span>{view.payload.myTeams?.length ? <span className="dynamic-island-subtitle">Команда {view.payload.myTeams.join(', ')}</span> : null}</p>}
