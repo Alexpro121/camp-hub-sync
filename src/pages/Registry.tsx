@@ -11,8 +11,13 @@ interface Kid {
 }
 const TOKEN_KEY = 'ironshift:registry-token';
 
-async function call(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('registry', { body });
+async function call(body: Record<string, unknown>, timeoutMs = 12_000) {
+  // Поганий інтернет: не висимо вічно на запиті, обриваємо й повторимо пізніше.
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  let data: any, error: any;
+  try { ({ data, error } = await supabase.functions.invoke('registry', { body, signal: ctl.signal })); }
+  catch { throw new Error('network'); } finally { clearTimeout(t); }
   if (error) throw new Error('network');
   if (data?.error) throw new Error(data.error);
   return data;
@@ -148,7 +153,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
 
 type Filter = 'all' | 'absent' | 'present';
 const QUEUE_KEY = 'ironshift:registry-queue';
-type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string }>;
+type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string; base_note?: string }>;
 const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
 const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
 const LIST_KEY = 'ironshift:registry-list';
@@ -179,27 +184,35 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const indexCache = useRef(new Map<string, Indexed>());
   const loaded = useRef(false);
+  const flushing = useRef<Promise<void> | null>(null);
 
   // Невідправлені дії накладаємо поверх свіжого списку з сервера.
   const applyQueue = (list: Kid[]) => {
     const pq = readQueue();
-    return list.map((k) => (pq[k.id] ? { ...k, ...pq[k.id] } : k));
+    return list.map((k) => { const x = pq[k.id]; if (!x) return k; const { base_note: _b, ...rest } = x; return { ...k, ...rest }; });
   };
 
   const flush = useCallback(async () => {
-    const pq = readQueue();
-    const ids = Object.keys(pq);
-    for (const id of ids) {
+    if (flushing.current) return flushing.current;
+    flushing.current = (async () => {
+      const pq = readQueue();
+      const ids = Object.keys(pq);
+      if (!ids.length) return;
       try {
-        await call({ action: 'update', token, id, ...pq[id] });
-        const cur = readQueue(); delete cur[id]; writeQueue(cur);
+        const d = await call({ action: 'batch', token, items: ids.map((id) => ({ id, ...pq[id] })) }, 15_000);
+        const cur = readQueue();
+        for (const r of d.results ?? []) {
+          if (r.status === 'error') continue;
+          // Видаляємо лише якщо за час запиту користувач не змінив цю дитину ще раз.
+          if (JSON.stringify(cur[r.id]) === JSON.stringify(pq[r.id])) delete cur[r.id];
+          if (r.child) setKids((ks) => ks?.map((k) => (k.id === r.id && !cur[r.id] ? { ...k, ...r.child } : k)) ?? ks);
+        }
+        writeQueue(cur);
       } catch (e: any) {
-        if (e.message === 'unauthorized') return onLogout();
-        if (e.message === 'not_found') { const cur = readQueue(); delete cur[id]; writeQueue(cur); continue; }
-        break;
+        if (e.message === 'unauthorized') onLogout();
       }
-    }
-    setQueued(Object.keys(readQueue()).length);
+    })().finally(() => { flushing.current = null; setQueued(Object.keys(readQueue()).length); });
+    return flushing.current;
   }, [token, onLogout]);
 
   const load = useCallback(async () => {
@@ -270,8 +283,11 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
 
   const patch = (id: string, p: Partial<Kid>) => setKids((ks) => ks?.map((k) => (k.id === id ? { ...k, ...p } : k)) ?? ks);
 
-  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }) => {
-    const pq = readQueue(); pq[id] = { ...pq[id], ...p }; writeQueue(pq); setQueued(Object.keys(pq).length);
+  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }, baseNote?: string) => {
+    const pq = readQueue();
+    const base = p.supervisor_notes !== undefined && pq[id]?.base_note === undefined
+      ? (baseNote ?? '') : pq[id]?.base_note;
+    pq[id] = { ...pq[id], ...p, ...(base !== undefined ? { base_note: base } : {}) }; writeQueue(pq); setQueued(Object.keys(pq).length);
     await flush();
     if (readQueue()[id]) toast.warning('Немає зв\'язку — збережу автоматично, щойно з\'явиться інтернет', { id: 'registry-offline' });
   }, [flush]);
@@ -292,8 +308,9 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   }, [send]);
 
   const saveNote = useCallback(async (k: Kid, note: string) => {
+    const base = k.supervisor_notes ?? '';
     patch(k.id, { supervisor_notes: note });
-    await send(k.id, { supervisor_notes: note });
+    await send(k.id, { supervisor_notes: note }, base);
     toast.success('Нотатку збережено', { duration: 1500 });
     setOpenId(null);
   }, [send]);
