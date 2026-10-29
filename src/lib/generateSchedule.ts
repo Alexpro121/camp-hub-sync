@@ -38,7 +38,8 @@ export async function readScheduleStream(response: Response, signal: AbortSignal
     while (true) {
       if (signal.aborted) throw new DOMException('Генерацію зупинено', 'AbortError');
       const chunk = await reader.read();
-      buffer += decoder.decode(chunk.value, { stream: !chunk.done }).replace(/\r\n/g, '\n');
+      buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      buffer = buffer.replace(/\r\n/g, '\n');
       let boundary = buffer.indexOf('\n\n');
       while (boundary >= 0) {
         consume(buffer.slice(0, boundary)); buffer = buffer.slice(boundary + 2); boundary = buffer.indexOf('\n\n');
