@@ -104,6 +104,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  useEffect(() => { const o = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = o; }; }, []);
   const save = async () => { setSaving(true); try { await onSaveNote(kid, note); } finally { setSaving(false); } };
   const close = () => (dirty ? save() : onClose());
   return (
