@@ -5,6 +5,7 @@
 - Render fixed mobile admin navigation through a body portal; transformed role-screen ancestors otherwise shift fixed controls during transitions.
 - Shift staff links are reusable, shift-scoped invites; the server validates the signed-in staff member and selected shift team before assignment.
 - Doctors are staff_members kind doctor without supervisor privileges or team authority; medical marks use a doctor-only version-checked function, and full lists use stable paginated reads — protects child records and prevents silent truncation or lost concurrent edits.
+- Doctor workspace themes are scoped semantic token overrides on both the page and portalled profile; medical editing precedes read-only details — keeps the clinical view consistent and frequent actions reachable.
 - Disabled talent access is enforced with restrictive table/storage policies and revoked public RPC grants; role screens do not import talent views — preserves history without allowing API bypass or extra loading.
 
 - Admin tabs live in src/components/admin/tabs/ and are lazy-loaded by AdminFlow, which keeps only header, tab switcher and shift context — keeps the admin screen small and avoids merge conflicts.
