@@ -113,4 +113,14 @@ describe('нотатка з реєстрації у супроводу', () => {
     expect(await screen.findByText('Нотатка:')).toBeInTheDocument();
     expect(screen.queryByText('з реєстрації')).not.toBeInTheDocument();
   });
+
+  it('does not hydrate another shift when changing the selected shift offline', async () => {
+    const view = open();
+    await screen.findByRole('button', { name: 'Відкрити картку: Коваль Олена' });
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      view.rerender(<TeamsView myTeam={4} shiftId="33333333-3333-4333-8333-333333333333" />);
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Відкрити картку: Коваль Олена' })).not.toBeInTheDocument());
+    } finally { online.mockRestore(); }
+  });
 });
