@@ -155,107 +155,48 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     }
   };
 
+  const displayedPreview = generating ? livePreview : preview;
+
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent aria-describedby={undefined} className="flex max-w-4xl max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
-        <DialogHeader>
-          <DialogTitle>Імпорт розкладу</DialogTitle>
+        <DialogHeader className="border-b border-border px-5 py-5 pr-12">
+          <DialogTitle className="flex items-center gap-2 text-xl"><CalendarDays className="size-5 text-primary" />Розклад зміни</DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="schedule-raw-text" className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Крок 1 — сирий текст розкладу
-            </Label>
-            <Textarea
-              id="schedule-raw-text"
-              disabled={busy || generating}
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder="Встав сюди текст розкладу на один або кілька днів (наприклад 11.08 – 15.08)…"
-              className="min-h-[140px] text-xs"
-            />
+        <Tabs value={mode} onValueChange={(value) => { if (!generating && !busy) { setMode(value); setEditing(false); } }} className="flex min-h-0 flex-col">
+          <div className="border-b border-border px-5 py-3">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ai" disabled={busy || generating}><Sparkles className="mr-2 size-4" />Генерація ШІ</TabsTrigger>
+              <TabsTrigger value="manual" disabled={busy || generating}><FileJson className="mr-2 size-4" />Ручний ввід</TabsTrigger>
+            </TabsList>
           </div>
-
-          <div className="space-y-2">
-            {generating ? <Button variant="outline" onClick={() => controller.current?.abort()} className="w-full h-11">
-              <Square className="size-4 mr-2" /> Зупинити генерацію
-            </Button> : <Button onClick={generate} disabled={busy || !rawText.trim() || rawText.length > 25000} className="w-full h-12">
-              <Sparkles className="size-4 mr-2" /> Згенерувати розклад
-            </Button>}
-            <p className="text-xs text-muted-foreground">Gemini 3.5 Flash-Lite</p>
-            {generating && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Розпізнаємо дати, події та команди…</p>}
-            {rawText.length > 25000 && <p role="alert" className="text-sm text-destructive">Текст завеликий — розділіть його на частини до 25 000 символів.</p>}
-            {generationError && <p role="alert" className="text-sm text-destructive break-words">{generationError}</p>}
-          </div>
-
-          <details className="space-y-2">
-            <summary className="cursor-pointer text-sm text-muted-foreground">Імпорт вручну через AI Studio</summary>
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Крок 2 — згенеруй JSON у ШІ
-            </Label>
-            <Button disabled={busy || generating} onClick={copyPrompt} className="w-full h-11 text-xs font-bold uppercase">
-              <ClipboardCopy className="w-4 h-4 mr-1.5" /> Скопіювати запит для ШІ
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full h-11 text-xs font-bold uppercase"
-              type="button"
-              onClick={openAiStudio}
-            >
-              <ExternalLink className="w-4 h-4 mr-1.5" /> Перейти в Google AI Studio
-            </Button>
-          </details>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="schedule-json" className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Крок 3 — вставити готовий JSON з AI Studio
-            </Label>
-            <Textarea
-              id="schedule-json"
-              disabled={busy || generating}
-              value={json}
-              onChange={(e) => { setJson(e.target.value); setCheckedJson(null); }}
-              placeholder='[{"date":"…","items":[…]}, …]'
-              className="min-h-[140px] font-mono text-[11px]"
-            />
-          </div>
-
-          <Button variant="outline" onClick={() => setCheckedJson(json)} disabled={busy || generating || !json.trim()} className="w-full h-11">
-            <Eye className="size-4 mr-2" /> Перевірити розклад
-          </Button>
-
-          {preview && (
-            <section className="space-y-3 border-y border-border py-4" aria-label="Перевірка розкладу" aria-live="polite">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="font-semibold">{preview.total} подій · {preview.days.length} дн.</h3>
-                {preview.duplicates > 0 && <span className="text-xs text-muted-foreground">Повторів прибрано: {preview.duplicates}</span>}
+          <div className="grid min-h-0 overflow-y-auto md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="min-w-0 space-y-4 border-b border-border p-5 md:border-b-0 md:border-r">
+              <div className="space-y-2">
+                <Label htmlFor="schedule-raw-text">Текст розкладу</Label>
+                <Textarea id="schedule-raw-text" disabled={busy || generating} value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="08:00 Підйом\n08:30–09:00 Сніданок\n09:30 Команда 1 — майстер-клас…" className="min-h-[180px] text-sm leading-relaxed" />
+                <div className="flex justify-between text-xs text-muted-foreground"><span>{date}</span><span className="tabular-nums">{rawText.length.toLocaleString('uk-UA')} / 25 000</span></div>
               </div>
-              {preview.errors.length > 0 && <div role="alert" className="space-y-1 text-sm text-destructive">
-                <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4" /> Виправте помилки перед збереженням</p>
-                <ul className="list-disc space-y-1 pl-5 break-words">{preview.errors.slice(0, 20).map((error, index) => <li key={index}>{error}</li>)}</ul>
-                {preview.errors.length > 20 && <p>Ще помилок: {preview.errors.length - 20}</p>}
-              </div>}
-              {preview.warnings.length > 0 && <details className="text-sm text-muted-foreground">
-                <summary className="cursor-pointer">Зверніть увагу: {preview.warnings.length}</summary>
-                <ul className="list-disc space-y-1 pl-5 pt-2">{preview.warnings.slice(0, 30).map((warning, index) => <li key={index}>{warning}</li>)}</ul>
-              </details>}
-              <div className="max-h-64 overflow-y-auto space-y-4">
-                {preview.days.map((day) => <div key={day.date}>
-                  <h4 className="sticky top-0 bg-background py-2 text-sm font-semibold">{day.date} <span className="text-muted-foreground">· {day.items.length}</span></h4>
-                  <ul className="divide-y divide-border">{day.items.slice(0, 100).map((item, index) => <li key={index} className="py-2 text-sm">
-                    <div className="flex gap-3"><span className="shrink-0 font-mono text-xs tabular-nums pt-0.5">{item.time_start}{item.time_end ? `–${item.time_end}` : ''}</span><span className="min-w-0 break-words font-medium">{item.title}</span></div>
-                    <p className="mt-1 text-xs text-muted-foreground break-words">{item.target_teams.length ? `Команди ${item.target_teams.join(', ')}` : 'Усі команди'}{item.location ? ` · ${item.location}` : ''}{item.sub_slots.length ? ` · Заїздів: ${item.sub_slots.length}` : ''}</p>
-                    {item.description && <p className="mt-1 text-xs text-muted-foreground break-words">{item.description}</p>}
-                  </li>)}</ul>
-                  {day.items.length > 100 && <p className="text-xs text-muted-foreground">Ще {day.items.length - 100} подій перевірено</p>}
-                </div>)}
-              </div>
-            </section>
-          )}
-
-          <Button onClick={publish} disabled={busy || generating || !preview || preview.errors.length > 0 || !preview.total} className="w-full h-12 text-xs font-bold uppercase">
-            {busy ? <><Loader2 className="size-4 mr-2 animate-spin" /> Зберігаємо чернетку…</> : <><CheckCircle2 className="size-4 mr-2" /> Зберегти перевірену чернетку</>}
+              <TabsContent value="ai" className="mt-0 space-y-3">
+                {generating ? <Button variant="outline" onClick={() => controller.current?.abort()} className="h-11 w-full"><Square className="mr-2 size-4" />Зупинити генерацію</Button> : <Button onClick={generate} disabled={busy || !rawText.trim() || rawText.length > 25000} className="h-11 w-full"><Sparkles className="mr-2 size-4" />{aiJson ? 'Згенерувати ще раз' : 'Згенерувати розклад'}</Button>}
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>Gemini 3.5 Flash-Lite</span>{generating && <span role="status" className="flex items-center gap-2"><Loader2 className="size-3 animate-spin" />{livePreview?.total ?? 0} подій</span>}</div>
+                {generationError && <p role="alert" className="break-words text-sm text-destructive">{generationError}</p>}
+              </TabsContent>
+              <TabsContent value="manual" className="mt-0 space-y-4">
+                <div className="grid grid-cols-2 gap-2"><Button disabled={busy} variant="outline" onClick={copyPrompt} className="h-auto min-h-11 whitespace-normal text-xs"><ClipboardCopy className="mr-2 size-4 shrink-0" />Скопіювати запит</Button><Button disabled={busy} variant="outline" onClick={openAiStudio} className="h-auto min-h-11 whitespace-normal text-xs"><ExternalLink className="mr-2 size-4 shrink-0" />Google AI Studio</Button></div>
+                <div className="space-y-2"><Label htmlFor="schedule-json">Готовий JSON</Label><Textarea id="schedule-json" disabled={busy} value={manualJson} onChange={(event) => { setManualJson(event.target.value); setCheckedManualJson(null); }} placeholder='[{"date":"…","items":[…]}]' className="min-h-[160px] font-mono text-xs" /></div>
+                <Button variant="outline" onClick={() => setCheckedManualJson(manualJson)} disabled={busy || !manualJson.trim()} className="h-11 w-full"><Eye className="mr-2 size-4" />Перевірити розклад</Button>
+              </TabsContent>
+              {rawText.length > 25000 && <p role="alert" className="text-sm text-destructive">Текст завеликий — розділіть його на частини до 25 000 символів.</p>}
+            </div>
+            <div className="min-w-0 p-5">
+              {displayedPreview ? <ScheduleImportReview preview={displayedPreview} live={generating} editing={editing} onEditingChange={setEditing} onEdit={editEvent} /> : <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CalendarDays className="size-8" /><p className="text-sm">{generating ? 'Очікуємо першу подію…' : 'Попередній перегляд'}</p>{generating && <Loader2 className="size-4 animate-spin" />}</div>}
+            </div>
+          </div>
+        </Tabs>
+        <div className="shrink-0 border-t border-border bg-background p-4">
+          <Button onClick={publish} disabled={busy || generating || !preview || preview.errors.length > 0 || !preview.total} className="h-12 w-full">
+            {busy ? <><Loader2 className="mr-2 size-4 animate-spin" />Зберігаємо чернетку…</> : <><CheckCircle2 className="mr-2 size-4" />Зберегти перевірену чернетку</>}
           </Button>
         </div>
       </DialogContent>
