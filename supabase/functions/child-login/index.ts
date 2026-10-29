@@ -137,6 +137,7 @@ Deno.serve(async (req) => {
     const liveNow = (shifts || []).filter((s: any) => s.start_date <= kyivDate(3) && today <= s.end_date).map((s: any) => s.id);
     const fallback = pickActiveShift(shifts || []);
     const liveIds: string[] = liveNow.length ? liveNow : (fallback?.id ? [fallback.id] : []);
+    if (!liveIds.length) return json({ error: 'no_active_shift' }, 403);
 
     if (action === 'search') {
       const fullName = typeof body?.fullName === 'string' ? body.fullName.trim() : '';
@@ -213,8 +214,9 @@ Deno.serve(async (req) => {
     const { data: child } = await cq.maybeSingle();
     if (!child) return json({ error: 'child_not_found' }, 404);
 
-    await svc.from('children').update({ has_logged_in: true }).eq('id', childId);
     const session = await issueSession(`child-${childId}@ironhelp.local`, 'child', { child_id: childId });
+    const { error: updateError } = await svc.from('children').update({ has_logged_in: true }).eq('id', childId);
+    if (updateError) return json({ error: 'login_failed' }, 500);
     return json({ session });
   } catch (_e) {
     return json({ error: 'login_failed' }, 500);

@@ -55,7 +55,8 @@ Deno.serve(async (req) => {
 
     // Активні зміни; якщо передано shift_id — працюємо лише в її межах.
     const activeShifts = async () => {
-      const { data } = await svc.from('shifts').select('id, name').eq('is_active', true).is('deleted_at', null);
+      const { data, error } = await svc.from('shifts').select('id, name').eq('is_active', true).is('deleted_at', null);
+      if (error) throw error;
       return (data ?? []) as { id: string; name: string }[];
     };
     const scopeIds = async (shiftId: unknown) => {
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
       for (let from = 0; ; from += 1000) {
         const { data, error } = await svc.from('children')
           .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at')
-          .in('shift_id', ids).is('deleted_at', null).order('full_name').range(from, from + 999);
+          .in('shift_id', ids).is('deleted_at', null).order('full_name').order('id').range(from, from + 999);
         if (error) throw error;
         all.push(...(data ?? []));
         if (!data || data.length < 1000) break;
@@ -99,12 +100,15 @@ Deno.serve(async (req) => {
       const items: any[] = Array.isArray(body.items) ? body.items.slice(0, 200) : [];
       const ids = items.map((i) => i?.id).filter((x) => typeof x === 'string');
       if (!ids.length) return json({ results: [] });
-      const { data: rows } = await svc.from('children').select('id, supervisor_notes, shifts!inner(is_active, deleted_at)')
+      const { data: rows, error: rowsError } = await svc.from('children').select('id, supervisor_notes, updated_at, shifts!inner(is_active, deleted_at)')
         .in('id', ids).eq('shifts.is_active', true).is('shifts.deleted_at', null).is('deleted_at', null);
+      if (rowsError) throw rowsError;
       const cur = new Map((rows ?? []).map((r: any) => [r.id, r]));
       const results = await Promise.all(items.map(async (it) => {
-        const row: any = cur.get(it?.id);
+        let row: any = cur.get(it?.id);
         if (!row) return { id: it?.id, status: 'not_found' };
+        // Compare-and-swap retries protect genuinely simultaneous note edits.
+        for (let attempt = 0; attempt < 5; attempt++) {
         const patch: Record<string, unknown> = {};
         if (typeof it.is_present === 'boolean') patch.is_present = it.is_present;
         if (typeof it.supervisor_notes === 'string') {
@@ -117,9 +121,20 @@ Deno.serve(async (req) => {
           patch.notes_origin = 'registry';
         }
         if (!Object.keys(patch).length) return { id: it.id, status: 'ok' };
-        const { data, error } = await svc.from('children').update(patch).eq('id', it.id)
+        let update = svc.from('children').update(patch).eq('id', it.id).is('deleted_at', null);
+        update = row.updated_at ? update.eq('updated_at', row.updated_at) : update.is('updated_at', null);
+        const { data, error } = await update
           .select('id, is_present, supervisor_notes, updated_at').maybeSingle();
-        return error ? { id: it.id, status: 'error' } : { id: it.id, status: 'ok', child: data };
+        if (error) return { id: it.id, status: 'error' };
+        if (data) return { id: it.id, status: 'ok', child: data };
+        const { data: latest, error: readError } = await svc.from('children')
+          .select('id, supervisor_notes, updated_at, shifts!inner(is_active, deleted_at)')
+          .eq('id', it.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).is('deleted_at', null).maybeSingle();
+        if (readError) return { id: it.id, status: 'error' };
+        if (!latest) return { id: it.id, status: 'not_found' };
+        row = latest;
+        }
+        return { id: it.id, status: 'error' };
       }));
       return json({ results });
     }
