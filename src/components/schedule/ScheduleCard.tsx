@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from 'react';
-import { Radio, ShoppingBag, Users } from 'lucide-react';
+import { Radio, ShoppingBag, Users, MapPin, Utensils, Dumbbell, Music2, Bus, CalendarDays } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase, toMinutes } from '@/lib/scheduleCategories';
@@ -8,13 +9,15 @@ import { isEventLive, isFairEvent } from '@/lib/fair-resolver';
 
 /** Left accent rail per category — deliberately restrained, four families only. */
 const ACCENT: Record<string, string> = {
-  meal: 'border-l-amber-500',
-  sports: 'border-l-emerald-500',
-  entertainment: 'border-l-indigo-500',
-  gathering: 'border-l-indigo-500',
-  transfer: 'border-l-sky-500',
-  general: 'border-l-slate-500',
+  meal: 'border-l-cat-meal',
+  sports: 'border-l-cat-sports',
+  entertainment: 'border-l-cat-event',
+  gathering: 'border-l-cat-gathering',
+  transfer: 'border-l-cat-transfer',
+  general: 'border-l-cat-general',
 };
+
+const CATEGORY_ICONS = { meal: Utensils, sports: Dumbbell, entertainment: Music2, gathering: Users, transfer: Bus, general: CalendarDays };
 
 const toMin = (t?: string | null): number | null => toMinutes(t);
 
@@ -61,6 +64,7 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.map(Number).includes(Number(team))) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
+  const CategoryIcon = CATEGORY_ICONS[item.category as keyof typeof CATEGORY_ICONS] ?? CalendarDays;
   const isFair = isFairEvent(item);
 
   /**
@@ -82,72 +86,68 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   return (
     <article
       className={[
-        'relative overflow-hidden rounded-2xl border border-white/10 border-l-4 bg-slate-900/80 p-4 pl-3.5 shadow-xl backdrop-blur-xl',
-        'transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98]',
+        'relative overflow-hidden rounded-lg border border-border border-l-[3px] bg-card p-4',
+        'transition-colors duration-200 motion-reduce:transition-none',
         accent,
-        isNow ? 'border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : '',
-        past ? 'opacity-50' : '',
+        isNow ? 'ring-1 ring-success/40 bg-success/5' : '',
+        past ? 'opacity-65' : '',
       ].join(' ')}
     >
 
-      <header className="flex items-start gap-3">
-        <span className="font-mono text-sm font-bold tabular-nums text-slate-200">
-          {event.timeStart} – {event.timeEnd}
+      <header className="flex items-center gap-2.5">
+        <span className="font-mono text-xl font-bold tabular-nums text-foreground">
+          {event.timeStart}
         </span>
+        <span className="text-xs font-mono tabular-nums text-muted-foreground">— {event.timeEnd}</span>
+        <CategoryIcon className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         {isNow && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+          <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-success/10 px-2 py-1 text-[10px] font-bold text-success">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
             Зараз
           </span>
         )}
       </header>
 
-      <h3 className="mt-1 break-words text-base font-bold tracking-tight text-white">
+      <h3 className="mt-3 break-words text-base font-semibold leading-snug text-foreground">
         {fairLive ? 'Розпочалася Ярмарка!' : sentenceCase(item.title)}
       </h3>
 
       {item.location && (
-        <span className="mt-1 flex items-center gap-1 text-xs font-medium text-slate-400">
-          📍 {item.location}
+        <span className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 shrink-0" /> {item.location}
         </span>
       )}
 
       {fairLive && (
-        <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.35)]">
-          🛍️ Касу відкрито
+        <span className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
+          <ShoppingBag className="h-3.5 w-3.5" /> Касу відкрито
         </span>
-      )}
-
-      {fairLive && (
-        <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200 shadow-sm backdrop-blur-md">
-          <span className="font-bold text-amber-300">💡 Корисна порада:</span> Обирайте одразу декілька товарів на стенді та сплачуйте за все разом однією сумою в 1 клік!
-        </div>
       )}
 
       {fairLive && onFairAction && (
-        <button
+        <Button
           type="button"
           onClick={onFairAction}
-          className="mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] hover:from-amber-400 hover:to-amber-500 active:scale-95"
+          className="mt-3 w-full gap-2"
         >
           {isStaff ? (
             <><Radio className="h-4 w-4" strokeWidth={2} /> Відкрити касу (Air Pay)</>
           ) : (
             <><ShoppingBag className="h-4 w-4" strokeWidth={2} /> Відкрити Air Pay та сплатити</>
           )}
-        </button>
+        </Button>
       )}
 
       {item.description && (
-        <p className="mt-0.5 break-words text-xs leading-relaxed text-slate-400">{item.description}</p>
+        <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{item.description}</p>
       )}
 
       {mySlot && (
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-1.5 text-xs font-medium text-amber-300 shadow-sm">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
           <span>
             Твій час: <span className="font-mono font-bold tabular-nums">{mySlot.time}</span>
           </span>
-          <span className="text-amber-300/80">Команди {mySlot.teams.join(' і ')}</span>
+          <span>Команди {mySlot.teams.join(' і ')}</span>
         </div>
       )}
 
@@ -156,10 +156,10 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
           {slots.map((s, k) => (
             <span
               key={k}
-              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-slate-300"
+              className="rounded-md bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
             >
               <span className="font-mono tabular-nums">{s.time}</span>
-              <span className="mx-1 text-slate-500">→</span>
+              <span className="mx-1 text-muted-foreground">→</span>
               Команди {s.teams.join(', ')}
             </span>
           ))}
@@ -174,8 +174,8 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
                 key={t}
                 className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-semibold tabular-nums ${
                   t === team
-                    ? 'border-amber-500/40 bg-amber-500/15 text-amber-300'
-                    : 'border-white/10 bg-white/5 text-slate-400'
+                    ? 'border-primary/20 bg-primary/10 text-primary'
+                    : 'border-border bg-muted/40 text-muted-foreground'
                 }`}
               >
                 <Users className="h-2.5 w-2.5" strokeWidth={1.75} />
@@ -183,7 +183,8 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
               </span>
             ))
           ) : (
-            <span className="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Users className="h-3 w-3" />
               Для всіх
             </span>
           )}
@@ -191,9 +192,9 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
       )}
 
       {isNow && (
-        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/5">
+        <div className="absolute inset-x-0 bottom-0 h-[3px] bg-success/10">
           <div
-            className="h-full bg-emerald-400/80 transition-[width] duration-1000 ease-out"
+            className="h-full bg-success transition-[width] duration-1000 ease-out motion-reduce:transition-none"
             style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
           />
         </div>
