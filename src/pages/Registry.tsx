@@ -163,8 +163,8 @@ const readList = (shiftId: string | null): CachedList | null => { try { const v 
 const writeList = (shiftId: string | null, v: CachedList) => { try { localStorage.setItem(listKey(shiftId), JSON.stringify(v)); } catch { /* quota */ } };
 const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'щойно' : m < 60 ? `${m} хв тому` : `${Math.round(m / 60)} год тому`; };
 
-function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const cached = useMemo(readList, []);
+function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shiftId: string | null; onChangeShift: () => void; onLogout: () => void }) {
+  const cached = useMemo(() => readList(shiftId), [shiftId]);
   const [kids, setKids] = useState<Kid[] | null>(() => (cached ? cached.children.map((k) => ({ ...k, ...readQueue()[k.id] })) : null));
   const [shifts, setShifts] = useState<Record<string, string>>(cached?.shifts ?? {});
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -177,7 +177,6 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [team, setTeam] = useState<number | null>(null);
-  const [shiftId, setShiftId] = useState<string | null>(null);
   const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
   const [queued, setQueued] = useState(() => Object.keys(readQueue()).length);
