@@ -1,19 +1,19 @@
 export const SCHEDULE_MODEL = 'gemini-3.5-flash-lite';
 
-const nullableText = { type: 'STRING', nullable: true };
-const teamList = { type: 'ARRAY', items: { type: 'INTEGER' } };
+const nullableText = { type: ['string', 'null'] };
+const teamList = { type: 'array', items: { type: 'integer' } };
 export const scheduleSchema = {
-  type: 'OBJECT', required: ['days'], properties: {
-    days: { type: 'ARRAY', items: {
-      type: 'OBJECT', required: ['date', 'items'], properties: {
-        date: { type: 'STRING' }, items: { type: 'ARRAY', items: {
-          type: 'OBJECT', required: ['title', 'time_start', 'time_end', 'description', 'location', 'category', 'target_teams', 'has_sub_slots', 'sub_slots'],
+  type: 'object', required: ['days'], properties: {
+    days: { type: 'array', items: {
+      type: 'object', required: ['date', 'items'], properties: {
+        date: { type: 'string' }, items: { type: 'array', items: {
+          type: 'object', required: ['title', 'time_start', 'time_end', 'description', 'location', 'category', 'target_teams', 'has_sub_slots', 'sub_slots'],
           properties: {
-            title: { type: 'STRING' }, time_start: { type: 'STRING' }, time_end: nullableText,
+            title: { type: 'string' }, time_start: { type: 'string' }, time_end: nullableText,
             description: nullableText, location: nullableText,
-            category: { type: 'STRING', enum: ['general', 'meal', 'sports', 'gathering', 'entertainment', 'transfer', 'fair'] },
-            target_teams: teamList, has_sub_slots: { type: 'BOOLEAN' }, sub_slots: { type: 'ARRAY', items: {
-              type: 'OBJECT', required: ['time', 'teams'], properties: { time: { type: 'STRING' }, teams: teamList },
+            category: { type: 'string', enum: ['general', 'meal', 'sports', 'gathering', 'entertainment', 'transfer', 'fair'] },
+            target_teams: teamList, has_sub_slots: { type: 'boolean' }, sub_slots: { type: 'array', items: {
+              type: 'object', required: ['time', 'teams'], properties: { time: { type: 'string' }, teams: teamList },
             } },
           },
         } },
@@ -32,7 +32,7 @@ export function scheduleRequest(rawText: string, date: string) {
 Назви короткі, без часу й технічних префіксів. Опис і локація — тільки з джерела. Опис бачать учасники: вилучи внутрішні вказівки супроводу, приховані сюрпризи й персональні контакти. Не використовуй слова «табір» або «вожатий». Не додавай пояснення чи markdown.
 Категорії: їжа meal; спорт sports; збори/лекції/майстер-класи gathering; концерти/квести entertainment; поїздки transfer; ярмарок fair; інше general.` }] },
     contents: [{ role: 'user', parts: [{ text: rawText }] }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: scheduleSchema, temperature: 0.1 },
+    generationConfig: { responseFormat: { text: { mimeType: 'APPLICATION_JSON', schema: scheduleSchema } } },
   };
 }
 
