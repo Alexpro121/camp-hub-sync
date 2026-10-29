@@ -84,6 +84,11 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     if (!preview || busy || generating) return;
     const days = preview.days.map((day) => day.date !== dayDate ? day : { ...day, items: day.items.map((item, position) => position !== index ? item : { ...item, [field]: value || null }) });
     const next = JSON.stringify({ days });
+    const check = previewScheduleImport(next, date);
+    if (check.errors.length || check.total !== preview.total) {
+      toast.error(check.errors[0] ?? 'Зміна створює повтор події');
+      return;
+    }
     setJson(next);
     setCheckedJson(next);
   };

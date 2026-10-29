@@ -9,6 +9,22 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.f
 beforeEach(() => { generate.mockReset(); save.mockReset(); save.mockResolvedValue({ total: 2, skipped: 0 }); });
 
 describe('admin schedule preview flow', () => {
+  it('shows complete events while generation is still running and blocks draft saving', async () => {
+    let finish: ((value: string) => void) | undefined;
+    const partial = '{"days":[{"date":"2026-02-24","items":[{"title":"Підйом","time_start":"08:00","time_end":"08:00"}';
+    generate.mockImplementation((_raw, _date, _signal, onText) => { onText(partial); return new Promise<string>((resolve) => { finish = resolve; }); });
+    render(<AdminAiStudioImportModal open date="2026-10-29" onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Текст розкладу'), { target: { value: '08:00 Підйом' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Згенерувати розклад' }));
+    expect(await screen.findByText('Підйом')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Зберегти перевірену чернетку' })).toBeDisabled();
+    expect(save).not.toHaveBeenCalled();
+    finish?.(partial + ']}]}');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Зберегти перевірену чернетку' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти перевірену чернетку' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0][0].items[0].time_end).toBeNull();
+  });
   it('generates inside the modal and validates before draft save', async () => {
     const json = '{"days":[{"date":"2026-10-29","items":[{"title":"Сніданок","time_start":"09:00","time_end":"10:00"}]}]}';
     generate.mockImplementation(async (_raw, _date, _signal, onText) => { onText(json); return json; });
@@ -31,7 +47,7 @@ describe('admin schedule preview flow', () => {
   it('requires validation, preserves parallel teams, then saves the reviewed draft', async () => {
     const imported = vi.fn();
     render(<AdminAiStudioImportModal open date="2026-10-29" onOpenChange={vi.fn()} onImported={imported} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Ручний ввід' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Ручний ввід' }), { button: 0, ctrlKey: false });
     const input = screen.getByLabelText('Готовий JSON');
     fireEvent.change(input, { target: { value: JSON.stringify({ days: [{ date: '2026-10-29', items: [
       { title: 'Гра', time_start: '9:5', target_teams: [1] },
@@ -50,7 +66,7 @@ describe('admin schedule preview flow', () => {
   });
   it('blocks invalid dates and invalidates verification after editing', () => {
     render(<AdminAiStudioImportModal open date="2026-10-29" onOpenChange={vi.fn()} onImported={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Ручний ввід' }));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Ручний ввід' }), { button: 0, ctrlKey: false });
     const input = screen.getByLabelText('Готовий JSON');
     fireEvent.change(input, { target: { value: '{"date":"2026-02-30","items":[{"title":"Гра","time_start":"10:00"}]}' } });
     fireEvent.click(screen.getByRole('button', { name: 'Перевірити розклад' }));
