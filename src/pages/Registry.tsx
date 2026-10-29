@@ -220,7 +220,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const pull = useCallback(async () => {
     if (!sinceRef.current) return;
     await flush();
-    const d = await call({ action: 'changes', token, since: sinceRef.current }, 8_000);
+    const d = await call({ action: 'changes', token, since: sinceRef.current, ...(shiftId ? { shift_id: shiftId } : {}) }, 8_000);
     const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
     if (!ch.length) return;
     sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
@@ -238,7 +238,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       return next;
     });
     setSyncedAt(Date.now()); setOnline(true);
-  }, [token, flush]);
+  }, [token, shiftId, flush]);
 
   const load = useCallback(async () => {
     try {
