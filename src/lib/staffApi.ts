@@ -12,7 +12,13 @@ export async function staffCall<T = any>(body: Record<string, unknown>, opts: { 
     .invoke('staff-accounts', { body, signal: opts.signal })
     .catch((e) => ({ data: null as any, error: e }));
   if (opts.signal?.aborted) throw new Error('aborted');
-  if (error || data?.error) throw new Error(data?.error || 'failed');
+  if (error || data?.error) {
+    let code = data?.error;
+    if (!code && error?.context instanceof Response) {
+      try { code = (await error.context.clone().json())?.error; } catch { /* response has no JSON */ }
+    }
+    throw new Error(code || 'failed');
+  }
   return data as T;
 }
 
