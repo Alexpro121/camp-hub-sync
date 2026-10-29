@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,9 +22,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   initialName: string;
+  year?: number;
 }
 
-export const CertificateModal = ({ open, onClose, initialName }: Props) => {
+export const CertificateModal = ({ open, onClose, initialName, year = 2026 }: Props) => {
   const [name, setName] = useState(initialName);
   const [editMode, setEditMode] = useState(false);
   const [tempName, setTempName] = useState(initialName);
@@ -34,25 +35,20 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
 
   const haptics = useHaptics();
 
-  const createPdf = useCallback(async (targetName: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await generatePersonalizedPdf(targetName);
-      setPdfData(result);
-    } catch (err: any) {
-      console.error(err);
-      setError(err?.message || 'Не вдалося згенерувати PDF-сертифікат');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    if (open) {
-      createPdf(name);
-    }
-  }, [open, name, createPdf]);
+    if (!open) return;
+    let cancelled = false;
+    let url: string | undefined;
+    setLoading(true); setError(null); setPdfData(null);
+    generatePersonalizedPdf(name).then(result => {
+      url = result.pdfUrl;
+      if (cancelled) { URL.revokeObjectURL(url); return; }
+      setPdfData(result); setLoading(false);
+    }).catch((err: unknown) => {
+      if (!cancelled) { setError(err instanceof Error ? err.message : 'Не вдалося згенерувати PDF-сертифікат'); setLoading(false); }
+    });
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+  }, [open, name]);
 
   const handleApplyName = async () => {
     const validation = validateCertificateName(initialName, tempName);
@@ -67,7 +63,6 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
     const validName = tempName.trim();
     setName(validName);
     setEditMode(false);
-    await createPdf(validName);
     toast.success('Ім’я в сертифікаті оновлено');
   };
 
@@ -116,7 +111,7 @@ export const CertificateModal = ({ open, onClose, initialName }: Props) => {
             </DialogTitle>
 
             <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25">
-              СЕЗОН 2026
+              СЕЗОН {year}
             </span>
           </div>
           <DialogDescription className="sr-only">

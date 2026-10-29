@@ -7,7 +7,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { AlumniPassportEnvelope } from '@/lib/alumniPassport';
+import { verifyChecksum, type AlumniPassportEnvelope } from '@/lib/alumniPassport';
 
 export const BRIDGE_TTL_MS = 3 * 60 * 1000; // 3 хвилини життя сесії
 export const ALUMNI_BROADCAST_CHANNEL = 'iron-alumni-broadcast';
@@ -47,7 +47,7 @@ function isValidPassportEnvelope(obj: any): obj is AlumniPassportEnvelope {
   if (typeof obj.checksum !== 'string' || !obj.checksum.trim()) return false;
   if (!obj.child_profile || typeof obj.child_profile !== 'object') return false;
   if (!obj.child_profile.full_name) return false;
-  return true;
+  return verifyChecksum(obj);
 }
 
 /* =========================================================================
@@ -130,7 +130,7 @@ export const hostPassportBridge = (
   passport: AlumniPassportEnvelope,
   callbacks: { onSent?: () => void; onExpired?: () => void; pin?: string } = {},
 ): BridgeHostHandle => {
-  const pin = callbacks.pin || passport.passport_id || generateBridgePin();
+  const pin = callbacks.pin || generateBridgePin();
   const handle = providePassportForPull(passport, pin, {
     onTransferred: callbacks.onSent,
     onExpired: callbacks.onExpired,
@@ -338,32 +338,43 @@ export async function deleteAlumniBroadcast(id: string): Promise<void> {
  */
 export function subscribeAlumniBroadcast(
   handler: (kind: AlumniBroadcastKind, payload: AlumniBroadcastPayload) => void,
-  opts: { year?: number } = {},
+  opts: { year?: number; passportId?: string } = {},
 ): () => void {
   let stopped = false;
+  let fetching = false;
+  const scope = `${opts.passportId || 'legacy'}:${opts.year || 'all'}`;
+  const seenKey = `${SEEN_KEY}:${scope}`;
+  const lastKey = `${LAST_SEEN_KEY}:${scope}`;
+  const seen = (): string[] => {
+    try { const value = JSON.parse(localStorage.getItem(seenKey) || '[]'); return Array.isArray(value) ? value : []; } catch { return []; }
+  };
+  const mark = (id: string, createdAt: string) => {
+    try { localStorage.setItem(seenKey, JSON.stringify([id, ...seen().filter(x => x !== id)].slice(0, 200))); const last = localStorage.getItem(lastKey); if (!last || last < createdAt) localStorage.setItem(lastKey, createdAt); } catch {}
+  };
   const deliver = (r: Row) => {
-    if (stopped || !r?.id || readSeen().includes(r.id)) return;
+    if (stopped || !r?.id || seen().includes(r.id)) return;
     if (r.target_year && opts.year && r.target_year !== opts.year) return;
-    markSeen(r.id, r.created_at);
+    mark(r.id, r.created_at);
     const [k, p] = toPayload(r);
     handler(k, p);
   };
 
-  // 1. Пропущені (поки додаток був закритий)
-  (async () => {
+  // Catch up again on reconnect and foreground, using server-side year filtering.
+  const catchUp = async () => {
+    if (stopped || fetching) return;
+    fetching = true;
     try {
-      let q = db.from('alumni_broadcasts').select('*').order('created_at', { ascending: true }).limit(20);
-      const last = localStorage.getItem(LAST_SEEN_KEY);
-      if (last) q = q.gt('created_at', last);
-      const { data } = await q;
-      const rows = (data as Row[]) ?? [];
-      // Показуємо найсвіжішу, адресовану саме цьому випускнику (з урахуванням року)
-      const relevant = rows.filter((r) => !(r.target_year && opts.year && r.target_year !== opts.year));
-      const latest = relevant[relevant.length - 1];
-      rows.forEach((r) => { if (r.id !== latest?.id) markSeen(r.id, r.created_at); });
-      if (latest) deliver(latest);
-    } catch { /* офлайн — спробуємо наступного разу */ }
-  })();
+      let q = db.from('alumni_broadcasts').select('*').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
+      if (opts.year) q = q.or(`target_year.is.null,target_year.eq.${opts.year}`);
+      const { data, error } = await q.limit(1);
+      if (!error && data?.[0]) deliver(data[0] as Row);
+    } catch { /* retry on reconnect */ }
+    finally { fetching = false; }
+  };
+  const foreground = () => { if (document.visibilityState === 'visible') void catchUp(); };
+  void catchUp();
+  window.addEventListener('online', catchUp);
+  document.addEventListener('visibilitychange', foreground);
 
   // 2. Нові в реальному часі
   const channel = supabase
@@ -373,6 +384,8 @@ export function subscribeAlumniBroadcast(
 
   return () => {
     stopped = true;
+    window.removeEventListener('online', catchUp);
+    document.removeEventListener('visibilitychange', foreground);
     supabase.removeChannel(channel);
   };
 }

@@ -1,3 +1,7 @@
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import certificateFont from '@/assets/alumni-roboto-bold.ttf.asset.json';
+
 /** Шляхи до файлу бланка в папці public/ */
 const CANDIDATE_PDF_PATHS = [
   '/certificate-template.pdf',
@@ -6,95 +10,24 @@ const CANDIDATE_PDF_PATHS = [
   encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'),
 ];
 
-/** Стабільні CDN-джерела кириличного шрифту */
-const FONT_URLS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/fonts/Roboto/Roboto-Bold.ttf',
-  'https://cdn.jsdelivr.net/npm/roboto-font@0.1.0/fonts/Roboto/roboto-bold-webfont.ttf',
-  'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/Roboto-Bold.ttf',
-];
-
 const PROHIBITED_WORDS = [
   'хуй', 'пізд', 'єбат', 'ебат', 'бляд', 'сука', 'мусор', 'гандон', 'чмо', 'лох', 'залуп', 'дроч', 'хер', 'підар', 'пидор', 'нах'
 ];
 
-function isValidFontBuffer(buffer: ArrayBuffer): boolean {
-  if (!buffer || buffer.byteLength < 10000) return false;
-  const view = new DataView(buffer);
-  const magic = view.getUint32(0);
-  return magic === 0x00010000 || magic === 0x4F54544F || magic === 0x74727565;
+const RESOURCE_CACHE = 'iron-certificate-resources-v1';
+let resourcesPromise: Promise<[ArrayBuffer, ArrayBuffer]> | null = null;
+async function resource(url: string): Promise<ArrayBuffer> {
+  const cache = typeof caches === 'undefined' ? null : await caches.open(RESOURCE_CACHE).catch(() => null);
+  const cached = await cache?.match(url);
+  if (cached) return cached.arrayBuffer();
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Для першого завантаження сертифіката потрібен інтернет');
+  await cache?.put(url, response.clone()).catch(() => {});
+  return response.arrayBuffer();
 }
-
-async function loadPdfEngine() {
-  if (typeof window === 'undefined') throw new Error('Потрібне середовище браузера');
-
-  const win = window as any;
-  if (win.PDFLib && win.fontkit) {
-    return {
-      PDFDocument: win.PDFLib.PDFDocument,
-      rgb: win.PDFLib.rgb,
-      fontkit: win.fontkit,
-    };
-  }
-
-  const loadScript = (src: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const existing = document.querySelector(`script[src="${src}"]`);
-      if (existing) {
-        resolve();
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Не вдалося завантажити ${src}`));
-      document.head.appendChild(script);
-    });
-  };
-
-  try {
-    await Promise.all([
-      loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js'),
-      loadScript('https://unpkg.com/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
-    ]);
-  } catch {
-    await Promise.all([
-      loadScript('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'),
-      loadScript('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@0.0.4/dist/fontkit.umd.min.js'),
-    ]);
-  }
-
-  return {
-    PDFDocument: win.PDFLib.PDFDocument,
-    rgb: win.PDFLib.rgb,
-    fontkit: win.fontkit,
-  };
-}
-
-async function fetchPdfTemplateBytes(): Promise<ArrayBuffer> {
-  for (const path of CANDIDATE_PDF_PATHS) {
-    try {
-      const res = await fetch(path);
-      if (res.ok) {
-        const bytes = await res.arrayBuffer();
-        if (bytes.byteLength > 1000) return bytes;
-      }
-    } catch {}
-  }
-  throw new Error('Файл бланка не знайдено в папці public/ (certificate-template.pdf)');
-}
-
-async function fetchCyrillicFontBytes(): Promise<ArrayBuffer> {
-  for (const url of FONT_URLS) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const bytes = await res.arrayBuffer();
-        if (isValidFontBuffer(bytes)) return bytes;
-      }
-    } catch {}
-  }
-  throw new Error('Не вдалося завантажити шрифт із підтримкою кирилиці');
+async function certificateResources(): Promise<[ArrayBuffer, ArrayBuffer]> {
+  if (!resourcesPromise) resourcesPromise = Promise.all([resource(CANDIDATE_PDF_PATHS[0]), resource(certificateFont.url)]).catch(error => { resourcesPromise = null; throw error; });
+  return resourcesPromise;
 }
 
 export const normalizeUkrainianText = (str: string): string => {
@@ -195,12 +128,7 @@ export async function generatePersonalizedPdf(name: string): Promise<{
   pdfUrl: string;
   previewImageUrl: string;
 }> {
-  const { PDFDocument, rgb, fontkit } = await loadPdfEngine();
-
-  const [pdfBytes, fontBytes] = await Promise.all([
-    fetchPdfTemplateBytes(),
-    fetchCyrillicFontBytes(),
-  ]);
+  const [pdfBytes, fontBytes] = await certificateResources();
 
   const pdfDoc = await PDFDocument.load(pdfBytes);
   pdfDoc.registerFontkit(fontkit);
@@ -240,7 +168,7 @@ export async function generatePersonalizedPdf(name: string): Promise<{
   });
 
   const modifiedPdfBytes = await pdfDoc.save();
-  const pdfBlob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+  const pdfBlob = new Blob([new Uint8Array(modifiedPdfBytes).buffer], { type: 'application/pdf' });
   const pdfUrl = URL.createObjectURL(pdfBlob);
 
   // Створюємо мобільне зображення-прев'ю через Canvas
