@@ -29,6 +29,13 @@
       "when": 1793268726729,
       "tag": "0003_restrict_medical_note_privileges",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793268952194,
+      "tag": "0004_exclude_doctors_from_team_authority",
+      "breakpoints": true
     }
   ]
 }
