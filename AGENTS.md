@@ -14,3 +14,4 @@
 - Dynamic Island renders through a body portal with measured content height and semantic surface tokens; its provider exclusively owns dismissal timers, pauses expanded content and keeps notification callbacks stable to avoid subscription churn.
 - Iron-dollar entries snapshot actor labels on server insert; manual adjustments derive actor IDs from the authenticated session, never caller-supplied IDs, so receipts retain trustworthy attribution without loading staff lists.
 - Schedule imports use a pure validated preview and full time/title/location/team identity; each new import writes only fresh shift-scoped drafts and compensates failed writes, so published events and parallel team workshops remain intact.
+- In-app schedule generation calls Google Gemini through an admin-validated streaming edge function with a server-only key; explicit cancellation and completed-stream checks prevent incomplete output from becoming verified drafts.
