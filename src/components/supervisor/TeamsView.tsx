@@ -146,21 +146,6 @@ const TeamsView = ({
           });
           return;
         }
-        if (payload.eventType === 'UPDATE' && n?.id && !n.deleted_at) {
-          let hit = false;
-          setChildren((prev) => {
-            const next = prev.map((x) => {
-              if (x.id !== n.id) return x;
-              hit = true;
-              if (x.team_number !== n.team_number) return x;
-              if ((x as any).updated_at && n.updated_at && (x as any).updated_at > n.updated_at) return x;
-              return { ...x, ...n };
-            });
-            if (hit) outbox.saveTeamsSnapshot(next);
-            return hit ? next : prev;
-          });
-          if (hit && !(old?.team_number != null && old.team_number !== n.team_number)) return;
-        }
         clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => { load().catch(() => {}); }, 600);
       })

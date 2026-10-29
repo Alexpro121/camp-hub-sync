@@ -143,6 +143,7 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
+        aria-describedby={undefined}
         className="
           fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
           !w-[calc(100dvw-1rem)] max-w-md min-w-0 max-h-[calc(100dvh-1rem)] overflow-x-hidden overflow-y-auto
