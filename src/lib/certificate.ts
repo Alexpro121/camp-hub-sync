@@ -1,33 +1,86 @@
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import certificateFont from '@/assets/alumni-roboto-bold.ttf.asset.json';
+import { getPdfJsLib } from '@/lib/pdfjsLoader';
 
-/** Шляхи до файлу бланка в папці public/ */
-const CANDIDATE_PDF_PATHS = [
-  '/certificate-template.pdf',
-  '/certificate.pdf',
-  '/Сертифікат_загальний_Залізна_Зміна.pdf',
-  encodeURI('/Сертифікат_загальний_Залізна_Зміна.pdf'),
-];
+/**
+ * Бланк і шрифт лежать у public/ і віддаються з нашого домену. Раніше шрифт брався зі шляху
+ * `/__l5e/assets-v1/…`, який існує лише на хостингу Lovable: деінде там була сторінка index.html,
+ * вбудувати «шрифт» не вдавалось, і сертифікат не генерувався.
+ */
+const TEMPLATE_URL = '/certificate-template.pdf';
+const FONT_URL = '/fonts/Roboto-Bold.ttf';
 
 const PROHIBITED_WORDS = [
   'хуй', 'пізд', 'єбат', 'ебат', 'бляд', 'сука', 'мусор', 'гандон', 'чмо', 'лох', 'залуп', 'дроч', 'хер', 'підар', 'пидор', 'нах'
 ];
 
-const RESOURCE_CACHE = 'iron-certificate-resources-v1';
+const RESOURCE_CACHE = 'iron-certificate-resources-v2';
 let resourcesPromise: Promise<[ArrayBuffer, ArrayBuffer]> | null = null;
-async function resource(url: string): Promise<ArrayBuffer> {
+
+const startsWith = (buf: ArrayBuffer, bytes: number[]) => {
+  const head = new Uint8Array(buf.slice(0, bytes.length));
+  return bytes.every((b, i) => head[i] === b);
+};
+const isPdf = (buf: ArrayBuffer) => startsWith(buf, [0x25, 0x50, 0x44, 0x46]); // %PDF
+const isFont = (buf: ArrayBuffer) =>
+  startsWith(buf, [0x00, 0x01, 0x00, 0x00]) || startsWith(buf, [0x4f, 0x54, 0x54, 0x4f]) || startsWith(buf, [0x74, 0x72, 0x75, 0x65]);
+
+/** Файл із кешу чи мережі; відповідь «не того типу» (наприклад, index.html замість файлу) не кешується. */
+async function resource(url: string, valid: (buf: ArrayBuffer) => boolean): Promise<ArrayBuffer> {
   const cache = typeof caches === 'undefined' ? null : await caches.open(RESOURCE_CACHE).catch(() => null);
   const cached = await cache?.match(url);
-  if (cached) return cached.arrayBuffer();
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('Для першого завантаження сертифіката потрібен інтернет');
-  await cache?.put(url, response.clone()).catch(() => {});
-  return response.arrayBuffer();
+  if (cached) {
+    const buf = await cached.arrayBuffer();
+    if (valid(buf)) return buf;
+    await cache?.delete(url).catch(() => {});
+  }
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new Error('Для першого завантаження сертифіката потрібен інтернет');
+  }
+  if (!response.ok) throw new Error('Не вдалося завантажити файли сертифіката. Спробуйте пізніше');
+  const buf = await response.clone().arrayBuffer();
+  if (!valid(buf)) throw new Error('Файли сертифіката на сервері пошкоджені або відсутні');
+  await cache?.put(url, response).catch(() => {});
+  return buf;
 }
 async function certificateResources(): Promise<[ArrayBuffer, ArrayBuffer]> {
-  if (!resourcesPromise) resourcesPromise = Promise.all([resource(CANDIDATE_PDF_PATHS[0]), resource(certificateFont.url)]).catch(error => { resourcesPromise = null; throw error; });
+  if (!resourcesPromise) {
+    resourcesPromise = Promise.all([resource(TEMPLATE_URL, isPdf), resource(FONT_URL, isFont)]).catch((error) => {
+      resourcesPromise = null;
+      throw error;
+    });
+  }
   return resourcesPromise;
+}
+
+/** Прев'ю першої сторінки PDF як зображення: мобільні браузери не показують PDF у <object>. */
+export async function renderPdfPreview(pdfBytes: Uint8Array, targetWidth = 1200, timeoutMs = 10_000): Promise<string | null> {
+  // CDN із PDF.js може бути недоступний: прев'ю необов'язкове і ніколи не блокує завантаження PDF.
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+  return Promise.race([renderPdfPreviewInner(pdfBytes, targetWidth), timeout]);
+}
+
+async function renderPdfPreviewInner(pdfBytes: Uint8Array, targetWidth: number): Promise<string | null> {
+  try {
+    const pdfjs = await getPdfJsLib();
+    if (!pdfjs) return null;
+    const doc = await pdfjs.getDocument({ data: pdfBytes.slice() }).promise;
+    const page = await doc.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: targetWidth / base.width });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas.toDataURL('image/jpeg', 0.88);
+  } catch {
+    return null;
+  }
 }
 
 export const normalizeUkrainianText = (str: string): string => {
@@ -126,7 +179,8 @@ export function validateCertificateName(
 export async function generatePersonalizedPdf(name: string): Promise<{ 
   pdfBlob: Blob; 
   pdfUrl: string;
-  previewImageUrl: string;
+  /** Байти PDF для прев'ю-зображення (renderPdfPreview). */
+  pdfBytes: Uint8Array;
 }> {
   const [pdfBytes, fontBytes] = await certificateResources();
 
@@ -171,27 +225,9 @@ export async function generatePersonalizedPdf(name: string): Promise<{
   const pdfBlob = new Blob([new Uint8Array(modifiedPdfBytes).buffer], { type: 'application/pdf' });
   const pdfUrl = URL.createObjectURL(pdfBlob);
 
-  // Створюємо мобільне зображення-прев'ю через Canvas
-  const canvas = document.createElement('canvas');
-  canvas.width = 1600;
-  canvas.height = Math.round(1600 * (height / width));
-  const ctx = canvas.getContext('2d');
-  
-  if (ctx) {
-    // Малюємо ім'я на прев'ю
-    const cFontSize = Math.round(canvas.height * 0.044);
-    ctx.font = `900 ${cFontSize}px "Montserrat", "Roboto", "Plus Jakarta Sans", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#0E172E';
-    
-    // Тимчасовий прев'ю рендер
-    ctx.fillText(formattedName, canvas.width / 2, canvas.height * (1 - 0.532));
-  }
-
   return { 
     pdfBlob, 
     pdfUrl,
-    previewImageUrl: pdfUrl // використовується для прямого перегляду
+    pdfBytes: modifiedPdfBytes,
   };
 }

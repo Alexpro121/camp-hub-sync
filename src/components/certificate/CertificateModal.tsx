@@ -15,7 +15,8 @@ import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { 
   validateCertificateName, 
-  generatePersonalizedPdf 
+  generatePersonalizedPdf,
+  renderPdfPreview,
 } from '@/lib/certificate';
 
 interface Props {
@@ -30,6 +31,7 @@ export const CertificateModal = ({ open, onClose, initialName, year = 2026 }: Pr
   const [editMode, setEditMode] = useState(false);
   const [tempName, setTempName] = useState(initialName);
   const [pdfData, setPdfData] = useState<{ pdfBlob: Blob; pdfUrl: string } | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,11 +41,13 @@ export const CertificateModal = ({ open, onClose, initialName, year = 2026 }: Pr
     if (!open) return;
     let cancelled = false;
     let url: string | undefined;
-    setLoading(true); setError(null); setPdfData(null);
+    setLoading(true); setError(null); setPdfData(null); setPreviewImage(null);
     generatePersonalizedPdf(name).then(result => {
       url = result.pdfUrl;
       if (cancelled) { URL.revokeObjectURL(url); return; }
-      setPdfData(result); setLoading(false);
+      setPdfData({ pdfBlob: result.pdfBlob, pdfUrl: result.pdfUrl }); setLoading(false);
+      // Зображення для телефонів, де PDF не відкривається у блоці, — дорисовується окремо й не блокує завантаження.
+      void renderPdfPreview(result.pdfBytes).then((img) => { if (!cancelled && img) setPreviewImage(img); });
     }).catch((err: unknown) => {
       if (!cancelled) { setError(err instanceof Error ? err.message : 'Не вдалося згенерувати PDF-сертифікат'); setLoading(false); }
     });
@@ -131,6 +135,9 @@ export const CertificateModal = ({ open, onClose, initialName, year = 2026 }: Pr
             )}
 
             {!loading && pdfData && (
+              previewImage ? (
+                <img src={previewImage} alt={`Сертифікат: ${name}`} className="w-full h-full object-contain rounded-2xl" />
+              ) : (
               <object
                 data={pdfData.pdfUrl}
                 type="application/pdf"
@@ -147,6 +154,7 @@ export const CertificateModal = ({ open, onClose, initialName, year = 2026 }: Pr
                   </div>
                 </div>
               </object>
+              )
             )}
 
             {error && (
