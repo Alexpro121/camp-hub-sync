@@ -4,7 +4,8 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Hash } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross } from 'lucide-react';
+import { useMedicalNotes } from '@/hooks/useMedicalNotes';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -61,6 +62,7 @@ const TeamsView = ({
     onEditChildChange?.(v);
   };
   const haptics = useHaptics();
+  const medical = useMedicalNotes();
   const [sortMode, setSortMode] = useState<SortMode>(() =>
     (localStorage.getItem('helpsuprov:team-sort') as SortMode) || 'default'
   );
@@ -309,6 +311,9 @@ const TeamsView = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm truncate">{c.full_name}</p>
+                          {medical[c.id]?.needs_attention && (
+                            <span className="inline-flex shrink-0" title={medical[c.id].note || 'Медична помітка лікаря'}><Cross className="w-4 h-4 text-destructive" aria-label="Медична помітка лікаря" /></span>
+                          )}
                           {c.has_logged_in && (
                             <CircleDot className="w-3 h-3 text-success shrink-0 animate-pulse-glow rounded-full" />
                           )}
@@ -317,7 +322,7 @@ const TeamsView = ({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
-                          {c.team_name ? `Категорія: ${c.team_name} · ` : ''}{c.phone || 'без телефону'}
+                          {medical[c.id]?.needs_attention ? `Лікар: ${medical[c.id].note || 'потрібна увага'} · ` : ''}{c.team_name ? `Категорія: ${c.team_name} · ` : ''}{c.phone || 'без телефону'}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-primary shrink-0">

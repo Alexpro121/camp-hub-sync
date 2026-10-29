@@ -16,6 +16,7 @@ import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
+const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
 
 interface Assignment {
   id: string;
@@ -144,6 +145,10 @@ const StaffPortal = () => {
 
   if (booting) return <FullScreenLoader label="Завантаження кабінету..." />;
 
+  if (cabinet?.kind === 'doctor') {
+    return <Suspense fallback={<FullScreenLoader label="Відкриваємо медичний список..." />}><DoctorDesk name={cabinet.full_name} theme={theme} toggleTheme={toggleTheme} onLogout={logout} /></Suspense>;
+  }
+
   if (inPanel) {
     return (
       <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}>
@@ -171,7 +176,7 @@ const StaffPortal = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-black tracking-tight">{adminMode ? 'Вхід адміністратора' : 'Вхід для супроводу'}</h1>
-                <p className="text-sm text-muted-foreground mt-1">{adminMode ? 'Введіть пароль адміністратора' : 'Особистий логін і пароль'}</p>
+                <p className="text-sm text-muted-foreground mt-1">{adminMode ? 'Введіть пароль адміністратора' : 'Супровід або лікар: особистий логін і пароль'}</p>
               </div>
               {ThemeBtn}
             </div>
