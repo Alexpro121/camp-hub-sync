@@ -35,7 +35,7 @@ const StatsTab = () => {
   const load = async () => {
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, notes_origin, raw_data, created_at, updated_at, deleted_at, gender').order('team_number'),
+      supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number'),
       supabase.from('transfers').select('child_id'),
     ]);
 
@@ -110,7 +110,7 @@ const StatsTab = () => {
   return (
     <div className="space-y-3">
       {editing && (
-        <ChildEditDialog key={editing.id} child={children.find(c => c.id === editing.id) ?? editing} open={!!editing} onClose={() => setEditing(null)} />
+        <ChildEditDialog child={editing} open={!!editing} onClose={() => setEditing(null)} />
       )}
 
       <div className="grid grid-cols-3 gap-2">
