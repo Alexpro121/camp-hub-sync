@@ -14,14 +14,16 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
 import { GENDER_LABEL, type Gender } from '@/lib/gender';
+import type { MedicalNote } from '@/lib/medical';
 
 interface Props {
   child: Child;
   open: boolean;
   onClose: () => void;
+  medical?: MedicalNote;
 }
 
-const ChildEditDialog = ({ child, open, onClose }: Props) => {
+const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
   const [phone, setPhone] = useState(child.phone || '');
   const [telegram, setTelegram] = useState(child.telegram_username || '');
   const [notes, setNotes] = useState(child.supervisor_notes || '');
@@ -177,6 +179,7 @@ const ChildEditDialog = ({ child, open, onClose }: Props) => {
 
           <TabsContent value="edit" className="min-w-0 mt-0">
             <div className="min-w-0 space-y-4 px-4 sm:px-5 py-4 pb-32 sm:pb-5">
+              {medical?.needs_attention && <section className="rounded-lg border border-destructive/40 bg-destructive/10 p-3" role="note"><h3 className="text-sm font-semibold text-destructive flex items-center gap-2"><Plus className="h-4 w-4" />Медична помітка лікаря</h3><p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{medical.note || 'Потребує уваги супроводу'}</p></section>}
               {/* A$ balance with +/- */}
               <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
                 <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">

@@ -95,6 +95,41 @@ export type Database = {
         }
         Relationships: []
       }
+      child_medical_notes: {
+        Row: {
+          child_id: string
+          needs_attention: boolean
+          note: string
+          updated_at: string
+          updated_by: string
+          version: number
+        }
+        Insert: {
+          child_id: string
+          needs_attention?: boolean
+          note?: string
+          updated_at?: string
+          updated_by: string
+          version?: number
+        }
+        Update: {
+          child_id?: string
+          needs_attention?: boolean
+          note?: string
+          updated_at?: string
+          updated_by?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_medical_notes_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       children: {
         Row: {
           created_at: string
@@ -1272,6 +1307,28 @@ export type Database = {
       review_transfer_request: {
         Args: { p_approve: boolean; p_request_id: string }
         Returns: Json
+      }
+      save_child_medical_note: {
+        Args: {
+          p_child_id: string
+          p_needs_attention: boolean
+          p_note: string
+          p_version: number
+        }
+        Returns: {
+          child_id: string
+          needs_attention: boolean
+          note: string
+          updated_at: string
+          updated_by: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "child_medical_notes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       search_child_for_transfer: {
         Args: { p_my_team: number; p_query: string; p_shift_id: string }

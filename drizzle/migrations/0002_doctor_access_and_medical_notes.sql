@@ -1,0 +1,20 @@
+ALTER TABLE public.staff_members DROP CONSTRAINT staff_members_kind_check;
+ALTER TABLE public.staff_members ADD CONSTRAINT staff_members_kind_check CHECK (kind IN ('supervisor','duckling','doctor'));
+CREATE OR REPLACE FUNCTION private.is_doctor(_user_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT EXISTS (SELECT 1 FROM public.staff_members WHERE user_id = _user_id AND is_active AND kind = 'doctor'); $$;
+CREATE OR REPLACE FUNCTION private.is_staff(_user_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$ SELECT EXISTS (SELECT 1 FROM public.user_roles r WHERE r.user_id = _user_id AND (r.role = 'admin' OR (r.role = 'supervisor' AND NOT EXISTS (SELECT 1 FROM public.staff_members m WHERE m.user_id = _user_id AND (m.kind = 'doctor' OR NOT m.is_active))))); $$;
+CREATE TABLE public.child_medical_notes (child_id uuid PRIMARY KEY REFERENCES public.children(id) ON DELETE CASCADE, note text NOT NULL DEFAULT '', needs_attention boolean NOT NULL DEFAULT false, updated_by uuid NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), version integer NOT NULL DEFAULT 1, CONSTRAINT medical_note_length CHECK (length(note) <= 4000));
+GRANT SELECT ON public.child_medical_notes TO authenticated;
+GRANT ALL ON public.child_medical_notes TO service_role;
+ALTER TABLE public.child_medical_notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY medical_notes_staff_read ON public.child_medical_notes FOR SELECT TO authenticated USING (private.has_role(auth.uid(), 'admin') OR private.is_doctor(auth.uid()) OR (private.is_staff(auth.uid()) AND EXISTS (SELECT 1 FROM public.children c JOIN public.staff_assignments a ON a.shift_id = c.shift_id AND a.team_number = c.team_number WHERE c.id = child_id AND a.staff_user_id = auth.uid())));
+CREATE OR REPLACE FUNCTION public.save_child_medical_note(p_child_id uuid, p_note text, p_needs_attention boolean, p_version integer) RETURNS public.child_medical_notes LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, private AS $$ DECLARE v public.child_medical_notes; BEGIN
+IF NOT private.is_doctor(auth.uid()) THEN RAISE EXCEPTION 'forbidden'; END IF;
+IF p_note IS NULL OR length(p_note) > 4000 OR p_needs_attention IS NULL OR p_version IS NULL OR p_version < 0 THEN RAISE EXCEPTION 'invalid_input'; END IF;
+PERFORM 1 FROM public.children WHERE id = p_child_id AND deleted_at IS NULL FOR UPDATE;
+IF NOT FOUND THEN RAISE EXCEPTION 'child_not_found'; END IF;
+SELECT * INTO v FROM public.child_medical_notes WHERE child_id = p_child_id;
+IF COALESCE(v.version, 0) <> p_version THEN RAISE EXCEPTION 'medical_note_conflict'; END IF;
+INSERT INTO public.child_medical_notes(child_id,note,needs_attention,updated_by) VALUES(p_child_id,btrim(p_note),p_needs_attention,auth.uid()) ON CONFLICT(child_id) DO UPDATE SET note=EXCLUDED.note,needs_attention=EXCLUDED.needs_attention,updated_by=EXCLUDED.updated_by,updated_at=now(),version=child_medical_notes.version+1 RETURNING * INTO v;
+RETURN v; END; $$;
+REVOKE ALL ON FUNCTION public.save_child_medical_note(uuid,text,boolean,integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.save_child_medical_note(uuid,text,boolean,integer) TO authenticated;
