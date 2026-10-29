@@ -1,15 +1,13 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2 } from "lucide-react";
+import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2, Eye, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
-import { cleanAndParseScheduleJson } from "@/lib/json-sanitizer";
-import { broadcastScheduleUpdated } from "@/lib/schedule";
-import { normalizeTime, normalizeCategory } from "@/lib/scheduleCategories";
+import { previewScheduleImport } from "@/lib/scheduleImport";
+import { saveScheduleImport } from "@/lib/saveScheduleImport";
 import { useActiveShift } from "@/context/ActiveShiftContext";
 
 const AI_STUDIO_URL = "https://aistudio.google.com/prompts/new_chat";
@@ -21,44 +19,15 @@ interface Props {
   onImported: (firstDate?: string) => void;
 }
 
-interface ParsedItem {
-  time_start?: string | null;
-  time_end?: string | null;
-  title?: string;
-  description?: string | null;
-  location?: string | null;
-  category?: string | null;
-  target_teams?: number[] | null;
-  has_sub_slots?: boolean | null;
-  sub_slots?: { time: string; teams: number[] }[] | null;
-}
-
-interface ParsedDay {
-  date: string;
-  items: ParsedItem[];
-}
-
-/** Accepts an array of days, a single day object, or a bare items array. */
-const toDays = (parsed: unknown, fallbackDate: string): ParsedDay[] => {
-  const norm = (d: any): ParsedDay | null => {
-    const items = Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : null;
-    if (!items) return null;
-    const date = typeof d?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.date) ? d.date : fallbackDate;
-    return { date, items: items as ParsedItem[] };
-  };
-  if (Array.isArray(parsed)) {
-    const days = parsed.map(norm).filter(Boolean) as ParsedDay[];
-    if (days.length) return days;
-  }
-  const single = norm(parsed);
-  return single ? [single] : [];
-};
-
 const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Props) => {
   const { shiftId } = useActiveShift();
   const [rawText, setRawText] = useState("");
   const [json, setJson] = useState("");
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
+  const [checkedJson, setCheckedJson] = useState<string | null>(null);
+  const preview = useMemo(() => checkedJson === json ? previewScheduleImport(json, date) : null, [checkedJson, json, date]);
+  const changeOpen = (next: boolean) => { if (!saving.current) onOpenChange(next); };
 
   const openAiStudio = () => {
     try {
@@ -94,129 +63,54 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
       ta.value = prompt;
       document.body.appendChild(ta);
       ta.select();
-      document.execCommand("copy");
+      const copied = document.execCommand("copy");
       ta.remove();
+      if (!copied) { toast.error("Не вдалося скопіювати запит"); return; }
     }
     toast.success("Промт скопійовано! Вставте його в AI Studio");
   };
 
-  /** Schedule row of one date inside the active shift (created on demand as a DRAFT). */
-  const ensureSchedule = async (dayDate: string): Promise<string> => {
-    let q = supabase.from("schedules").select("*").eq("date", dayDate).is("deleted_at", null);
-    if (shiftId) q = q.eq("shift_id", shiftId);
-    const { data: existing } = await q.order("created_at", { ascending: true });
-    const row = (existing || [])[0];
-    if (row) return row.id;
-    const { data, error } = await supabase
-      .from("schedules")
-      .insert({ shift_id: shiftId, date: dayDate, raw_text: rawText.trim() || null, is_published: false })
-      .select()
-      .single();
-    if (error || !data) throw error;
-    return data.id;
-  };
-
   const publish = async () => {
-    let days: ParsedDay[];
-    try {
-      days = toDays(cleanAndParseScheduleJson(json), date);
-      if (!days.length) throw new Error('JSON не містить днів з масивом "items"');
-    } catch (err: any) {
-      toast.error("Помилка синтаксису JSON", {
-        description: err?.message || "Перевірте вставлений текст",
-      });
-      return;
-    }
-    if (!days.some((d) => d.items.length)) {
-      toast.error("У JSON немає жодної події (items)");
-      return;
-    }
-
+    if (saving.current || !preview || preview.errors.length || !preview.total) return;
+    saving.current = true;
     setBusy(true);
     try {
-      let total = 0;
-      let skipped = 0;
-      for (const day of days) {
-        const scheduleId = await ensureSchedule(day.date);
-
-        // Existing events of this date → skip re-imported duplicates (same time + title).
-        const { data: dayScheduleRows } = await supabase
-          .from("schedules")
-          .select("id")
-          .eq("date", day.date)
-          .is("deleted_at", null);
-        const dayIds = (dayScheduleRows || []).map((s) => s.id);
-        const { data: existingItems } = dayIds.length
-          ? await supabase.from("schedule_items").select("title,time_start,location,target_teams").in("schedule_id", dayIds)
-          : { data: [] as { title: string; time_start: string | null; location: string | null; target_teams: any }[] };
-        const seen = new Set(
-          (existingItems || []).map((i: any) => `${i.time_start || ""}|${(i.title || "").trim().toLowerCase()}|${(i.location || "").trim().toLowerCase()}|${JSON.stringify([...(i.target_teams || [])].sort())}`),
-        );
-        const baseIndex = (existingItems || []).length;
-
-        const rows: any[] = [];
-        day.items
-          .filter((i) => (i.title || "").trim())
-          .forEach((i) => {
-            const title = String(i.title).trim();
-            const timeStart = normalizeTime(i.time_start || "") || null;
-            const key = `${timeStart || ""}|${title.toLowerCase()}|${String(i.location || "").trim().toLowerCase()}|${JSON.stringify([...((i as any).target_teams || [])].sort())}`;
-            if (seen.has(key)) { skipped += 1; return; }
-            seen.add(key);
-            rows.push({
-              schedule_id: scheduleId,
-              title,
-              description: i.description ? String(i.description).trim() : null,
-              location: i.location ? String(i.location).trim() : null,
-              time_start: timeStart,
-              time_end: normalizeTime(i.time_end || "") || null,
-              category: normalizeCategory(i.category),
-              target_teams: (Array.isArray(i.target_teams) ? i.target_teams : []).map(Number).filter((n) => Number.isInteger(n) && n > 0) as unknown as any,
-              order_index: baseIndex + rows.length,
-              has_sub_slots: Boolean(i.has_sub_slots && i.sub_slots?.length),
-              sub_slots: (Array.isArray(i.sub_slots) ? i.sub_slots : []).map((s: any) => ({ ...s, teams: (Array.isArray(s?.teams) ? s.teams : []).map(Number).filter((n: number) => Number.isInteger(n) && n > 0) })) as unknown as any,
-            });
-          });
-        if (!rows.length) continue;
-        const { error } = await supabase.from("schedule_items").insert(rows);
-        if (error) throw error;
-        total += rows.length;
-      }
-
-      const firstDate = [...days.map((d) => d.date)].sort()[0];
-      await broadcastScheduleUpdated({ date: firstDate, action: "SCHEDULE_MUTATED", source: "ai-studio", count: total });
-      if (total === 0) {
-        toast.info("Нових подій немає — усі вже є в розкладі");
-      } else {
-        toast.success(`Збережено як чернетку: ${total} подій · ${days.length} дн.`, {
-          description: skipped
-            ? `Пропущено дублікатів: ${skipped}. Перевір розклад і натисни «Опублікувати розклад».`
-            : "Перевір розклад і натисни «Опублікувати розклад» у редакторі дня.",
+      const result = await saveScheduleImport(preview.days, shiftId, rawText);
+      const firstDate = preview.days[0]?.date;
+      if (result.total) {
+        // Drafts are not announced as published events to participants.
+        toast.success(`Збережено як чернетку: ${result.total} подій`, {
+          description: result.skipped ? `Уже наявних подій: ${result.skipped}` : 'Перевірте редактор дня перед публікацією.',
         });
-      }
+      } else toast.info("Нових подій немає — усі вже є в розкладі");
       setJson("");
+      setCheckedJson(null);
       onOpenChange(false);
       onImported(firstDate);
-    } catch (e: any) {
-      toast.error(e?.message || "Помилка збереження розкладу");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Помилка збереження розкладу");
+      onImported();
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent aria-describedby={undefined} className="max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Імпорт розкладу через AI Studio</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <Label htmlFor="schedule-raw-text" className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Крок 1 — сирий текст розкладу
             </Label>
             <Textarea
+              id="schedule-raw-text"
+              disabled={busy}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               placeholder="Встав сюди текст розкладу на один або кілька днів (наприклад 11.08 – 15.08)…"
@@ -242,25 +136,54 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <Label htmlFor="schedule-json" className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Крок 3 — вставити готовий JSON з AI Studio
             </Label>
             <Textarea
+              id="schedule-json"
+              disabled={busy}
               value={json}
-              onChange={(e) => setJson(e.target.value)}
+              onChange={(e) => { setJson(e.target.value); setCheckedJson(null); }}
               placeholder='[{"date":"…","items":[…]}, …]'
               className="min-h-[140px] font-mono text-[11px]"
             />
           </div>
 
-          <Button onClick={publish} disabled={busy || !json.trim()} className="w-full h-12 text-xs font-bold uppercase">
-            {busy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Завантажити як чернетку
-              </>
-            )}
+          <Button variant="outline" onClick={() => setCheckedJson(json)} disabled={busy || !json.trim()} className="w-full h-11">
+            <Eye className="size-4 mr-2" /> Перевірити розклад
+          </Button>
+
+          {preview && (
+            <section className="space-y-3 border-y border-border py-4" aria-label="Перевірка розкладу" aria-live="polite">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="font-semibold">{preview.total} подій · {preview.days.length} дн.</h3>
+                {preview.duplicates > 0 && <span className="text-xs text-muted-foreground">Повторів прибрано: {preview.duplicates}</span>}
+              </div>
+              {preview.errors.length > 0 && <div role="alert" className="space-y-1 text-sm text-destructive">
+                <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4" /> Виправте помилки перед збереженням</p>
+                <ul className="list-disc space-y-1 pl-5 break-words">{preview.errors.slice(0, 20).map((error, index) => <li key={index}>{error}</li>)}</ul>
+                {preview.errors.length > 20 && <p>Ще помилок: {preview.errors.length - 20}</p>}
+              </div>}
+              {preview.warnings.length > 0 && <details className="text-sm text-muted-foreground">
+                <summary className="cursor-pointer">Зверніть увагу: {preview.warnings.length}</summary>
+                <ul className="list-disc space-y-1 pl-5 pt-2">{preview.warnings.slice(0, 30).map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+              </details>}
+              <div className="max-h-64 overflow-y-auto space-y-4">
+                {preview.days.map((day) => <div key={day.date}>
+                  <h4 className="sticky top-0 bg-background py-2 text-sm font-semibold">{day.date} <span className="text-muted-foreground">· {day.items.length}</span></h4>
+                  <ul className="divide-y divide-border">{day.items.slice(0, 100).map((item, index) => <li key={index} className="py-2 text-sm">
+                    <div className="flex gap-3"><span className="shrink-0 font-mono text-xs tabular-nums pt-0.5">{item.time_start}{item.time_end ? `–${item.time_end}` : ''}</span><span className="min-w-0 break-words font-medium">{item.title}</span></div>
+                    <p className="mt-1 text-xs text-muted-foreground break-words">{item.target_teams.length ? `Команди ${item.target_teams.join(', ')}` : 'Усі команди'}{item.location ? ` · ${item.location}` : ''}{item.sub_slots.length ? ` · Заїздів: ${item.sub_slots.length}` : ''}</p>
+                    {item.description && <p className="mt-1 text-xs text-muted-foreground break-words">{item.description}</p>}
+                  </li>)}</ul>
+                  {day.items.length > 100 && <p className="text-xs text-muted-foreground">Ще {day.items.length - 100} подій перевірено</p>}
+                </div>)}
+              </div>
+            </section>
+          )}
+
+          <Button onClick={publish} disabled={busy || !preview || preview.errors.length > 0 || !preview.total} className="w-full h-12 text-xs font-bold uppercase">
+            {busy ? <><Loader2 className="size-4 mr-2 animate-spin" /> Зберігаємо чернетку…</> : <><CheckCircle2 className="size-4 mr-2" /> Зберегти перевірену чернетку</>}
           </Button>
         </div>
       </DialogContent>
