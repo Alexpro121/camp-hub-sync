@@ -10,6 +10,8 @@ const MODEL = 'llama-3.3-70b-versatile';
  */
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for the Ukrainian educational project "Залізна Зміна" (Iron Shift).
 Your job is to convert unstructured Ukrainian raw text schedule into a valid, strictly structured JSON object.
+Preserve only times and events supported by the source. Do not invent durations: unknown time_end is null.
+Descriptions are visible to participants: omit internal staff instructions and surprise spoilers.
 
 ======================================================================
 STRICT TERMINOLOGY & PROJECT RULES:
@@ -80,7 +82,7 @@ PARSING RULES & SPECIAL PATTERNS:
       23:30 - відбій"
    -> Emit logical distinct events with realistic time ranges:
       - "Кліпи": 20:30-21:30, description: "Діти мають бути в залі о 20:20", category: "entertainment"
-      - "Вогнище та Дискотека": 21:30-22:45, description: "Тепло вдягнутися. Паркінг вище готелю. Сюрприз: шаурма (дітям не говоримо!)", category: "entertainment"
+      - "Вогнище": time_start only when explicitly specified, time_end: null, description: "Тепло вдягнутися. Паркінг вище готелю", category: "entertainment"
       - "Коротка свічка": 22:45-23:30, category: "gathering"
       - "Відбій": 23:30, time_end: null, category: "general"
 

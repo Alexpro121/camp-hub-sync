@@ -120,7 +120,7 @@ export const broadcastScheduleUpdated = async (payload: Record<string, unknown> 
 /** Key used to detect duplicates across merged schedules of the same day. */
 export const itemKey = scheduleImportKey;
 
-/** Drop duplicates (same start time + title); the last occurrence wins. */
+/** Drop exact time/title/location/team duplicates; the last occurrence wins. */
 export const dedupeItems = <T extends { time_start?: string | null; title?: string | null }>(items: T[]): T[] => {
   const map = new Map<string, T>();
   items.forEach((i) => map.set(itemKey(i), i));
@@ -129,7 +129,7 @@ export const dedupeItems = <T extends { time_start?: string | null; title?: stri
 
 /**
  * Multi-schedule overlay: camp-wide events (no shift) + the shift's own program.
- * Duplicates (same start time + title) collapse, shift-specific rows win.
+ * Exact duplicates collapse, shift-specific rows win without losing parallel team events.
  */
 export const mergeScheduleLayers = (
   campWide: ScheduleItem[],
