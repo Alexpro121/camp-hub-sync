@@ -27,9 +27,9 @@ const inviteUrl = (t: string) => `${window.location.origin}/staff/join/${t}`;
 const inviteAlive = (i: Invite) => !i.revoked && (!i.expires_at || new Date(i.expires_at) > new Date()) && (i.max_uses == null || i.uses < i.max_uses);
 const fmtDT = (d: string) => new Date(d).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-const KindToggle = ({ value, onChange }: { value: StaffKind; onChange: (k: StaffKind) => void }) => (
-  <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-muted">
-    {(['supervisor', 'duckling', 'doctor'] as StaffKind[]).map((k) => (
+const KindToggle = ({ value, onChange, allowDoctor = true }: { value: StaffKind; onChange: (k: StaffKind) => void; allowDoctor?: boolean }) => (
+  <div className={cn('grid gap-1 p-1 rounded-xl bg-muted', allowDoctor ? 'grid-cols-3' : 'grid-cols-2')}>
+    {(allowDoctor ? ['supervisor', 'duckling', 'doctor'] as StaffKind[] : ['supervisor', 'duckling'] as StaffKind[]).map((k) => (
       <Button key={k} type="button" variant="ghost" onClick={() => onChange(k)}
         className={cn('h-9 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]',
           value === k ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
@@ -269,7 +269,7 @@ const InviteSheet = ({ open, onClose, invites, onChanged }: { open: boolean; onC
         <SheetHeader><SheetTitle>Посилання на реєстрацію</SheetTitle></SheetHeader>
         <div className="mt-4 space-y-5 max-w-md mx-auto">
           <div className="space-y-3 rounded-2xl border border-border p-3">
-            <KindToggle value={kind} onChange={setKind} />
+            <KindToggle value={kind} onChange={setKind} allowDoctor={false} />
             <Field label="Назва (для себе, необовʼязково)"><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Каченята, серпень" /></Field>
             <div className="grid grid-cols-1 gap-2 min-[390px]:grid-cols-2">
               <LimitBox on={useCount} onToggle={() => setUseCount((v) => !v)} title="Кількість">
