@@ -15,6 +15,10 @@ function normLogin(s: unknown): string | null {
   return /^[a-z0-9._-]{3,40}$/.test(v) ? v : null;
 }
 const emailFor = (login: string) => `staff.${login}@ironhelp.local`;
+async function sha(s: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 /** ПІБ для пошуку: нижній регістр, єдиний апостроф, одинарні пробіли */
 function normName(s: unknown): string | null {
   const v = String(s ?? '').normalize('NFC').toLowerCase().replace(/[’ʼ`´‘"]/g, "'").replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
@@ -139,9 +143,24 @@ Deno.serve(async (req) => {
 
       const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
       let signIn: any = null; let member: any = null;
-      for (const c of candidates.filter((c) => c.is_active).slice(0, 5)) {
+      const active = candidates.filter((c) => c.is_active).slice(0, 5);
+      for (const c of active) {
         const { data } = await pub.auth.signInWithPassword({ email: emailFor(c.login), password });
         if (data?.session) { signIn = data; member = c; break; }
+      }
+      // Резерв: тимчасовий пароль від адміна працює ще 30 хв після встановлення нового.
+      if (!signIn?.session && active.length) {
+        const { data: resets } = await svc.from('staff_password_resets').select('user_id, salt, temp_hash, changed_at').in('user_id', active.map((c) => c.user_id));
+        for (const r of resets ?? []) {
+          if (r.changed_at && Date.now() - new Date(r.changed_at).getTime() > 30 * 60_000) continue;
+          if ((await sha(r.salt + password)) !== r.temp_hash) continue;
+          const c = active.find((x) => x.user_id === r.user_id);
+          const { data: link } = await svc.auth.admin.generateLink({ type: 'magiclink', email: emailFor(c.login) });
+          const hashed = link?.properties?.hashed_token;
+          if (!hashed) continue;
+          const { data } = await pub.auth.verifyOtp({ token_hash: hashed, type: 'magiclink' });
+          if (data?.session) { signIn = data; member = c; break; }
+        }
       }
       if (!signIn?.session) {
         recordFailure(rl, { slowAfter: 3 });
@@ -271,9 +290,11 @@ Deno.serve(async (req) => {
       // A shared browser can hold a valid child/admin session. Restoring /staff
       // is a read-only probe, not an attempt to grant staff access.
       if (!member) return body.allow_missing === true ? json({ cabinet: null }) : json({ error: 'not_staff' }, 403);
+      const { data: reset } = await svc.from('staff_password_resets').select('changed_at').eq('user_id', user.id).maybeSingle();
+      const must_change_password = Boolean(reset && !reset.changed_at);
       if (actingMember?.kind === 'doctor') {
         const [withAvatar] = await resolveAvatars(svc, [{ ...member }], () => user.id);
-        return json({ ...withAvatar, assignments: [] });
+        return json({ ...withAvatar, must_change_password, assignments: [] });
       }
       const { data: asg } = await svc
         .from('staff_assignments')
@@ -310,6 +331,18 @@ Deno.serve(async (req) => {
       if (!a) return json({ error: 'forbidden' }, 403);
       await ensureRole(svc, user.id, 'supervisor', { team_number: a.team_number });
       return json({ ok: true, team: a.team_number, shift_id: a.shift_id });
+    }
+
+    // ---------- ЗМІНА ТИМЧАСОВОГО ПАРОЛЯ ----------
+    if (action === 'change_password') {
+      const password = String(body?.password ?? '');
+      if (password.length < 6 || password.length > 72) return json({ error: 'weak_password' });
+      const { data: r } = await svc.from('staff_password_resets').select('salt, temp_hash').eq('user_id', user.id).maybeSingle();
+      if (r && (await sha(r.salt + password)) === r.temp_hash) return json({ error: 'same_password' });
+      const { error } = await svc.auth.admin.updateUserById(user.id, { password });
+      if (error) return json({ error: /weak|pwned|guess/i.test(error.message) ? 'weak_password' : 'update_failed' });
+      if (r) await svc.from('staff_password_resets').update({ changed_at: new Date().toISOString() }).eq('user_id', user.id);
+      return json({ ok: true });
     }
 
     // ---------- СВІЙ ПРОФІЛЬ ----------
@@ -363,9 +396,14 @@ Deno.serve(async (req) => {
 
     if (action === 'set_password') {
       const password = String(body?.password ?? '');
+      const uid = String(body?.user_id ?? '');
       if (password.length < 6) return json({ error: 'invalid_input' }, 400);
-      const { error } = await svc.auth.admin.updateUserById(String(body?.user_id), { password });
-      return error ? json({ error: /weak|pwned|guess/i.test(error.message) ? 'weak_password' : 'update_failed' }) : json({ ok: true });
+      const { error } = await svc.auth.admin.updateUserById(uid, { password });
+      if (error) return json({ error: /weak|pwned|guess/i.test(error.message) ? 'weak_password' : 'update_failed' });
+      // Тимчасовий пароль: діє, доки людина не встановить свій, і ще 30 хв після цього.
+      const salt = crypto.randomUUID();
+      await svc.from('staff_password_resets').upsert({ user_id: uid, salt, temp_hash: await sha(salt + password), created_at: new Date().toISOString(), changed_at: null });
+      return json({ ok: true });
     }
 
     if (action === 'set_active') {
