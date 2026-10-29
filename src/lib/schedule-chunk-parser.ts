@@ -1,12 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
-import { ScheduleAiResponseSchema } from '@/lib/schemas/apiSchemas';
+import { ScheduleAiResponseSchema, type ScheduleAiResponse } from '@/lib/schemas/apiSchemas';
 
 export interface ChunkParseResult {
   success: boolean;
   source: 'ai' | 'groq_two_phase' | 'fallback' | 'local_fallback';
-  items: any[];
+  items: ScheduleAiResponse['items'];
   reason?: string;
-  error?: any;
+  error?: unknown;
 }
 
 /** Ensures a valid access token before hitting the function (expired sessions caused 401s). */
@@ -38,43 +38,16 @@ async function callScheduleEdgeFunction(rawText: string, signal?: AbortSignal): 
       };
     }
     return { success: false, source: 'fallback', items: [], reason: res.error ? 'invoke_error' : 'empty_result', error: res.error };
-  } catch (e: any) {
-    return { success: false, source: 'fallback', items: [], reason: 'client_exception', error: { message: e?.message } };
+  } catch (e: unknown) {
+    return { success: false, source: 'fallback', items: [], reason: 'client_exception', error: { message: e instanceof Error ? e.message : String(e) } };
   }
 }
 
-function sortAndDeduplicateItems(items: any[]) {
-  const map = new Map<string, any>();
-  for (const item of items) {
-    const key = `${item?.time_start ?? ''}_${(item?.title ?? '').trim().toLowerCase()}`;
-    if (!map.has(key)) map.set(key, item);
-  }
-  return Array.from(map.values()).sort((a, b) => String(a?.time_start ?? '').localeCompare(String(b?.time_start ?? '')));
-}
-
-/** Splits long schedules at a logical midday boundary and parses both halves in parallel. */
+/** Compatibility entrypoint: preserve the entire date/team/subslot context in one request.
+ * Arbitrary midpoint splitting silently lost half-days and team headers. */
 export async function parseScheduleSmartTwoPhase(rawText: string, signal?: AbortSignal): Promise<ChunkParseResult> {
   if (!rawText?.trim()) return { success: false, source: 'fallback', items: [], reason: 'empty_input' };
-
-  if (rawText.length < 1000) return await callScheduleEdgeFunction(rawText, signal);
-
-  const lines = rawText.split(/\r?\n/);
-  let midIndex = lines.findIndex((line) => /обід|15[:.]00|14[:.]30/i.test(line));
-  if (midIndex <= 0 || midIndex >= lines.length - 2) midIndex = Math.floor(lines.length / 2);
-
-  const textPhase1 = lines.slice(0, midIndex).join('\n');
-  const textPhase2 = lines.slice(midIndex).join('\n');
-
-  const [res1, res2] = await Promise.all([
-    callScheduleEdgeFunction(textPhase1, signal),
-    callScheduleEdgeFunction(textPhase2, signal),
-  ]);
-
   if (signal?.aborted) return { success: false, source: 'fallback', items: [], reason: 'aborted' };
-  const combined = [...(res1.items ?? []), ...(res2.items ?? [])];
-  if (combined.length === 0) {
-    return { success: false, source: 'fallback', items: [], reason: res1.reason ?? res2.reason ?? 'empty_result', error: res1.error ?? res2.error };
-  }
-
-  return { success: true, source: 'groq_two_phase', items: sortAndDeduplicateItems(combined) };
+  if (rawText.length > 25000) return { success: false, source: 'fallback', items: [], reason: 'input_too_large' };
+  return callScheduleEdgeFunction(rawText, signal);
 }

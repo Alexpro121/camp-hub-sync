@@ -37,7 +37,7 @@ export const catMeta = (c?: string | null): CategoryMeta => CATEGORY_META[normal
  * "9:5", "9" — and returns the canonical "HH:MM", or null when unparsable.
  */
 export const normalizeTime = (raw?: string | null): string | null => {
-  const t = (raw ?? '').trim();
+  const t = (raw ?? '').trim().replace(/^(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?$/, '$1');
   if (!t) return null;
   const m = t.match(/^(\d{1,2})\s*[:.,\-–—\s]?\s*(\d{1,2})?$/) ?? t.match(/^(\d{2})(\d{2})$/);
   if (!m) return null;
