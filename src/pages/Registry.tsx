@@ -74,11 +74,11 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
   kid: Kid; query: string; shiftName?: string; i: number; onToggle: (k: Kid) => void; onOpen: (k: Kid) => void;
 }) {
   return (
-    <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-both">
-      <div className={`flex items-center gap-3 rounded-2xl border p-3 transition-colors ${kid.is_present ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
+    <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both motion-reduce:animate-none">
+      <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${kid.is_present ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
         <button onClick={() => onToggle(kid)} aria-label={kid.is_present ? 'Зняти присутність' : 'Позначити присутнім'}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-all duration-200 active:scale-90 ${kid.is_present ? 'border-success bg-success text-success-foreground' : 'border-muted-foreground/40 text-transparent'}`}>
-          <Check className={`h-6 w-6 transition-transform ${kid.is_present ? 'scale-100' : 'scale-50'}`} />
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90 [-webkit-tap-highlight-color:transparent] ${kid.is_present ? 'border-success bg-success text-success-foreground shadow-[0_0_0_4px_hsl(var(--success)/0.15)]' : 'border-muted-foreground/40 text-transparent'}`}>
+          <Check className={`h-6 w-6 transition-transform duration-300 ease-[cubic-bezier(.34,1.56,.64,1)] ${kid.is_present ? 'scale-100 rotate-0' : 'scale-50 -rotate-12'}`} />
         </button>
         <button onClick={() => onOpen(kid)} className="min-w-0 flex-1 text-left">
           <div className="truncate font-semibold text-foreground"><Highlight text={kid.full_name} query={query} /></div>
@@ -104,11 +104,12 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  useEffect(() => { const o = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = o; }; }, []);
   const save = async () => { setSaving(true); try { await onSaveNote(kid, note); } finally { setSaving(false); } };
   const close = () => (dirty ? save() : onClose());
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/70 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={close}>
-      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-8 duration-300 sm:rounded-3xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 sm:backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={close}>
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300 ease-out pb-[env(safe-area-inset-bottom)] sm:rounded-3xl">
         <div className="flex items-start gap-3 border-b border-border p-4">
           <div className="min-w-0 flex-1">
             <h2 className="break-words text-lg font-bold text-foreground">{kid.full_name}</h2>
@@ -116,7 +117,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
           </div>
           <button onClick={close} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
         </div>
-        <div className="space-y-4 overflow-y-auto p-4">
+        <div className="space-y-4 overflow-y-auto overscroll-contain p-4">
           <button onClick={() => onToggle(kid)}
             className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.is_present ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
             <Check className="h-5 w-5" />{kid.is_present ? 'Присутній(я) — зареєстровано' : 'Позначити присутнім'}
@@ -280,15 +281,19 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
     setOpenId(null);
   }, [send]);
 
+  const searchingRef = useRef(searching); searchingRef.current = searching;
+  const onRowToggle = useCallback((x: Kid) => toggle(x, searchingRef.current), [toggle]);
+  const onRowOpen = useCallback((x: Kid) => setOpenId(x.id), []);
+  const [coarse] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches);
   const openKid = kids?.find((k) => k.id === openId) ?? null;
   const multiShift = Object.keys(shifts).length > 1;
   const visible = results.slice(0, limit);
-  const chip = (active: boolean) => `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`;
+  const chip = (active: boolean) => `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-[color,background-color,border-color,transform] duration-200 active:scale-95 snap-start ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`;
 
   return (
     <div className="min-h-[100dvh] bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="mx-auto max-w-2xl px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="mx-auto max-w-2xl px-4 pb-2 sm:pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
           <div className="mb-2 flex items-center gap-2">
             <h1 className="flex-1 text-lg font-bold text-foreground">Реєстрація</h1>
             {queued > 0 && <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning" title="Чекають на інтернет">⏳ {queued}</span>}
@@ -298,18 +303,18 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-success transition-[width] duration-700 ease-out" style={{ width: total ? `${(present / total) * 100}%` : '0%' }} />
           </div>
-          <div className="relative mt-3">
+          <div className="relative mt-2 sm:mt-3">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-            <input ref={inputRef} autoFocus value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
+            <input ref={inputRef} autoFocus={!coarse} inputMode="search" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && results[0]) { e.shiftKey ? setOpenId(results[0].id) : (!results[0].is_present ? toggle(results[0], true) : setOpenId(results[0].id)); }
                 if (e.key === 'Escape') setQ('');
               }}
               placeholder="Прізвище, ім'я або телефон…" aria-label="Пошук дитини" autoComplete="off" autoCorrect="off" spellCheck={false}
-              className="h-14 w-full rounded-2xl border border-input bg-card pl-11 pr-11 text-base text-foreground outline-none focus:ring-2 focus:ring-ring" />
+              className="h-12 sm:h-14 w-full rounded-2xl border border-input bg-card pl-11 pr-11 text-base text-foreground outline-none focus:ring-2 focus:ring-ring" />
             {q && <button onClick={() => { setQ(''); inputRef.current?.focus(); }} aria-label="Очистити" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-muted-foreground"><X className="h-5 w-5" /></button>}
           </div>
-          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto overscroll-x-contain px-4 pb-1 snap-x [scrollbar-width:none]">
             {([['absent', `Не прийшли · ${total - present}`], ['present', `Прийшли · ${present}`], ['all', 'Усі']] as [Filter, string][]).map(([f, l]) => (
               <button key={f} onClick={() => setFilter(f)} className={chip(filter === f)}>{l}</button>
             ))}
@@ -340,8 +345,8 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
         ) : (
           <>
             {searching && <p className="mb-2 text-xs text-muted-foreground">Найкращі збіги серед усіх дітей · Enter — відмітити першого</p>}
-            <ul key={`${dq}|${filter}|${team}|${shiftId}`} className={`space-y-2 transition-opacity ${q !== dq ? 'opacity-60' : ''}`}>
-              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift ? shifts[k.shift_id] : undefined} onToggle={(x) => toggle(x, searching)} onOpen={(x) => setOpenId(x.id)} />)}
+            <ul key={`${filter}|${team}|${shiftId}|${searching ? 's' : 'b'}`} className={`space-y-2 transition-opacity duration-150 ${q !== dq ? 'opacity-60' : ''}`}>
+              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift ? shifts[k.shift_id] : undefined} onToggle={onRowToggle} onOpen={onRowOpen} />)}
             </ul>
             {results.length > limit && (
               <button onClick={() => setLimit((l) => l + 100)} className="mt-3 h-11 w-full rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">
