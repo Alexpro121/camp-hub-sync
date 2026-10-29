@@ -1,14 +1,14 @@
 # Admin panel reorganization
-- [ ] Fully disable Talent evening UI and backend access without deleting historical data.
-- [ ] Run controlled stress tests and authenticated supervisor checks using the selected account; record limits and results.
+- [x] Fully disable Talent evening UI and backend access without deleting historical data; authenticated direct read rejected.
+- [x] Run controlled stress tests and authenticated supervisor checks as sizikov.oleksii: 144 reads at 4/12/24 concurrency, zero failures, p95 0.85/1.49/2.09 seconds; tabs and reconnect checked. No child data changed.
 - [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
 - [x] Add admin-assigned doctor login, all-child search and profiles with correct shift/team supervisors.
 - [x] Add doctor-only medical notes and removable red plus marks visible to supervisors; verify schema privileges and focused tests.
-- [ ] Verify doctor save/remove and supervisor display end-to-end (blocked: no requesting-user app account/session available; sign in as doctor in preview).
+- [ ] Verify doctor save/remove and supervisor display end-to-end (blocked: no doctor account exists; selected test account is supervisor).
 - [x] Open on selected shift overview with meaningful, fast summary and shortcuts.
 - [x] Make section navigation one-tap on phones, keep all existing sections reachable.
 - [x] Streamline shift creation and staff screens for narrow phones without changing permissions or data behavior.
-- [ ] Verify signed-in admin interactions on mobile and desktop (blocked: preview is signed out and no requesting-user app account is available).
+- [ ] Verify signed-in admin interactions on mobile and desktop (blocked: selected test account is supervisor, no admin impersonation authorized).
 - [x] Stabilize the admin viewport, bottom navigation, sheets, dialogs, and narrow forms on phones.
 - [x] Smooth admin transitions, add overview utilities, debounce live statistics, and hide alumni broadcasts.
 - [x] Add shift-scoped staff invitation links with existing-account login, registration, team choice, and 5-second confirmation.
