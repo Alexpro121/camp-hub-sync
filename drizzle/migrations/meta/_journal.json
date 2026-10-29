@@ -15,6 +15,13 @@
       "when": 1791029047473,
       "tag": "0001_login_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793268549119,
+      "tag": "0002_doctor_access_and_medical_notes",
+      "breakpoints": true
     }
   ]
 }
