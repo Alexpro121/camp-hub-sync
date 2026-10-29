@@ -104,6 +104,7 @@ export const DeviceSyncModal = ({ open, onClose, passport, defaultMode = 'send',
     const claim = claimPassportBridge(clean);
     claimRef.current = claim;
     const result = await claim.promise;
+    if (result.status === 'cancelled') return;
     claimRef.current = null;
     setWaiting(false);
 

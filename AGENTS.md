@@ -8,3 +8,4 @@
 - Disabled talent access is enforced with restrictive table/storage policies and revoked public RPC grants; role screens do not import talent views — preserves history without allowing API bypass or extra loading.
 
 - Admin tabs live in src/components/admin/tabs/ and are lazy-loaded by AdminFlow, which keeps only header, tab switcher and shift context — keeps the admin screen small and avoids merge conflicts.
+- Alumni passports validate structure and checksum before loading or transferring, retain child identity, and refresh newer snapshots; certificate resources are app-owned and cached after first download to support offline reuse.
