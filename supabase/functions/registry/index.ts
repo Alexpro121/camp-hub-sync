@@ -75,6 +75,9 @@ Deno.serve(async (req) => {
       if (typeof body.is_present === 'boolean') patch.is_present = body.is_present;
       if (typeof body.supervisor_notes === 'string') patch.supervisor_notes = body.supervisor_notes.slice(0, 2000);
       if (!body.id || !Object.keys(patch).length) return json({ error: 'bad_request' });
+      const { data: own } = await svc.from('children').select('id, shifts!inner(is_active, deleted_at)')
+        .eq('id', body.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).maybeSingle();
+      if (!own) return json({ error: 'not_found' });
       const { data, error } = await svc.from('children').update(patch).eq('id', body.id).is('deleted_at', null)
         .select('id, is_present, supervisor_notes, updated_at').maybeSingle();
       if (error) throw error;
