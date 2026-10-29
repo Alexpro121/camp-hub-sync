@@ -427,13 +427,69 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   );
 }
 
+// Якщо активних змін кілька — після пароля питаємо, з якою працюємо.
+function ShiftPick({ token, onPick, onLogout }: { token: string; onPick: (id: string | null) => void; onLogout: () => void }) {
+  const [shifts, setShifts] = useState<{ id: string; name: string }[] | null>(null);
+  const [err, setErr] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    call({ action: 'shifts', token })
+      .then((d) => {
+        if (dead) return;
+        const s: { id: string; name: string }[] = d.shifts ?? [];
+        if (s.length === 1) onPick(s[0].id); // одна зміна — одразу до роботи
+        else setShifts(s);
+      })
+      .catch((e) => { if (!dead) { if (e.message === 'unauthorized') onLogout(); else setErr('Немає зв\'язку. Спробуйте ще раз.'); } });
+    return () => { dead = true; };
+  }, [token, onPick, onLogout, attempt]);
+  return (
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+        <h1 className="mb-1 text-center text-xl font-bold text-foreground">Оберіть зміну</h1>
+        <p className="mb-5 text-center text-sm text-muted-foreground">Зараз активних кілька — з ким працюємо?</p>
+        {!shifts ? (
+          err ? (
+            <div className="text-center">
+              <p className="mb-3 text-sm text-destructive">{err}</p>
+              <button onClick={() => { setErr(''); setAttempt((a) => a + 1); }} className="h-11 w-full rounded-xl border border-border font-medium text-foreground">Спробувати ще</button>
+            </div>
+          ) : <div className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted" />)}</div>
+        ) : shifts.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">Зараз немає активних змін.</p>
+        ) : (
+          <div className="space-y-2">
+            {shifts.map((s, i) => (
+              <button key={s.id} onClick={() => onPick(s.id)} style={{ animationDelay: `${i * 60}ms` }}
+                className="flex h-14 w-full items-center justify-between gap-2 rounded-2xl border border-border bg-background px-4 font-semibold text-foreground transition-transform animate-in fade-in slide-in-from-bottom-2 fill-mode-both active:scale-[0.98]">
+                <span className="min-w-0 truncate">{s.name}</span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+            <button onClick={() => onPick(null)}
+              className="h-12 w-full rounded-2xl font-semibold text-primary-foreground transition-transform active:scale-[0.98]" style={{ background: 'var(--gradient-primary)' }}>
+              Усі зміни разом
+            </button>
+          </div>
+        )}
+        <button onClick={onLogout} className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground">Вийти</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Registry() {
   const [token, setToken] = useState<string | null>(() => {
     const t = localStorage.getItem(TOKEN_KEY);
     return t && Number(t.split('.')[0]) > Date.now() ? t : null;
   });
+  const [shiftId, setShiftId] = useState<string | null | undefined>(undefined);
   useEffect(() => { document.title = 'Реєстрація дітей'; }, []);
   const onToken = (t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); };
-  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); setToken(null); }, []);
-  return token ? <Desk token={token} onLogout={logout} /> : <Gate onToken={onToken} />;
+  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setShiftId(undefined); }, []);
+  const pick = useCallback((id: string | null) => setShiftId(id), []);
+  if (!token) return <Gate onToken={onToken} />;
+  if (shiftId === undefined) return <ShiftPick token={token} onPick={pick} onLogout={logout} />;
+  return <Desk key={shiftId ?? 'all'} token={token} shiftId={shiftId} onChangeShift={() => setShiftId(undefined)} onLogout={logout} />;
 }
