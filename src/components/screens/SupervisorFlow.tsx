@@ -33,7 +33,6 @@ import { exportToExcel } from '@/lib/excel';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
-import TalentTeamView from '@/components/talent/TalentTeamView';
 import CoupeManager from '@/components/coupes/CoupeManager';
 import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
 import { TRAIN_TITLE, TRAIN_FEATURE_ENABLED } from '@/lib/trips';
@@ -509,11 +508,6 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
               </div>
             </TabsContent>
 
-            {talent.active && (
-              <TabsContent value="talent" className="mt-2 animate-fade-in">
-                <TalentTeamView myTeam={authedTeam} />
-              </TabsContent>
-            )}
 
             {FAIR_FEATURE_ENABLED && (
             <TabsContent value="fair" className="mt-2 animate-fade-in">

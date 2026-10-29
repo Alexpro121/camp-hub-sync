@@ -20,7 +20,6 @@ import AdminOverview from '@/components/admin/AdminOverview';
 const AdminPrintQRCodes = lazyRetry(() => import('@/components/fair/AdminPrintQRCodes'));
 const AdminScheduleEditor = lazyRetry(() => import('@/components/schedule/AdminScheduleEditor'));
 const TrainTab = lazyRetry(() => import('@/components/admin/TrainTab'));
-const TalentAdmin = lazyRetry(() => import('@/components/talent/TalentAdmin'));
 const AdminNotificationsView = lazyRetry(() => import('@/components/admin/AdminNotificationsView'));
 const AdminTransferApprovals = lazyRetry(() => import('@/components/admin/AdminTransferApprovals'));
 const ShiftsTab = lazyRetry(() => import('@/components/admin/tabs/AdminShiftsTab'));
@@ -76,7 +75,6 @@ const AdminFlow = ({ onBack }: Props) => {
     { value: 'staff', label: 'Супровід', icon: Users },
   ];
   const moreTabs = [
-    { value: 'talent', label: 'Таланти', icon: Mic2 },
     { value: 'notifications', label: 'Сповіщення', icon: Bell },
     ...(TRAIN_FEATURE_ENABLED ? [{ value: 'coupes', label: 'Потяг', icon: Train }] : []),
     ...(FAIR_FEATURE_ENABLED ? [{ value: 'fair', label: 'Ярмарок', icon: ShoppingBag }] : []),
@@ -185,7 +183,6 @@ const AdminFlow = ({ onBack }: Props) => {
           <Suspense fallback={<div className="mt-5 space-y-3" aria-label="Завантаження розділу"><div className="h-16 rounded-md bg-muted animate-pulse" /><div className="h-40 rounded-md bg-muted animate-pulse" /></div>}>
            <TabsContent value="shifts" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><ShiftsTab /></TabsContent>
            <TabsContent value="schedule" className="mt-3 min-w-0 space-y-4 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminScheduleEditor /></TabsContent>
-           <TabsContent value="talent" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TalentAdmin /></TabsContent>
            <TabsContent value="notifications" className="mt-3 min-w-0 space-y-3 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminTransferApprovals /><AdminNotificationsView /></TabsContent>
            {TRAIN_FEATURE_ENABLED && (<TabsContent value="coupes" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><TrainTab /></TabsContent>)}
            {FAIR_FEATURE_ENABLED && (<TabsContent value="fair" className="mt-3 min-w-0 animate-[fade-in_180ms_ease-out] motion-reduce:animate-none"><AdminPrintQRCodes /></TabsContent>)}

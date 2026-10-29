@@ -43,7 +43,6 @@ import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
-import TalentTeamView from '@/components/talent/TalentTeamView';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
@@ -745,11 +744,6 @@ const ChildFlow = ({ onBack }: Props) => {
             )}
 
             {/* ================= ВМІСТ 4: ТАЛАНТИ (ТІЛЬКИ ПРИ АКТИВНІЙ ПОДІЇ) ================= */}
-            {talent.active && (
-              <TabsContent value="talent" className="mt-3">
-                <TalentTeamView myTeam={child.team_number} />
-              </TabsContent>
-            )}
           </Tabs>
         </div>
 
