@@ -1,436 +1,84 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import {
-  FileSpreadsheet, Coins, AlertCircle, Megaphone, Siren, Sparkles, Utensils, X,
-  Clock, ChevronDown, WifiOff, Train, ArrowLeftRight, Bell, Activity, ShoppingBag, Navigation,
-  CheckCircle2, MapPin
-} from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertCircle, Bell, CheckCircle2, ChevronDown, Clock, FileSpreadsheet, Info, Loader2, MapPin, Megaphone, WifiOff, X } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  useDynamicIsland,
-  type BroadcastColor,
-  type IslandPayload,
-  type IslandState,
-} from '@/context/DynamicIslandContext';
+import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { Button } from '@/components/ui/button';
 import { getEventCategoryIcon } from '@/lib/eventIcons';
-import { useHaptics } from '@/hooks/useHaptics';
-
-// Преміальний Obsidian Glass стиль острівця у стилі Apple
-const BASE_CONTAINER =
-  'island-capsule bg-[#000000]/95 text-slate-100 overflow-hidden backdrop-blur-3xl ring-1 ring-white/15 flex items-center justify-center relative select-none shadow-[0_24px_54px_-8px_rgba(0,0,0,0.92),_0_0_20px_-3px_rgba(255,255,255,0.06),_inset_0_1px_1px_rgba(255,255,255,0.2)]';
-
-const BROADCAST_THEME: Record<BroadcastColor, { border: string; bg: string; badge: string; glow: string; text: string }> = {
-  red: {
-    border: 'ring-rose-500/40',
-    bg: 'bg-gradient-to-b from-[#1C0A0E]/98 to-[#0B0406]/98',
-    badge: 'bg-rose-500/25 text-rose-200 border-rose-500/40',
-    glow: 'shadow-[0_16px_40px_-6px_rgba(244,63,94,0.35)]',
-    text: 'text-rose-100',
-  },
-  green: {
-    border: 'ring-emerald-500/40',
-    bg: 'bg-gradient-to-b from-[#081C12]/98 to-[#040D08]/98',
-    badge: 'bg-emerald-500/25 text-emerald-200 border-emerald-500/40',
-    glow: 'shadow-[0_16px_40px_-6px_rgba(16,185,129,0.35)]',
-    text: 'text-emerald-100',
-  },
-  purple: {
-    border: 'ring-purple-500/40',
-    bg: 'bg-gradient-to-b from-[#170A24]/98 to-[#08030F]/98',
-    badge: 'bg-purple-500/25 text-purple-200 border-purple-500/40',
-    glow: 'shadow-[0_16px_40px_-6px_rgba(168,85,247,0.35)]',
-    text: 'text-purple-100',
-  },
-  orange: {
-    border: 'ring-[#FA5A15]/45',
-    bg: 'bg-gradient-to-b from-[#1F0D06]/98 to-[#0A0402]/98',
-    badge: 'bg-[#FA5A15]/25 text-orange-200 border-[#FA5A15]/40',
-    glow: 'shadow-[0_16px_40px_-6px_rgba(250,90,21,0.35)]',
-    text: 'text-orange-100',
-  },
-};
-
-const BADGE_TITLES: Record<BroadcastColor, string> = {
-  red: 'ТЕРМІНОВО', 
-  green: 'ІНФОРМАЦІЯ', 
-  purple: 'ПОДІЯ', 
-  orange: 'ХАРЧУВАННЯ',
-};
-
-const BroadcastIcon = ({ color }: { color: BroadcastColor }) => {
-  const cls = 'w-3.5 h-3.5 shrink-0';
-  if (color === 'red') return <Siren className={cls} />;
-  if (color === 'green') return <Megaphone className={cls} />;
-  if (color === 'purple') return <Sparkles className={cls} />;
-  return <Utensils className={cls} />;
-};
-
-/** Контекстна іконка з інтелектуальним аналізом назви події */
-function renderIslandIcon(state: IslandState, payload: IslandPayload) {
-  const cls = 'w-4 h-4 shrink-0';
-  if (state === 'OFFLINE') return <WifiOff className={`${cls} text-amber-400`} />;
-  if (state === 'EXCEL_IMPORT') return <FileSpreadsheet className={`${cls} text-teal-400`} />;
-  if (state === 'BROADCAST') return <Megaphone className={`${cls} text-rose-400`} />;
-  if (payload.type === 'TRAIN') return <Train className={`${cls} text-sky-400`} />;
-  if (payload.type === 'COUPES_SWAP') return <ArrowLeftRight className={`${cls} text-purple-400`} />;
-
-  const text = `${payload.title || ''} ${payload.subtitle || ''} ${payload.eventTitle || ''}`.toLowerCase();
-
-  if (state === 'EVENT_ALERT' || payload.isSchedule) {
-    if (/обід|сніданок|вечеря|чай|смаколики|їдальня|харчування/.test(text)) return <Utensils className={`${cls} text-amber-400`} />;
-    if (/йога|зарядка|спорт|футбол|турнір|активн/.test(text)) return <Activity className={`${cls} text-emerald-400`} />;
-    if (/ярмарок|ярмарка|покупк|айрон|а\$/.test(text)) return <ShoppingBag className={`${cls} text-[#FA5A15]`} />;
-    if (/таланти|концерт|свічка|дискотека|ватра/.test(text)) return <Sparkles className={`${cls} text-purple-400`} />;
-    if (/виїзд|буковель|потяг|трансфер|автобус/.test(text)) return <Navigation className={`${cls} text-sky-400`} />;
-    const Fallback = getEventCategoryIcon(payload.eventTitle ?? '', payload.category);
-    return <Fallback className={`${cls} text-amber-400`} />;
-  }
-
-  if (payload.type === 'COINS' || /долар|монет|баланс|оплат|нарахова|списан/.test(text)) {
-    return <Coins className={`${cls} text-[#FA5A15]`} />;
-  }
-  if (state === 'SUCCESS_TOAST') return <CheckCircle2 className={`${cls} text-emerald-400`} />;
-  if (state === 'ERROR_TOAST') return <AlertCircle className={`${cls} text-rose-400`} />;
-  return <Bell className={`${cls} text-sky-400`} />;
-}
 
 const DynamicIsland = () => {
   const { state, payload, expanded, hide, toggleExpanded, pauseAutoHide, resumeAutoHide } = useDynamicIsland();
-  const [contentIn, setContentIn] = useState(false);
-  const haptics = useHaptics();
-
-  // Жест свайпу вгору (Swipe Up to Dismiss)
-  const touchStartY = useRef<number | null>(null);
-  const swipedAt = useRef(0);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-    if (state !== 'HIDDEN') pauseAutoHide();
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartY.current !== null) {
-      const touchEndY = e.changedTouches[0].clientY;
-      const diffY = touchStartY.current - touchEndY;
-      // Якщо свайпнули вгору на 24px і більше — закриваємо острівець
-      if (diffY > 24) {
-        haptics.impact('light');
-        swipedAt.current = Date.now();
-        hide();
-      }
-    }
-    touchStartY.current = null;
-    if (state !== 'HIDDEN' && !expanded) resumeAutoHide();
-  };
-
-  // Плавний стаггер: спочатку розкривається форма острова, через 80мс плавно влітає контент
+  const content = useRef<HTMLDivElement>(null);
+  const startTouch = useRef<{ x: number; y: number } | null>(null);
+  const [height, setHeight] = useState(48);
+  const [snapshot, setSnapshot] = useState({ state, payload, expanded });
+  const visible = state !== 'HIDDEN';
+  // Keep the outgoing content intact while the capsule contracts.
+  useEffect(() => { if (visible) setSnapshot({ state, payload, expanded }); }, [state, payload, expanded, visible]);
+  const view = visible ? { state, payload, expanded } : snapshot;
+  const busy = view.state === 'LOADING_ONLY' || view.state === 'EXCEL_IMPORT';
+  const event = view.state === 'EVENT_ALERT';
+  const broadcast = view.state === 'BROADCAST';
+  const title = event ? view.payload.eventTitle : broadcast ? view.payload.message : view.state === 'OFFLINE' ? 'Немає зв’язку' : view.state === 'EXCEL_IMPORT' ? 'Імпорт таблиці' : view.state === 'LOADING_ONLY' ? 'Завантаження' : view.payload.title;
+  const subtitle = view.state === 'OFFLINE' ? (view.payload.queued ? `${view.payload.queued} дій чекають на відправлення` : 'Зміни збережено на пристрої') : view.state === 'EXCEL_IMPORT' ? view.payload.fileName : broadcast ? view.payload.author : view.payload.subtitle;
+  const Icon = event ? getEventCategoryIcon(view.payload.eventTitle ?? '', view.payload.category) : view.state === 'SUCCESS_TOAST' ? CheckCircle2 : view.state === 'ERROR_TOAST' ? AlertCircle : view.state === 'OFFLINE' ? WifiOff : broadcast ? Megaphone : view.state === 'EXCEL_IMPORT' ? FileSpreadsheet : Bell;
+  const tone = view.state === 'ERROR_TOAST' || (broadcast && view.payload.color === 'red') ? 'danger' : view.state === 'SUCCESS_TOAST' ? 'success' : view.state === 'OFFLINE' ? 'warning' : 'neutral';
+  const progress = Math.min(100, Math.max(0, view.payload.progress ?? 0));
+  useLayoutEffect(() => {
+    const node = content.current;
+    if (!node) return;
+    const measure = () => setHeight(Math.ceil(node.getBoundingClientRect().height));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [view.state, view.payload, view.expanded]);
   useEffect(() => {
-    setContentIn(false);
-    if (state === 'HIDDEN') return;
-    const t = setTimeout(() => setContentIn(true), 80);
-    return () => clearTimeout(t);
-  }, [state, payload, expanded]);
+    if (!visible) return;
+    const keydown = (e: KeyboardEvent) => { if (e.key === 'Escape') hide(); };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  }, [visible, hide]);
 
-  // Захист від зависання на екрані (знижено до комфортних 7.5с)
-  useEffect(() => {
-    if (state === 'HIDDEN') return;
-    const maxTimeout = setTimeout(() => hide(), 7500);
-    return () => clearTimeout(maxTimeout);
-  }, [state, payload, expanded, hide]);
-
-  // Точні розміри та радіуси острівця для різних станів
-  const shape = (() => {
-    switch (state) {
-      case 'LOADING_ONLY':
-        return 'w-[124px] h-[32px] rounded-full ring-sky-500/40 shadow-[0_8px_25px_rgba(14,165,233,0.25)]';
-      case 'EXCEL_IMPORT':
-        return 'w-[336px] max-w-[92vw] h-[74px] rounded-[24px] ring-teal-500/40 shadow-[0_12px_32px_rgba(20,184,166,0.2)]';
-      case 'OFFLINE':
-        return 'w-[270px] max-w-[92vw] h-[38px] rounded-full ring-amber-500/40 bg-amber-950/90 text-amber-200 shadow-[0_10px_28px_rgba(245,158,11,0.2)]';
-      case 'SUCCESS_TOAST':
-        return 'w-[330px] max-w-[92vw] min-h-[64px] rounded-[24px] ring-emerald-500/40 shadow-[0_14px_34px_rgba(16,185,129,0.25)]';
-      case 'ERROR_TOAST':
-        return 'w-[330px] max-w-[92vw] min-h-[64px] rounded-[24px] ring-rose-500/40 shadow-[0_14px_34px_rgba(244,63,94,0.25)]';
-      case 'BROADCAST': {
-        const theme = BROADCAST_THEME[payload.color ?? 'red'];
-        return `w-[356px] max-w-[92vw] min-h-[92px] rounded-[26px] ${theme.border} ${theme.bg} ${theme.glow}`;
-      }
-      case 'EVENT_ALERT':
-        return expanded
-          ? 'w-[364px] max-w-[94vw] min-h-[114px] rounded-[28px] ring-amber-500/35 shadow-[0_16px_45px_rgba(245,158,11,0.25)]'
-          : 'w-[296px] max-w-[92vw] h-[40px] rounded-full ring-amber-500/30 shadow-[0_10px_28px_rgba(245,158,11,0.2)]';
-      default:
-        return 'w-[100px] h-[30px] rounded-full opacity-0 scale-75 -translate-y-3 pointer-events-none';
-    }
-  })();
-
-  const color = payload.color ?? 'red';
-  const broadcastTheme = BROADCAST_THEME[color];
-  const p = payload.progress ?? 0;
-  const teamsLabel = payload.myTeams?.length
-    ? `(Команд${payload.myTeams.length > 1 ? 'и' : 'а'} ${payload.myTeams.join(' і ')})`
-    : '';
-  const islandIcon = renderIslandIcon(state, payload);
-
-  return (
-    <div 
-      className="fixed left-0 right-0 z-[9999] flex justify-center pointer-events-none select-none transition-all duration-300"
-      style={{ top: 'max(env(safe-area-inset-top, 0px), 8px)' }}
-    >
-      <div
-        onMouseEnter={() => state !== 'HIDDEN' && pauseAutoHide()}
-        onMouseLeave={() => state !== 'HIDDEN' && !expanded && resumeAutoHide()}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onClick={() => {
-          if (Date.now() - swipedAt.current < 400) return;
-          if (state === 'HIDDEN' || state === 'EXCEL_IMPORT' || state === 'LOADING_ONLY') return;
-          haptics.impact('light');
-          if (state === 'EVENT_ALERT') toggleExpanded();
-          else hide();
-        }}
-        className={`${BASE_CONTAINER} ${shape} transform-gpu will-change-transform ${
-          state === 'HIDDEN' 
-            ? 'opacity-0 scale-75 -translate-y-3 pointer-events-none' 
-            : 'opacity-100 scale-100 translate-y-0 pointer-events-auto cursor-pointer active:scale-[0.98]'
-        }`}
-        style={{
-          transition: 'all 0.38s cubic-bezier(0.32, 0.72, 0, 1)',
-        }}
-      >
-        <div
-          className={`w-full h-full flex items-center justify-center px-3.5 transition-all duration-180 ease-out transform-gpu ${
-            contentIn ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
-          }`}
-        >
-          {/* 1. СТАН: ЛОАДЕР */}
-          {state === 'LOADING_ONLY' && (
-            <div className="w-full flex items-center justify-center gap-2">
-              <div className="relative w-16 h-1 bg-white/15 rounded-full overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-sky-400 to-indigo-400 animate-[shimmerMove_1.2s_infinite]" />
-              </div>
+  return createPortal(
+    <div className="dynamic-island-position" data-visible={visible}>
+      <section aria-label="Сповіщення" aria-hidden={!visible} className="dynamic-island-capsule" data-visible={visible} data-expanded={view.expanded} data-busy={busy} data-tone={tone}
+        style={{ height: visible ? height : 28 }}
+        onMouseEnter={pauseAutoHide} onMouseLeave={() => { if (!expanded) resumeAutoHide(); }}
+        onFocusCapture={pauseAutoHide} onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && !expanded) resumeAutoHide(); }}
+        onTouchStart={(e) => { const touch = e.touches[0]; if (touch) startTouch.current = { x: touch.clientX, y: touch.clientY }; pauseAutoHide(); }}
+        onTouchCancel={() => { startTouch.current = null; if (!expanded) resumeAutoHide(); }}
+        onTouchEnd={(e) => {
+          const touch = e.changedTouches[0]; const start = startTouch.current;
+          if (start && touch && start.y - touch.clientY > 36 && Math.abs(start.x - touch.clientX) < 48) hide();
+          startTouch.current = null;
+          if (!expanded) resumeAutoHide();
+        }}>
+        <div ref={content} className="dynamic-island-content">
+          <div className="dynamic-island-row">
+            <span className="dynamic-island-icon">{view.state === 'LOADING_ONLY' ? <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <Icon className="h-5 w-5" />}</span>
+            <div className="min-w-0 flex-1" role={view.state === 'ERROR_TOAST' ? 'alert' : 'status'} aria-live={view.state === 'ERROR_TOAST' ? 'assertive' : 'polite'} aria-atomic="true">
+              <p className={`dynamic-island-title ${view.expanded ? '' : 'line-clamp-1'}`}>{title}</p>
+              {subtitle && <p className={`dynamic-island-subtitle ${view.expanded ? '' : 'line-clamp-1'}`}>{subtitle}</p>}
             </div>
-          )}
-
-          {/* 2. СТАН: ІМПОРТ EXCEL */}
-          {state === 'EXCEL_IMPORT' && (
-            <div className="w-full flex flex-col justify-between h-full py-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 bg-teal-500/20 ring-1 ring-teal-500/30 rounded-lg flex items-center justify-center shrink-0">
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-teal-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-white leading-tight">Імпорт таблиці</div>
-                    <div className="text-[10px] text-slate-400 truncate">{payload.fileName ?? 'Google Sheets'}</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs font-bold text-teal-400 tabular-nums">{p}%</span>
-              </div>
-              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden ring-1 ring-white/5">
-                <div 
-                  className="h-full bg-gradient-to-r from-teal-400 to-emerald-400 rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(20,184,166,0.6)]" 
-                  style={{ width: `${p}%` }} 
-                />
-              </div>
-            </div>
-          )}
-
-          {/* 3. СТАН: ОФЛАЙН */}
-          {state === 'OFFLINE' && (
-            <div className="w-full flex items-center justify-between text-xs font-semibold gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span className="truncate">{payload.queued ? `Офлайн — ${payload.queued} дій у черзі` : 'Офлайн режим'}</span>
-              </div>
-              <span className="text-[9px] bg-amber-500/25 text-amber-200 px-2 py-0.5 rounded-full ring-1 ring-amber-500/35 font-mono font-bold shrink-0">
-                OFFLINE
-              </span>
-            </div>
-          )}
-
-          {/* 4. СТАН: УСПІХ (SUCCESS TOAST) */}
-          {state === 'SUCCESS_TOAST' && (
-            <div className="w-full flex items-center justify-between gap-2.5 py-1">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 ring-1 ring-emerald-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
-                  {islandIcon}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-emerald-300 leading-tight truncate">{payload.title}</div>
-                  {payload.subtitle && (
-                    <div className="text-[10px] text-slate-300/85 font-medium leading-tight truncate mt-0.5">
-                      {payload.subtitle}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <button 
-                onClick={(e) => { e.stopPropagation(); hide(); }} 
-                aria-label="Закрити"
-                className="p-1.5 hover:bg-white/10 active:scale-90 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* 5. СТАН: ПОМИЛКА (ERROR TOAST) */}
-          {state === 'ERROR_TOAST' && (
-            <div className="w-full flex items-center justify-between gap-2.5 py-1">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-rose-500/20 ring-1 ring-rose-500/35 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(244,63,94,0.3)]">
-                  {islandIcon}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-rose-300 leading-tight truncate">{payload.title}</div>
-                  {payload.subtitle && (
-                    <div className="text-[10px] text-slate-300/85 font-medium leading-tight truncate mt-0.5">
-                      {payload.subtitle}
-                    </div>
-                  )}
-                </div>
-              </div>
-              {payload.errorDetails ? (
-                <button
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    toast.error('Деталі помилки', { description: payload.errorDetails }); 
-                  }}
-                  className="text-[10px] bg-rose-500/25 hover:bg-rose-500/35 active:scale-95 text-rose-200 ring-1 ring-rose-500/40 px-2.5 py-1 rounded-lg transition-all font-semibold shrink-0"
-                >
-                  Деталі
-                </button>
-              ) : (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); hide(); }} 
-                  aria-label="Закрити"
-                  className="p-1.5 hover:bg-white/10 active:scale-90 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* 6. СТАН: ОГОЛОШЕННЯ (BROADCAST) */}
-          {state === 'BROADCAST' && (
-            <div className="w-full flex flex-col justify-between h-full py-2.5 gap-1.5">
-              <div className="w-full flex items-center justify-between pb-1.5 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <BroadcastIcon color={color} />
-                  <span className={`text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-full border ${broadcastTheme.badge}`}>
-                    {BADGE_TITLES[color]}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-white/70 font-medium truncate max-w-[120px]">{payload.author}</span>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); hide(); }} 
-                    aria-label="Закрити"
-                    className="p-1 hover:bg-white/10 active:scale-90 rounded-full transition-all text-white/70 hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              <div className={`text-xs font-semibold leading-relaxed break-words ${broadcastTheme.text}`}>
-                {payload.message}
-              </div>
-            </div>
-          )}
-
-          {/* 7. СТАН: НАГАДУВАННЯ РОЗКЛАДУ (КОМПАКТНИЙ) */}
-          {state === 'EVENT_ALERT' && !expanded && (
-            <div className="w-full flex items-center justify-between gap-2.5 text-xs font-semibold">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-6 h-6 rounded-lg bg-amber-500/20 ring-1 ring-amber-500/30 flex items-center justify-center shrink-0">
-                  {islandIcon}
-                </div>
-                <span className="text-white truncate">
-                  <span className="text-amber-400 font-bold">{payload.phase === 'pre' ? 'Скоро' : 'Зараз'}:</span> {payload.eventTitle}
-                  {payload.myTime && (
-                    <span className="text-amber-300 font-mono"> ({payload.myTime})</span>
-                  )}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="font-mono text-[11px] font-bold text-amber-300/90 tabular-nums">
-                  {payload.range}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-white/60" />
-              </div>
-            </div>
-          )}
-
-          {/* 8. СТАН: НАГАДУВАННЯ РОЗКЛАДУ (РОЗГОРНУТИЙ) */}
-          {state === 'EVENT_ALERT' && expanded && (
-            <div className="w-full h-full flex flex-col justify-between py-3 gap-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex min-w-0 items-start gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 ring-1 ring-amber-500/35 flex items-center justify-center shrink-0 mt-0.5">
-                    {islandIcon}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[9px] font-bold tracking-[0.2em] text-amber-400 uppercase">
-                      {payload.phase === 'pre' ? 'Подія за 5 хвилин' : 'Подія починається'}
-                    </div>
-                    <div className="text-sm font-bold text-white break-words leading-tight mt-0.5">
-                      {payload.eventTitle}
-                    </div>
-                    {payload.subtitle && (
-                      <div className="text-[11px] text-amber-200/80 font-medium break-words mt-0.5">
-                        {payload.subtitle}
-                      </div>
-                    )}
-                    {payload.location && (
-                      <div className="flex items-center gap-1 text-[11px] text-slate-300/80 font-medium mt-1">
-                        <MapPin className="w-3 h-3 text-[#FA5A15]" />
-                        <span>Локація: {payload.location}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); hide(); }}
-                  aria-label="Закрити"
-                  className="p-1 hover:bg-white/10 active:scale-90 rounded-full transition-all text-white/60 hover:text-white shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {payload.myTime ? (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 ring-1 ring-amber-500/25 flex flex-col gap-1">
-                  <div className="flex items-baseline gap-2 font-mono text-xl sm:text-2xl font-black tabular-nums text-amber-300">
-                    <Clock className="h-4 w-4 self-center text-amber-400" />
-                    <span>Твій вихід: {payload.myTime}</span>
-                    {teamsLabel && (
-                      <span className="font-sans text-[11px] font-bold text-amber-300/80">{teamsLabel}</span>
-                    )}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-medium">
-                    Загальний час події: <span className="font-mono tabular-nums text-slate-200">{payload.range}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 font-mono text-lg font-bold tabular-nums text-white p-2 rounded-xl bg-white/5 ring-1 ring-white/10">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  <span>{payload.range}</span>
-                </div>
-              )}
-            </div>
-          )}
+            {view.state === 'EXCEL_IMPORT' ? <span className="dynamic-island-time">{progress}%</span> : !busy && <>
+              <Button variant="ghost" size="icon" className="dynamic-island-control" tabIndex={visible ? 0 : -1} aria-label={view.expanded ? 'Згорнути сповіщення' : 'Розгорнути сповіщення'} title={view.expanded ? 'Згорнути' : 'Розгорнути'} aria-expanded={view.expanded} onClick={toggleExpanded}><ChevronDown className={view.expanded ? 'rotate-180 transition-transform' : 'transition-transform'} /></Button>
+              <Button variant="ghost" size="icon" className="dynamic-island-control" tabIndex={visible ? 0 : -1} aria-label="Закрити сповіщення" title="Закрити" onClick={hide}><X /></Button>
+            </>}
+          </div>
+          {view.state === 'EXCEL_IMPORT' && <div role="progressbar" aria-label="Імпорт таблиці" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="dynamic-island-progress"><div style={{ width: `${progress}%` }} /></div>}
+          {view.expanded && (event || view.payload.errorDetails) && <div className="dynamic-island-details">
+            {event && <>
+              <p className="dynamic-island-subtitle">{view.payload.phase === 'pre' ? 'Незабаром' : 'Подія починається'}</p>
+              {(view.payload.myTime || view.payload.range) && <p className="flex flex-wrap items-center gap-2"><Clock className="h-4 w-4" /><span className="dynamic-island-time">{view.payload.myTime ?? view.payload.range}</span>{view.payload.myTeams?.length ? <span className="dynamic-island-subtitle">Команда {view.payload.myTeams.join(', ')}</span> : null}</p>}
+              {view.payload.myTime && view.payload.range && <p className="dynamic-island-subtitle">Загальний час: {view.payload.range}</p>}
+              {view.payload.location && <p className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span>{view.payload.location}</span></p>}
+            </>}
+            {view.payload.errorDetails && <Button variant="ghost" className="dynamic-island-detail-action" onClick={() => toast.error('Деталі помилки', { description: view.payload.errorDetails })}><Info />Деталі помилки</Button>}
+          </div>}
         </div>
-      </div>
-
-      <style>{`
-        @keyframes shimmerMove {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
-    </div>
+      </section>
+    </div>, document.body,
   );
 };
-
 export default DynamicIsland;

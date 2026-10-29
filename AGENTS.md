@@ -11,3 +11,4 @@
 - Admin tabs live in src/components/admin/tabs/ and are lazy-loaded by AdminFlow, which keeps only header, tab switcher and shift context — keeps the admin screen small and avoids merge conflicts.
 - Alumni passports validate structure and checksum before loading or transferring, retain child identity, and refresh newer snapshots; certificate resources are app-owned and cached after first download to support offline reuse.
 - Registry refreshes share an in-flight guard with trailing reconciliation; partial acknowledgements patch known rows across cached scopes and protect in-flight full-list results, while version-checked server retries preserve simultaneous notes and full delta pages reconcile timestamp boundaries.
+- Dynamic Island renders through a body portal with measured content height and semantic surface tokens; its provider exclusively owns dismissal timers, pauses expanded content and keeps notification callbacks stable to avoid subscription churn.

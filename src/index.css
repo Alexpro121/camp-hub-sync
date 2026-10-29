@@ -398,6 +398,71 @@
   100% { width: 0; right: 0; left: unset; }
 }
 
+/* Dynamic Island: neutral surface, physical shape transitions, no decorative glow. */
+:root {
+  --island-surface: 0 0% 4%;
+  --island-text: 0 0% 96%;
+  --island-muted: 0 0% 65%;
+  --island-line: 0 0% 19%;
+  --island-control: 0 0% 13%;
+  --island-success: 148 61% 62%;
+  --island-danger: 0 78% 72%;
+  --island-warning: 42 83% 67%;
+  --island-shadow: 0 8px 24px hsl(0 0% 0% / .24), 0 1px 3px hsl(0 0% 0% / .2);
+  --island-ease: cubic-bezier(.22, .82, .26, 1);
+}
+.dynamic-island-position {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  inset-inline: 0;
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-inline: 12px;
+}
+.dynamic-island-capsule {
+  --island-accent: var(--island-text);
+  width: 336px;
+  max-width: 100%;
+  border-radius: 28px;
+  background: hsl(var(--island-surface));
+  color: hsl(var(--island-text));
+  border: 1px solid hsl(var(--island-line));
+  box-shadow: var(--island-shadow);
+  overflow: hidden;
+  pointer-events: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0;
+  transform-origin: top center;
+  transition: width 440ms var(--island-ease), height 440ms var(--island-ease), border-radius 440ms var(--island-ease), transform 320ms var(--island-ease), opacity 180ms ease;
+}
+.dynamic-island-capsule[data-expanded="true"] { width: 364px; border-radius: 26px; }
+.dynamic-island-capsule[data-busy="true"] { width: 296px; }
+.dynamic-island-capsule[data-visible="false"] { width: 104px; opacity: 0; transform: translateY(-6px) scale(.92); pointer-events: none; }
+.dynamic-island-capsule[data-tone="success"] { --island-accent: var(--island-success); }
+.dynamic-island-capsule[data-tone="danger"] { --island-accent: var(--island-danger); }
+.dynamic-island-capsule[data-tone="warning"] { --island-accent: var(--island-warning); }
+.dynamic-island-content { padding: 5px 8px 5px 14px; }
+.dynamic-island-row { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.dynamic-island-icon { display: flex; flex: 0 0 22px; justify-content: center; color: hsl(var(--island-accent)); }
+.dynamic-island-title { font-size: 13px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.dynamic-island-subtitle { font-size: 12px; font-weight: 400; line-height: 1.4; color: hsl(var(--island-muted)); overflow-wrap: anywhere; }
+.dynamic-island-time { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dynamic-island-control { width: 36px; height: 44px; border-radius: 50%; flex-shrink: 0; gap: 0; color: hsl(var(--island-muted)); }
+.dynamic-island-capsule .dynamic-island-control:hover, .dynamic-island-capsule .dynamic-island-control:focus-visible, .dynamic-island-capsule .dynamic-island-detail-action:hover { background: hsl(var(--island-control)); color: hsl(var(--island-text)); }
+.dynamic-island-control:focus-visible { outline: 2px solid hsl(var(--island-muted)); outline-offset: -4px; box-shadow: none; }
+.dynamic-island-control:active { transform: scale(.9); }
+.dynamic-island-details { margin-top: 5px; padding: 12px 6px 10px; border-top: 1px solid hsl(var(--island-line)); display: grid; gap: 8px; font-size: 13px; max-height: min(280px, 55dvh); overflow-y: auto; overscroll-behavior: contain; animation: island-details-in 220ms var(--island-ease); }
+.dynamic-island-detail-action { justify-content: flex-start; color: hsl(var(--island-text)); }
+.dynamic-island-progress { height: 3px; margin: 4px 6px 10px 0; border-radius: 3px; overflow: hidden; background: hsl(var(--island-line)); }
+.dynamic-island-progress > div { height: 100%; background: hsl(var(--island-text)); transition: width 280ms ease-out; }
+@keyframes island-details-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .dynamic-island-capsule, .dynamic-island-progress > div, .dynamic-island-control { transition: none; }
+  .dynamic-island-details { animation: none; }
+}
+
 /* =============== APPLE SPRING PHYSICS FOR DYNAMIC ISLAND =============== */
 .island-container {
   transition:
