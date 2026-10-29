@@ -1,4 +1,6 @@
 # Admin panel reorganization
+- [x] Validate all 5 personal staff accounts, the admin and one active child account with authenticated browser sessions: tabs, 390px/desktop screenshots, no runtime errors or horizontal overflow; 336 bounded reads at 4/12 concurrency with zero failures, maximum p95 465ms. Talent reads and privileged cross-role actions denied. Admin detect-gender intercepted to avoid changing child data. 74 frontend and 3 server tests pass.
+- [ ] Check every remaining individual child and legacy team account (not covered: 81 child and 13 legacy supervisor accounts; current browser run covers personal staff and representative child only).
 - [x] Fully disable Talent evening UI and backend access without deleting historical data; authenticated direct read rejected.
 - [x] Run controlled stress tests and authenticated supervisor checks as sizikov.oleksii: 144 reads at 4/12/24 concurrency, zero failures, p95 0.85/1.49/2.09 seconds; tabs and reconnect checked. No child data changed.
 - [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
@@ -8,7 +10,7 @@
 - [x] Open on selected shift overview with meaningful, fast summary and shortcuts.
 - [x] Make section navigation one-tap on phones, keep all existing sections reachable.
 - [x] Streamline shift creation and staff screens for narrow phones without changing permissions or data behavior.
-- [ ] Verify signed-in admin interactions on mobile and desktop (blocked: selected test account is supervisor, no admin impersonation authorized).
+- [x] Verify signed-in admin overview, shifts, schedule and loaded staff list on mobile and desktop; read-only navigation checked, mutations intentionally not exercised.
 - [x] Stabilize the admin viewport, bottom navigation, sheets, dialogs, and narrow forms on phones.
 - [x] Smooth admin transitions, add overview utilities, debounce live statistics, and hide alumni broadcasts.
 - [x] Add shift-scoped staff invitation links with existing-account login, registration, team choice, and 5-second confirmation.
