@@ -49,5 +49,6 @@ export function providerMessage(status: number): string {
   if (status === 401 || status === 403) return 'Google відхилив доступ. Перевірте ключ і доступ до Gemini у Google AI Studio.';
   if (status === 404) return 'Обрана модель Gemini зараз недоступна. Генерація зупинена.';
   if (status === 429) return 'Перевищено квоту Google Gemini. Спробуйте пізніше або перевірте тариф Google AI Studio.';
+  if (status === 503) return 'Gemini перевантажений. Спробуйте пізніше. Нічого не збережено.';
   return 'Google Gemini тимчасово не відповідає. Генерація не збережена.';
 }
