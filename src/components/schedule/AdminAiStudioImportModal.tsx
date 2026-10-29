@@ -3,7 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2, Eye, AlertTriangle, Sparkles, Square } from "lucide-react";
+import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2, Eye, Sparkles, Square, FileJson, CalendarDays } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ScheduleImportReview } from './ScheduleImportReview';
+import { ScheduleStreamPreview } from '@/lib/scheduleStreamPreview';
 import { toast } from "sonner";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
 import { previewScheduleImport } from "@/lib/scheduleImport";
@@ -23,14 +26,24 @@ interface Props {
 const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Props) => {
   const { shiftId } = useActiveShift();
   const [rawText, setRawText] = useState("");
-  const [json, setJson] = useState("");
+  const [aiJson, setAiJson] = useState('');
+  const [manualJson, setManualJson] = useState('');
+  const [mode, setMode] = useState('ai');
+  const json = mode === 'ai' ? aiJson : manualJson;
+  const setJson = mode === 'ai' ? setAiJson : setManualJson;
+  const [liveJson, setLiveJson] = useState('');
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
   const controller = useRef<AbortController | null>(null);
   const saving = useRef(false);
-  const [checkedJson, setCheckedJson] = useState<string | null>(null);
-  const preview = useMemo(() => checkedJson === json ? previewScheduleImport(json, date) : null, [checkedJson, json, date]);
+  const [checkedAiJson, setCheckedAiJson] = useState<string | null>(null);
+  const [checkedManualJson, setCheckedManualJson] = useState<string | null>(null);
+  const checkedJson = mode === 'ai' ? checkedAiJson : checkedManualJson;
+  const setCheckedJson = mode === 'ai' ? setCheckedAiJson : setCheckedManualJson;
+  const preview = useMemo(() => checkedJson === json && json ? previewScheduleImport(json, date) : null, [checkedJson, json, date]);
+  const livePreview = useMemo(() => liveJson ? previewScheduleImport(liveJson, date) : null, [liveJson, date]);
   const changeOpen = (next: boolean) => {
     if (saving.current) return;
     if (!next) controller.current?.abort();
@@ -47,17 +60,32 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     setGenerationError('');
     setCheckedJson(null);
     setJson('');
+    setLiveJson('');
+    setEditing(false);
+    const streamPreview = new ScheduleStreamPreview(date);
     try {
       const result = await generateSchedule(rawText.trim(), date, request.signal, (text) => {
-        if (!request.signal.aborted) setJson(text);
+        if (!request.signal.aborted) {
+          const events = streamPreview.update(text);
+          if (events) setLiveJson(events);
+        }
       });
       if (!request.signal.aborted) { setJson(result); setCheckedJson(result); }
     } catch (error: unknown) {
       setJson('');
+      setLiveJson('');
       if (!request.signal.aborted) setGenerationError(error instanceof Error ? error.message : 'Не вдалося згенерувати розклад');
     } finally {
       if (controller.current === request) { controller.current = null; setGenerating(false); }
     }
+  };
+
+  const editEvent = (dayDate: string, index: number, field: 'title' | 'time_start' | 'time_end', value: string) => {
+    if (!preview || busy || generating) return;
+    const days = preview.days.map((day) => day.date !== dayDate ? day : { ...day, items: day.items.map((item, position) => position !== index ? item : { ...item, [field]: value || null }) });
+    const next = JSON.stringify({ days });
+    setJson(next);
+    setCheckedJson(next);
   };
 
   const openAiStudio = () => {
@@ -129,7 +157,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent aria-describedby={undefined} className="max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
+      <DialogContent aria-describedby={undefined} className="flex max-w-4xl max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Імпорт розкладу</DialogTitle>
         </DialogHeader>
