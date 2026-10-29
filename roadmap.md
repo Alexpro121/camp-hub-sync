@@ -1,4 +1,5 @@
 # Admin panel reorganization
+- [ ] Validate every existing staff account and admin with approved sessions; cover role restrictions and bounded read-only load without changing child records.
 - [x] Fully disable Talent evening UI and backend access without deleting historical data; authenticated direct read rejected.
 - [x] Run controlled stress tests and authenticated supervisor checks as sizikov.oleksii: 144 reads at 4/12/24 concurrency, zero failures, p95 0.85/1.49/2.09 seconds; tabs and reconnect checked. No child data changed.
 - [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
