@@ -10,6 +10,8 @@ const MODEL = 'llama-3.3-70b-versatile';
  */
 const SYSTEM_PROMPT = `You are an expert schedule parsing assistant for the Ukrainian educational project "Залізна Зміна" (Iron Shift).
 Your job is to convert unstructured Ukrainian raw text schedule into a valid, strictly structured JSON object.
+Preserve only times and events supported by the source. Do not invent durations: unknown time_end is null.
+Descriptions are visible to participants: omit internal staff instructions and surprise spoilers.
 
 ======================================================================
 STRICT TERMINOLOGY & PROJECT RULES:
@@ -80,27 +82,27 @@ PARSING RULES & SPECIAL PATTERNS:
       23:30 - відбій"
    -> Emit logical distinct events with realistic time ranges:
       - "Кліпи": 20:30-21:30, description: "Діти мають бути в залі о 20:20", category: "entertainment"
-      - "Вогнище та Дискотека": 21:30-22:45, description: "Тепло вдягнутися. Паркінг вище готелю. Сюрприз: шаурма (дітям не говоримо!)", category: "entertainment"
+      - "Вогнище": time_start only when explicitly specified, time_end: null, description: "Тепло вдягнутися. Паркінг вище готелю", category: "entertainment"
       - "Коротка свічка": 22:45-23:30, category: "gathering"
       - "Відбій": 23:30, time_end: null, category: "general"
 
 5. CLEAN TITLES:
    Remove raw hours, bullet points, and team prefixes from "title". Put extra logistics info into "description".`;
 
-const TIME = /^\d{1,2}:\d{2}$/;
+const TIME = /^(?:[01]?\d|2[0-3]):[0-5]\d$/;
 
 const SubSlotSchema = z.object({
   time: z.string().regex(TIME),
-  teams: z.array(z.number()).default([]),
+  teams: z.array(z.number().int().positive()).default([]),
 });
 
 const ItemSchema = z.object({
   date: z.string().nullable().optional(),
   time_start: z.string().regex(TIME).nullable().optional(),
   time_end: z.string().regex(TIME).nullable().optional(),
-  title: z.string().min(1),
+  title: z.string().trim().min(1),
   description: z.string().nullable().optional().default(null),
-  target_teams: z.array(z.number()).default([]),
+  target_teams: z.array(z.number().int().positive()).default([]),
   category: z
     .enum(['fair', 'sports', 'meal', 'gathering', 'entertainment', 'transfer', 'general'])
     .default('general'),
@@ -208,13 +210,16 @@ Deno.serve(async (req) => {
     const token = auth.replace(/^Bearer\s+/i, '');
     let authorized = false;
     if (token && token !== ANON_KEY) {
-      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
+      const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false }, global: { headers: { Authorization: auth } } });
       const { data: userRes } = await pub.auth.getUser(token);
-      authorized = Boolean(userRes?.user);
+      if (userRes?.user) {
+        const { data: roles, error } = await pub.from('user_roles').select('role').eq('user_id', userRes.user.id).eq('role', 'admin').limit(1);
+        authorized = !error && Boolean(roles?.length);
+      }
     }
 
     if (!authorized) {
-      return json({ source: 'local_fallback', reason: 'unauthorized', items: [] }, 200);
+      return json({ source: 'local_fallback', reason: 'unauthorized', items: [] }, 403);
     }
 
     const parsedBody = BodySchema.safeParse(await req.json());

@@ -1,6 +1,7 @@
 import type { ScheduleItem } from '@/types/app';
 import { fromMinutes, toMinutes } from './scheduleCategories';
 import { supabase } from '@/integrations/supabase/client';
+import { scheduleImportKey } from './scheduleImport';
 
 /** Fallback duration when the source row has no end time. */
 export const DEFAULT_DURATION = 60;
@@ -117,10 +118,9 @@ export const broadcastScheduleUpdated = async (payload: Record<string, unknown> 
 };
 
 /** Key used to detect duplicates across merged schedules of the same day. */
-export const itemKey = (i: { time_start?: string | null; title?: string | null }) =>
-  `${(i.time_start || '').trim()}|${(i.title || '').trim().toLowerCase()}`;
+export const itemKey = scheduleImportKey;
 
-/** Drop duplicates (same start time + title); the last occurrence wins. */
+/** Drop exact time/title/location/team duplicates; the last occurrence wins. */
 export const dedupeItems = <T extends { time_start?: string | null; title?: string | null }>(items: T[]): T[] => {
   const map = new Map<string, T>();
   items.forEach((i) => map.set(itemKey(i), i));
@@ -129,7 +129,7 @@ export const dedupeItems = <T extends { time_start?: string | null; title?: stri
 
 /**
  * Multi-schedule overlay: camp-wide events (no shift) + the shift's own program.
- * Duplicates (same start time + title) collapse, shift-specific rows win.
+ * Exact duplicates collapse, shift-specific rows win without losing parallel team events.
  */
 export const mergeScheduleLayers = (
   campWide: ScheduleItem[],
@@ -155,7 +155,7 @@ export const getScheduleForDate = async (
   opts: { publishedOnly?: boolean } = {},
 ): Promise<ScheduleItem[]> => {
   const publishedOnly = opts.publishedOnly !== false;
-  let q = supabase.from('schedules').select('id').eq('date', date);
+  let q = supabase.from('schedules').select('id').eq('date', date).is('deleted_at', null);
   if (publishedOnly) q = q.eq('is_published', true);
   // Overlay: the shift's own program PLUS camp-wide schedules (shift_id IS NULL).
   if (shiftId) q = q.or(`shift_id.eq.${shiftId},shift_id.is.null`);

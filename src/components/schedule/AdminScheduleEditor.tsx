@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { useActiveShift } from '@/context/ActiveShiftContext';
 import AdminAiStudioImportModal from './AdminAiStudioImportModal';
+import { scheduleImportKey } from '@/lib/scheduleImport';
 
 const todayISO = () => localISO();
 
@@ -48,27 +49,42 @@ const AdminScheduleEditor = () => {
   const [form, setForm] = useState<Form | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const loadVersion = useRef(0);
 
   // Midnight rollover: yesterday → today, live and on app focus.
   useAutoTodayDate(date, setDate);
 
   const load = useCallback(async () => {
+    const version = ++loadVersion.current;
     setLoading(true);
-    const { data: sch } = await supabase.from('schedules').select('*').eq('date', date).is('deleted_at', null);
+    try {
+    const { data: sch, error: scheduleError } = await supabase.from('schedules').select('*').eq('date', date).is('deleted_at', null);
+    if (scheduleError) throw scheduleError;
+    if (version !== loadVersion.current) return;
     // Parallel shifts: only this shift's program (plus camp-wide rows) is editable here.
     const list = ((sch || []) as Schedule[]).filter((s) => !s.shift_id || !shiftId || s.shift_id === shiftId);
     setSchedules(list);
     const ids = list.map((s) => s.id);
     if (ids.length) {
-      const { data } = await supabase.from('schedule_items').select('*').in('schedule_id', ids).order('time_start');
+      const { data, error } = await supabase.from('schedule_items').select('*').in('schedule_id', ids).order('time_start');
+      if (error) throw error;
+      if (version !== loadVersion.current) return;
       setItems(dedupeItems((data || []) as unknown as ScheduleItem[]));
     } else {
       setItems([]);
     }
-    setLoading(false);
+    } catch (error: unknown) {
+      if (version === loadVersion.current) {
+        setSchedules([]);
+        setItems([]);
+        toast.error(error instanceof Error ? error.message : 'Не вдалося завантажити розклад');
+      }
+    } finally {
+      if (version === loadVersion.current) setLoading(false);
+    }
   }, [date, shiftId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); return () => { loadVersion.current++; }; }, [load]);
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => (a.time_start || '').localeCompare(b.time_start || '') || a.order_index - b.order_index),
@@ -130,14 +146,18 @@ const AdminScheduleEditor = () => {
     if (!form) return;
     if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
     if (!form.time_start?.trim()) { toast.error('Вкажи час початку — без нього подія не з’явиться в розкладі'); return; }
+    const range = normalizeTimeRange(form.time_start);
+    const end = form.time_end.trim() ? normalizeTime(form.time_end) : range.end;
+    if (!range.start || (form.time_end.trim() && !end)) { toast.error('Вкажіть коректний час у форматі ГГ:ХХ'); return; }
+    if (end === range.start) { toast.error('Початок і кінець не можуть збігатися'); return; }
     setBusy(true);
     try {
       const payload = {
         title: form.title.trim(),
         location: form.location.trim() || null,
         // Any input format is accepted: "14.25", "14:25", "1425", "14.25 - 14.56".
-        time_start: normalizeTime(form.time_start) || null,
-        time_end: normalizeTime(form.time_end) || null,
+        time_start: range.start,
+        time_end: end,
         category: form.category,
         target_teams: form.target_teams, // [] = for everyone
       };
@@ -148,8 +168,7 @@ const AdminScheduleEditor = () => {
         const scheduleId = await ensureSchedule();
         // Deduplication: same start time + title on this day → update instead of duplicating.
         const dup = sorted.find(
-          (i) => (i.time_start || '') === (payload.time_start || '') &&
-            (i.title || '').trim().toLowerCase() === payload.title.toLowerCase(),
+          (i) => scheduleImportKey(i) === scheduleImportKey(payload),
         );
         if (dup) {
           const { error } = await supabase.from('schedule_items').update(payload).eq('id', dup.id);

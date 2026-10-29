@@ -14,30 +14,18 @@ const pad = (h: string, m: string) => `${h.padStart(2, '0')}:${m}`;
 
 /** Extracts team numbers mentioned in a chunk of text: "1 і 2 команда", "команди 3-5", "4, 6 команда". */
 export function extractTeams(text: string): number[] {
-  const lower = text.toLowerCase();
-  if (!/команд/.test(lower)) return [];
+  const lower = text.toLowerCase().replace(/\b\d{1,2}[:.]\d{2}\b/g, '');
   const teams = new Set<number>();
-
-  // ranges: "3-5 команда" / "команди 3-5"
-  for (const m of lower.matchAll(/(\d{1,2})\s*(?:-|–|—)\s*(\d{1,2})\s*(?=команд)/g)) {
-    const a = parseInt(m[1], 10);
-    const b = parseInt(m[2], 10);
-    if (a && b && b >= a && b - a < 30) for (let i = a; i <= b; i++) teams.add(i);
-  }
-
-  // enumerations before the word "команда": "1 і 2 команда", "1, 2, 3 команди"
-  const before = lower.split(/команд/)[0] ?? '';
-  const tail = before.slice(-40);
-  for (const m of tail.matchAll(/\b(\d{1,2})\b/g)) {
-    const n = parseInt(m[1], 10);
-    if (n >= 1 && n <= 40) teams.add(n);
-  }
-
-  // "команда 7" / "команди 7 та 8"
-  const after = lower.split(/команд\w*/)[1] ?? '';
-  for (const m of after.slice(0, 25).matchAll(/\b(\d{1,2})\b/g)) {
-    const n = parseInt(m[1], 10);
-    if (n >= 1 && n <= 40) teams.add(n);
+  const numbers = String.raw`\d{1,2}(?:\s*(?:[,іийта]+|[-–—])\s*\d{1,2})*`;
+  const expressions = new RegExp(`(${numbers})\\s*команд[а-яіїєґ]*|команд[а-яіїєґ]*\\s*(${numbers})`, 'g');
+  for (const match of lower.matchAll(expressions)) {
+    const expression = match[1] ?? match[2];
+    for (const part of expression.split(/\s*(?:,|і|та|й)\s*/)) {
+      const bounds = part.split(/\s*[-–—]\s*/).map(Number);
+      const from = bounds[0];
+      const to = bounds[1] ?? from;
+      if (from >= 1 && to <= 99 && to >= from) for (let n = from; n <= to; n++) teams.add(n);
+    }
   }
 
   return Array.from(teams).sort((a, b) => a - b);

@@ -37,12 +37,12 @@ export const catMeta = (c?: string | null): CategoryMeta => CATEGORY_META[normal
  * "9:5", "9" — and returns the canonical "HH:MM", or null when unparsable.
  */
 export const normalizeTime = (raw?: string | null): string | null => {
-  const t = (raw ?? '').trim();
+  const t = (raw ?? '').trim().replace(/^(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?$/, '$1');
   if (!t) return null;
   const m = t.match(/^(\d{1,2})\s*[:.,\-–—\s]?\s*(\d{1,2})?$/) ?? t.match(/^(\d{2})(\d{2})$/);
   if (!m) return null;
   const h = Number(m[1]);
-  const min = m[2] == null || m[2] === '' ? 0 : Number(m[2].length === 1 ? `${m[2]}0` : m[2]);
+  const min = m[2] == null || m[2] === '' ? 0 : Number(m[2]);
   if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 };
