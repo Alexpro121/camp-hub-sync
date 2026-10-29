@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
   note_from_table: string | null; supervisor_notes: string | null; is_present: boolean;
-  gender: string | null; telegram_username: string | null;
+  gender: string | null; telegram_username: string | null; updated_at?: string;
 }
 const TOKEN_KEY = 'ironshift:registry-token';
 
@@ -185,6 +185,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const indexCache = useRef(new Map<string, Indexed>());
   const loaded = useRef(false);
   const flushing = useRef<Promise<void> | null>(null);
+  const sinceRef = useRef('');
 
   // Невідправлені дії накладаємо поверх свіжого списку з сервера.
   const applyQueue = (list: Kid[]) => {
@@ -215,6 +216,30 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
     return flushing.current;
   }, [token, onLogout]);
 
+  // Легка дельта: що змінив супровід/інший пристрій реєстрації за останні секунди.
+  const pull = useCallback(async () => {
+    if (!sinceRef.current) return;
+    await flush();
+    const d = await call({ action: 'changes', token, since: sinceRef.current }, 8_000);
+    const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
+    if (!ch.length) return;
+    sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
+    const pq = readQueue();
+    setKids((ks) => {
+      if (!ks) return ks;
+      const map = new Map(ch.map((c) => [c.id, c]));
+      const next = ks.filter((k) => !map.get(k.id)?.deleted_at).map((k) => {
+        const c = map.get(k.id); if (!c) return k;
+        const { base_note: _b, ...mine } = pq[k.id] ?? {};
+        return { ...k, ...c, ...mine };
+      });
+      const known = new Set(ks.map((k) => k.id));
+      for (const c of ch) if (!known.has(c.id) && !c.deleted_at) next.push(c);
+      return next;
+    });
+    setSyncedAt(Date.now()); setOnline(true);
+  }, [token, flush]);
+
   const load = useCallback(async () => {
     try {
       await flush();
@@ -223,6 +248,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
       const children: Kid[] = d.children ?? [];
       setShifts(sh);
       setKids(applyQueue(children));
+      sinceRef.current = children.reduce((m, k) => (k.updated_at && k.updated_at > m ? k.updated_at : m), '');
       const at = Date.now(); setSyncedAt(at); setOnline(true);
       writeList({ at, children, shifts: sh });
       loaded.current = true;
@@ -233,13 +259,17 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   }, [token, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
+  const pullRef = useRef(pull); pullRef.current = pull;
+  const onLogoutRef = useRef(onLogout); onLogoutRef.current = onLogout;
   useEffect(() => {
     loadRef.current();
     const tick = () => document.visibilityState === 'visible' && navigator.onLine && loadRef.current();
-    const t = setInterval(tick, 20_000);
+    const fast = () => document.visibilityState === 'visible' && navigator.onLine && pullRef.current().catch((e: any) => e?.message === 'unauthorized' && onLogoutRef.current());
+    const t = setInterval(tick, 60_000);
+    const f = setInterval(fast, 4_000);
     window.addEventListener('online', tick);
     document.addEventListener('visibilitychange', tick);
-    return () => { clearInterval(t); window.removeEventListener('online', tick); document.removeEventListener('visibilitychange', tick); };
+    return () => { clearInterval(t); clearInterval(f); window.removeEventListener('online', tick); document.removeEventListener('visibilitychange', tick); };
   }, []);
 
   // «/» або будь-яка літера фокусує пошук — зручно на ноутбуці.
