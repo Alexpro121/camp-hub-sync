@@ -64,8 +64,12 @@ export function previewScheduleImport(input: string, fallbackDate: string): Impo
       if (!validation.success) { result.errors.push(`${label}: ${validation.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`); return; }
       const value = validation.data;
       const range = normalizeTimeRange(value.time_start);
-      const end = value.time_end ? normalizeTime(value.time_end) : range.end;
+      let end = value.time_end ? normalizeTime(value.time_end) : range.end;
       if (!range.start || (value.time_end && !end)) { result.errors.push(`${label}: некоректний час`); return; }
+      if (end === range.start) {
+        end = null;
+        result.warnings.push(`${label}: однаковий час завершення прибрано; тривалість не визначена`);
+      }
       const slots: ImportItem['sub_slots'] = [];
       for (const slot of value.sub_slots ?? []) {
         const time = normalizeTime(slot.time);
@@ -78,8 +82,7 @@ export function previewScheduleImport(input: string, fallbackDate: string): Impo
         if (duration != null && offset > duration) { result.errors.push(`${label}: заїзд ${time} за межами події`); return; }
         slots.push({ time, teams: slot.teams, title: slot.title, location: slot.location });
       }
-      if (!end) result.warnings.push(`${label}: кінець не вказаний`);
-      if (end === range.start) result.errors.push(`${label}: початок і кінець збігаються`);
+      if (!end && value.time_end !== value.time_start) result.warnings.push(`${label}: кінець не вказаний`);
       if (/дітям не говор|дітям не каз|супровід.{0,20}(веде|збирає)|секретн.*інструкц/i.test(`${value.title} ${value.description ?? ''}`)) result.warnings.push(`${label}: перевірте внутрішні вказівки — опис бачитимуть учасники`);
       const item: ImportItem = { title: value.title ?? '', description: value.description ?? null, location: value.location ?? null, target_teams: value.target_teams ?? [], time_start: range.start, time_end: end, category: normalizeCategory(value.category), has_sub_slots: slots.length > 0, sub_slots: slots };
       const key = `${date}|${scheduleImportKey(item)}`;
