@@ -227,6 +227,8 @@ async function run(a: QueuedAction) {
     if (error) throw error;
   } else if (a.op === 'update' && a.matchId) {
     const values = await resolveConflicts(a);
+    // Нотатка, яку написав супровід, перестає бути «з реєстрації».
+    if (a.table === 'children' && 'supervisor_notes' in values) (values as Record<string, any>).notes_origin = 'staff';
     const { error } = await supabase.from(a.table as any).update(values).eq('id', a.matchId);
     if (error) throw error;
   } else {

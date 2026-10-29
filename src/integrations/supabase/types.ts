@@ -141,6 +141,7 @@ export type Database = {
           iron_dollars: number
           is_present: boolean
           note_from_table: string | null
+          notes_origin: string | null
           phone: string | null
           raw_data: Json | null
           row_number: number | null
@@ -161,6 +162,7 @@ export type Database = {
           iron_dollars?: number
           is_present?: boolean
           note_from_table?: string | null
+          notes_origin?: string | null
           phone?: string | null
           raw_data?: Json | null
           row_number?: number | null
@@ -181,6 +183,7 @@ export type Database = {
           iron_dollars?: number
           is_present?: boolean
           note_from_table?: string | null
+          notes_origin?: string | null
           phone?: string | null
           raw_data?: Json | null
           row_number?: number | null

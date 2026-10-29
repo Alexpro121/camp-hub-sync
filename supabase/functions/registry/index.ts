@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
             note = (now ? `${now}\n— ` : '') + note;
           }
           patch.supervisor_notes = note.slice(0, 4000);
+          patch.notes_origin = 'registry';
         }
         if (!Object.keys(patch).length) return { id: it.id, status: 'ok' };
         const { data, error } = await svc.from('children').update(patch).eq('id', it.id)
@@ -126,7 +127,10 @@ Deno.serve(async (req) => {
     if (body.action === 'update') {
       const patch: Record<string, unknown> = {};
       if (typeof body.is_present === 'boolean') patch.is_present = body.is_present;
-      if (typeof body.supervisor_notes === 'string') patch.supervisor_notes = body.supervisor_notes.slice(0, 2000);
+      if (typeof body.supervisor_notes === 'string') {
+        patch.supervisor_notes = body.supervisor_notes.slice(0, 2000);
+        patch.notes_origin = 'registry';
+      }
       if (!body.id || !Object.keys(patch).length) return json({ error: 'bad_request' });
       const { data: own } = await svc.from('children').select('id, shifts!inner(is_active, deleted_at)')
         .eq('id', body.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).maybeSingle();

@@ -56,19 +56,22 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
   useEffect(() => { clientUpdatedAt.current = child.updated_at ?? new Date().toISOString(); }, [child.id, child.updated_at]);
 
   const writeProfile = async () => {
+    // Нотатку надсилаємо лише коли її справді редагували: інакше просто відкрита
+    // картка перезаписала б свіжу нотатку з реєстрації й зняла б позначку «з реєстрації».
+    const noteChanged = notes !== (child.supervisor_notes ?? '');
     const res = await queuedWrite({
-    table: 'children',
-    op: 'update',
-    matchId: child.id,
-    clientUpdatedAt: clientUpdatedAt.current,
-    mergeFields: ['supervisor_notes'],
-    label: `Профіль · ${child.full_name}`,
-    values: {
-      phone: phone || null,
-      telegram_username: telegram || null,
-      supervisor_notes: notes || null,
-      gender: gender || null,
-    },
+      table: 'children',
+      op: 'update',
+      matchId: child.id,
+      clientUpdatedAt: clientUpdatedAt.current,
+      mergeFields: noteChanged ? ['supervisor_notes'] : undefined,
+      label: `Профіль · ${child.full_name}`,
+      values: {
+        phone: phone || null,
+        telegram_username: telegram || null,
+        ...(noteChanged ? { supervisor_notes: notes || null } : {}),
+        gender: gender || null,
+      },
     });
     // Our own write is now the server version — don't treat it as a conflict next time.
     if (!res.error) clientUpdatedAt.current = new Date(Date.now() + 1000).toISOString();
@@ -224,7 +227,14 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
               </div>
 
               <div data-tour="step-4-notes" className="space-y-2">
-                <Label htmlFor="notes" className="text-slate-300">Замітки</Label>
+                <Label htmlFor="notes" className="flex min-w-0 flex-wrap items-center gap-2 text-slate-300">
+                  Замітки
+                  {child.notes_origin === 'registry' && (child.supervisor_notes ?? '').trim() && (
+                    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                      з реєстрації
+                    </span>
+                  )}
+                </Label>
                 <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
               </div>
 

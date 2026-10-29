@@ -324,6 +324,14 @@ const TeamsView = ({
                         <p className="text-xs text-muted-foreground truncate">
                           {medical[c.id]?.needs_attention ? `Лікар: ${medical[c.id].note || 'потрібна увага'} · ` : ''}{c.team_name ? `Категорія: ${c.team_name} · ` : ''}{c.phone || 'без телефону'}
                         </p>
+                        {(c.supervisor_notes ?? '').trim() ? (
+                          <p className="truncate text-xs" title={(c.supervisor_notes ?? '').trim()}>
+                            <span className={c.notes_origin === 'registry' ? 'font-semibold text-warning' : 'font-semibold text-primary'}>
+                              {c.notes_origin === 'registry' ? 'Реєстрація:' : 'Нотатка:'}
+                            </span>{' '}
+                            <span className="text-muted-foreground">{(c.supervisor_notes ?? '').trim()}</span>
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-1 text-primary shrink-0">
                         <Coins className="w-3.5 h-3.5" />
