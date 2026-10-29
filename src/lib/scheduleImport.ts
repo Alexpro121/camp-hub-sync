@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { safeParseScheduleJson } from './json-sanitizer';
 import { normalizeCategory, normalizeTime, normalizeTimeRange } from './scheduleCategories';
+import { boundScheduleEstimates } from './scheduleEstimateBounds';
 
 const teams = z.array(z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive())]))
   .nullish().transform((value) => [...new Set(value ?? [])].sort((a, b) => a - b));
@@ -93,6 +94,10 @@ export function previewScheduleImport(input: string, fallbackDate: string): Impo
   });
   result.days = [...grouped.values()].filter((day) => day.items.length).sort((a, b) => a.date.localeCompare(b.date));
   result.days.forEach((day) => day.items.sort((a, b) => a.time_start.localeCompare(b.time_start)));
+  const bounded = boundScheduleEstimates(result.days);
+  result.days = bounded.days;
+  result.warnings.push(...bounded.warnings);
+  result.errors.push(...bounded.errors);
   if (!result.total && !result.errors.length) result.errors.push('У JSON немає жодної події');
   return result;
 }

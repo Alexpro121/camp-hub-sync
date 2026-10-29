@@ -90,7 +90,10 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
 
   const editEvent = (dayDate: string, index: number, field: 'title' | 'time_start' | 'time_end', value: string) => {
     if (!preview || busy || generating) return;
-    const days = preview.days.map((day) => day.date !== dayDate ? day : { ...day, items: day.items.map((item, position) => position !== index ? item : { ...item, [field]: value || null }) });
+    const days = preview.days.map((day) => day.date !== dayDate ? day : { ...day, items: day.items.map((item, position) => position !== index ? item : {
+      ...item, [field]: value || null,
+      description: field === 'title' ? item.description : item.description?.replace(/завершення\s+орієнтовне[.!]?/ig, '').trim() || null,
+    }) });
     const next = JSON.stringify({ days });
     const check = previewScheduleImport(next, date);
     if (check.errors.length || check.total !== preview.total) {

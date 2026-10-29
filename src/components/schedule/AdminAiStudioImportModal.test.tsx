@@ -9,6 +9,24 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.f
 beforeEach(() => { generate.mockReset(); save.mockReset(); save.mockResolvedValue({ total: 2, skipped: 0 }); });
 
 describe('admin schedule preview flow', () => {
+  it('saves exercise ending at 09:00 before breakfast with four arrivals', async () => {
+    const items = [
+      { title: 'Зарядка', time_start: '08:30', time_end: '09:15', description: 'Завершення орієнтовне', target_teams: [] },
+      { title: 'Сніданок', time_start: '09:00', time_end: '10:00', target_teams: [], sub_slots: ['09:00', '09:15', '09:30', '09:45'].map((time, index) => ({ time, teams: [index + 1] })) },
+    ];
+    const json = JSON.stringify({ days: [{ date: '2026-10-29', items }] });
+    generate.mockImplementation(async (_raw, _date, _signal, onText) => { onText(json); return json; });
+    render(<AdminAiStudioImportModal open date="2026-10-29" onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Текст розкладу'), { target: { value: '08:30 Зарядка\n09:00–10:00 Сніданок, 4 заїзди' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Згенерувати розклад' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Зберегти перевірену чернетку' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти перевірену чернетку' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const saved = save.mock.calls[0][0][0].items;
+    expect(saved[0]).toMatchObject({ time_start: '08:30', time_end: '09:00' });
+    expect(saved[1]).toMatchObject({ time_start: '09:00', time_end: '10:00' });
+    expect(saved[1].sub_slots).toHaveLength(4);
+  });
   it('shows complete events while generation is still running and blocks draft saving', async () => {
     let finish: ((value: string) => void) | undefined;
     const partial = '{"days":[{"date":"2026-02-24","items":[{"title":"Підйом","time_start":"08:00","time_end":"08:00"}';
