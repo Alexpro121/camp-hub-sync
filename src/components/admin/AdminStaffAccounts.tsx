@@ -28,13 +28,13 @@ const inviteAlive = (i: Invite) => !i.revoked && (!i.expires_at || new Date(i.ex
 const fmtDT = (d: string) => new Date(d).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 const KindToggle = ({ value, onChange }: { value: StaffKind; onChange: (k: StaffKind) => void }) => (
-  <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-muted">
-    {(['supervisor', 'duckling'] as StaffKind[]).map((k) => (
-      <button key={k} type="button" onClick={() => onChange(k)}
+  <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-muted">
+    {(['supervisor', 'duckling', 'doctor'] as StaffKind[]).map((k) => (
+      <Button key={k} type="button" variant="ghost" onClick={() => onChange(k)}
         className={cn('h-9 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]',
           value === k ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}>
         {KIND_LABEL[k]}
-      </button>
+      </Button>
     ))}
   </div>
 );
@@ -94,6 +94,7 @@ const AdminStaffAccounts = () => {
     all: members.length,
     supervisor: members.filter((m) => m.kind === 'supervisor').length,
     duckling: members.filter((m) => m.kind === 'duckling').length,
+    doctor: members.filter((m) => m.kind === 'doctor').length,
     off: members.filter((m) => !m.is_active).length,
   }), [members]);
 
@@ -142,7 +143,7 @@ const AdminStaffAccounts = () => {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Пошук: імʼя, логін, телефон" className="pl-9 h-10 rounded-xl" />
         </div>
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-          {([['all', 'Всі'], ['supervisor', 'Супровід'], ['duckling', 'Каченята'], ['off', 'Вимкнені']] as [Filter, string][]).map(([k, l]) => (
+          {([['all', 'Всі'], ['supervisor', 'Супровід'], ['duckling', 'Каченята'], ['doctor', 'Лікарі'], ['off', 'Вимкнені']] as [Filter, string][]).map(([k, l]) => (
             <Button key={k} variant="ghost" size="sm" onClick={() => setFilter(k)}
               className={cn('shrink-0 min-h-10 px-3 rounded-md text-xs font-semibold border transition-colors',
                 filter === k ? 'bg-foreground text-background border-foreground' : 'bg-transparent text-muted-foreground border-border hover:text-foreground')}>

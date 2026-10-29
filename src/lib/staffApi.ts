@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type StaffKind = 'supervisor' | 'duckling';
-export const KIND_LABEL: Record<StaffKind, string> = { supervisor: 'Супровід', duckling: 'Каченя' };
+export type StaffKind = 'supervisor' | 'duckling' | 'doctor';
+export const KIND_LABEL: Record<StaffKind, string> = { supervisor: 'Супровід', duckling: 'Каченя', doctor: 'Лікар' };
 
 export const isAbortError = (e: unknown) => (e as Error)?.name === 'AbortError' || (e as Error)?.message === 'aborted';
 

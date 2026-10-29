@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { admin, ANON_KEY, corsHeaders, ensureRole, json, SUPABASE_URL } from '../_shared/accounts.ts';
 import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
+import { z } from 'npm:zod@3';
 
 /** Логін: латиниця/цифри/._- , 3..40 символів, нижній регістр */
 function normLogin(s: unknown): string | null {
@@ -24,7 +25,7 @@ const clean = (v: unknown, max: number) => String(v ?? '').normalize('NFC').trim
 const normPhone = (v: unknown) => { const d = String(v ?? '').replace(/\D/g, ''); return d.length >= 9 && d.length <= 15 ? '+' + (d.length === 9 ? '380' + d : d.length === 10 && d.startsWith('0') ? '38' + d : d) : null; };
 const normTg = (v: unknown) => { const t = String(v ?? '').trim().replace(/^https?:\/\/t\.me\//i, '').replace(/^@+/, ''); return /^[A-Za-z0-9_]{4,32}$/.test(t) ? t : null; };
 const okAvatar = (v: unknown) => typeof v === 'string' && /^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= 90000;
-const KINDS = ['supervisor', 'duckling'];
+const KINDS = ['supervisor', 'duckling', 'doctor'];
 
 // Фото супроводу зберігаються у сховищі, у базі — лише короткий шлях "storage:<path>".
 const AVATAR_BUCKET = 'staff-avatars';
@@ -124,12 +125,12 @@ Deno.serve(async (req) => {
       // Кандидати: точний логін, або ПІБ (без регістру, зайвих пробілів, різних апострофів)
       const candidates: any[] = [];
       if (login) {
-        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active').eq('login', login).maybeSingle();
+        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active, kind').eq('login', login).maybeSingle();
         if (data) candidates.push(data);
       }
       if (nameKey && nameKey.includes(' ')) {
         const first = nameKey.split(' ')[0];
-        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active').ilike('full_name', `%${first.replace(/[%_]/g, '')}%`).limit(50);
+        const { data } = await svc.from('staff_members').select('user_id, full_name, login, is_active, kind').ilike('full_name', `%${first.replace(/[%_]/g, '')}%`).limit(50);
         for (const m of data ?? []) {
           if (normName(m.full_name) === nameKey && !candidates.some((c) => c.user_id === m.user_id)) candidates.push(m);
         }
@@ -147,7 +148,8 @@ Deno.serve(async (req) => {
       }
       resetFailures(rl);
       // Без прив'язки до команди, доки супровід не обере зміну в кабінеті.
-      await ensureRole(svc, signIn.user.id, 'supervisor', { team_number: null });
+      if (member.kind !== 'doctor') await ensureRole(svc, signIn.user.id, 'supervisor', { team_number: null });
+      else await svc.from('user_roles').delete().eq('user_id', signIn.user.id).eq('role', 'supervisor');
       return json({ session: signIn.session, full_name: member.full_name });
     }
 
@@ -200,6 +202,30 @@ Deno.serve(async (req) => {
 
     const user = await authUser(req);
     if (!user) return json({ error: 'unauthorized' }, 401);
+    const { data: actingMember } = await svc.from('staff_members').select('kind, is_active').eq('user_id', user.id).maybeSingle();
+    if (actingMember && !actingMember.is_active) return json({ error: 'forbidden' }, 403);
+    if (actingMember?.kind === 'doctor' && ['join_shift', 'enter_shift'].includes(action)) return json({ error: 'forbidden' }, 403);
+
+    if (action === 'doctor_data' || action === 'doctor_save') {
+      if (actingMember?.kind !== 'doctor' || !actingMember.is_active) return json({ error: 'forbidden' }, 403);
+      if (action === 'doctor_save') {
+        const parsed = z.object({ child_id: z.string().uuid(), note: z.string().max(4000), needs_attention: z.boolean(), version: z.number().int().nonnegative() }).safeParse(body);
+        if (!parsed.success) return json({ error: 'invalid_input' }, 400);
+        const token = req.headers.get('Authorization') ?? '';
+        const client = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: token } }, auth: { persistSession: false } });
+        const b = parsed.data;
+        const { data, error } = await client.rpc('save_child_medical_note', { p_child_id: b.child_id, p_note: b.note, p_needs_attention: b.needs_attention, p_version: b.version });
+        return error ? json({ error: error.message.includes('medical_note_conflict') ? 'medical_note_conflict' : 'save_failed' }) : json({ medical: data });
+      }
+      const [kids, shifts, assignments, notes] = await Promise.all([
+        svc.from('children').select('*').is('deleted_at', null).order('full_name').limit(10000),
+        svc.from('shifts').select('id,name').is('deleted_at', null),
+        svc.from('staff_assignments').select('shift_id,team_number,staff_members(full_name,kind,is_active)'),
+        svc.from('child_medical_notes').select('*'),
+      ]);
+      if ([kids, shifts, assignments, notes].some((r) => r.error)) return json({ error: 'load_failed' }, 500);
+      return json({ children: kids.data, shifts: shifts.data, assignments: assignments.data, medical: notes.data });
+    }
 
     // ---------- САМОПРИЗНАЧЕННЯ ЗА ПОСИЛАННЯМ ЗМІНИ ----------
     if (action === 'join_shift') {
@@ -235,6 +261,7 @@ Deno.serve(async (req) => {
     if (action === 'cabinet') {
       const { data: member } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
       if (!member) return json({ error: 'not_staff' }, 403);
+      if (actingMember?.kind === 'doctor') return json({ ...member, assignments: [] });
       const { data: asg } = await svc
         .from('staff_assignments')
         .select('id, team_number, shift_id, shifts(id, name, shift_type, start_date, end_date, deleted_at)')
@@ -318,7 +345,7 @@ Deno.serve(async (req) => {
       if (error || !created.user) return json({ error: /weak|pwned|guess/i.test(error?.message ?? '') ? 'weak_password' : 'create_failed' });
       const kind = KINDS.includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
       await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, kind, phone: normPhone(body?.phone), telegram: normTg(body?.telegram) });
-      await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
+      if (kind !== 'doctor') await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
       return json({ ok: true });
     }
 
@@ -394,7 +421,12 @@ Deno.serve(async (req) => {
       if ('phone' in body) { const raw = String(body.phone ?? '').trim(); const p = raw ? normPhone(raw) : null; if (raw && !p) return json({ error: 'bad_phone' }); patch.phone = p; }
       if ('telegram' in body) { const raw = String(body.telegram ?? '').trim(); const t = raw ? normTg(raw) : null; if (raw && !t) return json({ error: 'bad_telegram' }); patch.telegram = t; }
       if ('avatar_url' in body && body.avatar_url === null) patch.avatar_url = null;
-      await svc.from('staff_members').update(patch).eq('user_id', String(body?.user_id));
+      const memberId = z.string().uuid().safeParse(body?.user_id);
+      if (!memberId.success) return json({ error: 'invalid_input' }, 400);
+      const { error } = await svc.from('staff_members').update(patch).eq('user_id', memberId.data);
+      if (error) return json({ error: 'update_failed' }, 500);
+      if (patch.kind === 'doctor') await svc.from('user_roles').delete().eq('user_id', memberId.data).eq('role', 'supervisor');
+      else if (patch.kind) await ensureRole(svc, memberId.data, 'supervisor', { team_number: null });
       return json({ ok: true });
     }
 
@@ -409,7 +441,7 @@ Deno.serve(async (req) => {
       if (max_uses !== null && !(max_uses >= 1 && max_uses <= 500)) return json({ error: 'invalid_input' });
       if (hours !== null && !(hours > 0 && hours <= 24 * 60)) return json({ error: 'invalid_input' });
       if (max_uses === null && hours === null) return json({ error: 'need_limit' });
-      const kind = KINDS.includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
+      const kind = ['supervisor', 'duckling'].includes(String(body?.kind)) ? String(body.kind) : 'supervisor';
       const bytes = crypto.getRandomValues(new Uint8Array(18));
       const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const { data, error } = await svc.from('staff_invites').insert({
