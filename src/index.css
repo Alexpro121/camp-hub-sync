@@ -940,3 +940,40 @@
   .fog-1, .fog-2 { animation: none; }
   .card-hero::before { animation: none; }
 }
+
+/* Clinical workspace: neutral surfaces, teal actions and red attention marks. */
+.doctor-desk {
+  --background: 210 10% 10%;
+  --foreground: 210 14% 95%;
+  --card: 210 9% 13%;
+  --card-foreground: 210 14% 95%;
+  --muted: 210 8% 18%;
+  --muted-foreground: 210 8% 67%;
+  --primary: 170 56% 57%;
+  --primary-foreground: 170 40% 9%;
+  --accent: 170 56% 57%;
+  --accent-foreground: 170 40% 9%;
+  --secondary: 210 8% 18%;
+  --secondary-foreground: 210 14% 95%;
+  --border: 210 8% 24%;
+  --input: 210 8% 28%;
+  --ring: 170 56% 57%;
+}
+.doctor-desk.staff-light {
+  --background: 180 10% 96%;
+  --foreground: 200 17% 15%;
+  --card: 0 0% 100%;
+  --card-foreground: 200 17% 15%;
+  --muted: 180 8% 92%;
+  --muted-foreground: 200 9% 42%;
+  --primary: 170 70% 28%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 170 70% 28%;
+  --accent-foreground: 0 0% 100%;
+  --secondary: 180 8% 92%;
+  --secondary-foreground: 200 17% 15%;
+  --destructive: 0 72% 45%;
+  --border: 180 9% 85%;
+  --input: 180 9% 80%;
+  --ring: 170 70% 28%;
+}

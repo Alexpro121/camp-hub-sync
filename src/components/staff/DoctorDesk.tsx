@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon } from 'lucide-react';
+import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon, Users, Phone, ChevronRight, X, ClipboardList, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,27 +64,47 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
     setData((d) => d ? { ...d, medical: [...d.medical.filter((n) => n.child_id !== child.id), result.medical] } : d);
     toast.success('Медичну помітку збережено'); setOpenId(null);
   };
-  return <main className={`min-h-[100dvh] bg-background text-foreground ${theme === 'light' ? 'staff-light' : ''}`}>
-    <header className="sticky top-0 z-10 border-b border-border bg-background px-4 py-3 safe-top">
-      <div className="mx-auto max-w-3xl space-y-3">
-        <div className="flex items-center gap-2"><Stethoscope className="h-6 w-6 text-primary shrink-0" /><div className="min-w-0 flex-1"><h1 className="font-bold text-lg">Лікар</h1><p className="text-xs text-muted-foreground truncate">{name}</p></div>
-          <Button size="icon" variant="ghost" onClick={toggleTheme} aria-label="Змінити тему">{theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}</Button>
-          <Button size="icon" variant="ghost" onClick={onLogout} aria-label="Вийти"><LogOut className="h-4 w-4" /></Button></div>
-        <div className="relative"><Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" /><Input aria-label="Пошук дитини" placeholder="ПІБ або телефон" value={query} onChange={(e) => setQuery(e.target.value)} className="h-11 pl-10" /></div>
-        <div className="flex flex-wrap gap-2"><Select value={shift} onValueChange={setShift}><SelectTrigger className="w-full sm:w-64 h-11"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Усі зміни</SelectItem>{data?.shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
-          <Button variant={marked ? 'destructive' : 'outline'} className="h-11" onClick={() => setMarked((v) => !v)}><Cross className="mr-2 h-4 w-4" />З поміткою</Button></div>
+  const markedCount = (data?.children ?? []).filter((c) => (shift === 'all' || c.shift_id === shift) && medical[c.id]?.needs_attention).length;
+  const childCount = (data?.children ?? []).filter((c) => shift === 'all' || c.shift_id === shift).length;
+  return <main className={`doctor-desk min-h-[100dvh] bg-background text-foreground ${theme === 'light' ? 'staff-light' : ''}`}>
+    <header className="border-b border-border bg-card px-4 pt-5 pb-4 sm:px-6 sm:pt-7 safe-top">
+      <div className="mx-auto max-w-5xl">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Stethoscope className="h-6 w-6" /></div>
+          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-primary">Медичний кабінет</p><h1 className="text-xl font-bold tracking-normal sm:text-2xl">Лікар</h1></div>
+          <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={toggleTheme} aria-label="Змінити тему" title="Змінити тему">{theme === 'light' ? <Moon /> : <Sun />}</Button>
+          <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={onLogout} aria-label="Вийти" title="Вийти"><LogOut /></Button>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <p className="min-w-0 break-words text-sm text-muted-foreground">{name}</p>
+          <div className="flex items-center gap-4 text-xs sm:text-sm"><span className="flex items-center gap-1.5 text-muted-foreground"><Users className="h-4 w-4" /><strong className="font-semibold text-foreground">{data ? childCount : '—'}</strong> дітей</span><span className="flex items-center gap-1.5 text-destructive"><Cross className="h-4 w-4" /><strong className="font-semibold">{data ? markedCount : '—'}</strong> з поміткою</span></div>
+        </div>
       </div>
     </header>
-    <section className="mx-auto max-w-3xl p-4 space-y-2">
-      {error && <div role="alert" className="flex items-center gap-2 text-sm text-destructive">Не вдалося оновити список.<Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className="h-4 w-4 mr-1" />Повторити</Button></div>}
-      {!data && !error && <p className="text-muted-foreground">Завантаження дітей…</p>}
-      {data && <p className="text-xs text-muted-foreground pb-2">Знайдено: {visible.length}</p>}
-      {visible.slice(0, limit).map((c) => <Button key={c.id} variant="outline" onClick={() => setOpenId(c.id)} className="h-auto min-h-[76px] w-full justify-start whitespace-normal p-3 text-left motion-safe:animate-in motion-safe:fade-in">
-        {medical[c.id]?.needs_attention && <Cross className="h-5 w-5 shrink-0 text-destructive mr-3" aria-label="Медична помітка" />}
-        <div className="min-w-0 flex-1"><p className="font-semibold break-words">{c.full_name}</p><p className="text-xs text-muted-foreground">Команда {c.team_number} · {data?.shifts.find((s) => s.id === c.shift_id)?.name ?? 'Без зміни'}</p><p className="text-xs text-muted-foreground break-words">{supervisorsForChild(data?.assignments ?? [], c.shift_id, c.team_number).join(' · ') || 'Супровід не призначений'}</p></div>
-      </Button>)}
-      {data && visible.length === 0 && <p className="py-8 text-center text-muted-foreground">Дітей не знайдено</p>}
-      {visible.length > limit && <Button variant="secondary" className="w-full h-11" onClick={() => setLimit((n) => n + 60)}>Показати ще</Button>}
+    <div className="sticky top-0 z-10 border-b border-border bg-background px-4 py-4 sm:px-6">
+      <div className="mx-auto max-w-5xl space-y-3">
+        <div className="relative"><Search className="pointer-events-none absolute left-3.5 top-3.5 h-5 w-5 text-muted-foreground" /><Input aria-label="Пошук дитини" placeholder="ПІБ або телефон" value={query} onChange={(e) => setQuery(e.target.value)} className="h-12 rounded-lg bg-card pl-11 pr-11 text-base" />{query && <Button variant="ghost" size="icon" aria-label="Очистити пошук" title="Очистити пошук" onClick={() => setQuery('')} className="absolute right-1 top-1 hover:bg-muted hover:text-foreground"><X /></Button>}</div>
+        <div className="flex flex-wrap items-center gap-2"><Select value={shift} onValueChange={setShift}><SelectTrigger className="h-11 w-full min-w-0 bg-card sm:w-64"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Усі зміни</SelectItem>{data?.shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
+          <div className="flex h-11 rounded-md border border-border bg-muted p-1" role="group" aria-label="Фільтр дітей">
+            <Button variant="ghost" aria-pressed={!marked} className={`h-9 px-3 hover:bg-card hover:text-foreground ${!marked ? 'bg-card text-foreground' : 'text-muted-foreground'}`} onClick={() => setMarked(false)}>Усі</Button>
+            <Button variant="ghost" aria-pressed={marked} className={`h-9 px-3 hover:bg-card hover:text-destructive ${marked ? 'bg-card text-destructive' : 'text-muted-foreground'}`} onClick={() => setMarked(true)}><Cross />З поміткою<span className="text-xs tabular-nums">{markedCount}</span></Button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <section className="mx-auto max-w-5xl px-4 pb-8 pt-5 sm:px-6">
+      {error && <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">Не вдалося оновити список.<Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw />Повторити</Button></div>}
+      {!data && !error && <div role="status" className="space-y-3"><p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 motion-safe:animate-spin" />Завантаження дітей…</p>{[0, 1, 2, 3].map((n) => <div key={n} className="h-24 rounded-lg bg-muted motion-safe:animate-pulse" />)}</div>}
+      {data && <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold tracking-normal">{marked ? 'Діти з медичною поміткою' : 'Список дітей'}</h2><p className="text-xs text-muted-foreground tabular-nums">Знайдено: {visible.length}</p></div>}
+      <div className="grid gap-2.5 lg:grid-cols-2">
+        {visible.slice(0, limit).map((c) => <Button key={c.id} variant="outline" onClick={() => setOpenId(c.id)} className={`group h-auto min-h-[108px] w-full items-start justify-start gap-3 whitespace-normal rounded-lg bg-card p-4 text-left hover:border-primary/50 hover:bg-muted/50 hover:text-foreground motion-safe:transition-colors ${medical[c.id]?.needs_attention ? 'border-destructive/30' : 'border-border'}`}>
+          <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold ${medical[c.id]?.needs_attention ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>{medical[c.id]?.needs_attention ? <Cross aria-label="Медична помітка" /> : String(c.team_number).padStart(2, '0')}</span>
+          <div className="min-w-0 flex-1 space-y-1.5"><p className="break-words text-sm font-semibold leading-snug sm:text-base">{c.full_name}</p><p className="break-words text-xs text-muted-foreground">Команда {c.team_number} · {data?.shifts.find((s) => s.id === c.shift_id)?.name ?? 'Без зміни'}</p><p className="flex items-start gap-1.5 text-xs text-muted-foreground"><Users className="mt-0.5 shrink-0" /><span className="break-words">{supervisorsForChild(data?.assignments ?? [], c.shift_id, c.team_number).join(' · ') || 'Супровід не призначений'}</span></p>{c.phone && <p className="flex items-center gap-1.5 text-xs text-primary"><Phone /><span className="break-all tabular-nums">{c.phone}</span></p>}</div>
+          <ChevronRight className="mt-1 text-muted-foreground group-hover:text-primary" />
+        </Button>)}
+      </div>
+      {data && visible.length === 0 && <div className="flex flex-col items-center gap-3 py-16 text-center"><Search className="h-8 w-8 text-muted-foreground" /><p className="text-sm text-muted-foreground">Дітей не знайдено</p></div>}
+      {visible.length > limit && <Button variant="secondary" className="mt-4 h-11 w-full" onClick={() => setLimit((n) => n + 60)}>Показати ще</Button>}
     </section>
     {child && <MedicalProfile key={child.id} child={child} medical={medical[child.id]} supervisors={supervisorsForChild(data?.assignments ?? [], child.shift_id, child.team_number)} onClose={() => setOpenId(null)} onSave={save} onConflict={() => void load()} light={theme === 'light'} />}
   </main>;
@@ -106,19 +126,19 @@ function MedicalProfile({ child, medical, supervisors, onClose, onSave, onConfli
   }, [medical?.version, medical?.note, medical?.needs_attention, note, attention, version]);
   const close = () => { if (!busy && (!dirty || window.confirm('Закрити без збереження помітки?'))) onClose(); };
   const rows = [['Телефон', child.phone], ['Telegram', child.telegram_username], ['Категорія', child.team_name], ['Стать', child.gender === 'girl' ? 'Дівчинка' : child.gender === 'boy' ? 'Хлопчик' : 'Не визначено'], ['Баланс А$', String(child.iron_dollars)], ['Зі списку', child.note_from_table], ['Нотатки супроводу', child.supervisor_notes]];
-  return <Dialog open onOpenChange={(v) => !v && close()}><DialogContent className={`max-w-lg w-[calc(100dvw-1rem)] max-h-[calc(100dvh-1rem)] flex flex-col overflow-hidden p-0 ${light ? 'staff-light' : ''}`}>
-    <DialogHeader className="border-b border-border p-4 pr-12 shrink-0"><DialogTitle className="break-words text-left">{child.full_name}</DialogTitle><DialogDescription className="text-xs text-muted-foreground text-left">Команда {child.team_number} · {child.is_present ? 'Присутній(я)' : 'Відсутній(я)'}</DialogDescription></DialogHeader>
-    <div className="min-h-0 overflow-y-auto overscroll-contain p-4 space-y-5">
-      <section><h2 className="text-sm font-semibold mb-2">Супровід</h2><p className="text-sm break-words">{supervisors.join(' · ') || 'Не призначений'}</p></section>
-      <dl className="space-y-3">{rows.filter(([, v]) => v).map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="text-sm whitespace-pre-wrap break-words">{label === 'Телефон' ? <a className="text-primary" href={`tel:${value}`}>{value}</a> : value}</dd></div>)}</dl>
-      {child.raw_data && <dl className="space-y-2">{Object.entries(child.raw_data).map(([k, v]) => <div key={k}><dt className="text-xs text-muted-foreground break-words">{k}</dt><dd className="text-sm break-words">{typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}</dd></div>)}</dl>}
-      <section className="border-t border-border pt-4 space-y-3"><h2 className="font-semibold flex items-center gap-2"><Cross className="h-4 w-4 text-destructive" />Медична помітка</h2>
-        <div className="flex items-center gap-3"><Checkbox id="medical-attention" checked={attention} onCheckedChange={(v) => setAttention(v === true)} /><Label htmlFor="medical-attention">Потребує уваги супроводу</Label></div>
-        <Label htmlFor="medical-note">Нотатка лікаря</Label><Textarea id="medical-note" rows={4} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} className="resize-none" />
+  return <Dialog open onOpenChange={(v) => !v && close()}><DialogContent className={`doctor-desk text-foreground w-[calc(100dvw-1rem)] max-w-2xl max-h-[calc(100dvh-1rem)] gap-0 flex flex-col overflow-hidden rounded-lg p-0 ${light ? 'staff-light' : ''}`}>
+    <DialogHeader className="shrink-0 border-b border-border bg-card p-5 pr-12"><p className="mb-1 flex items-center gap-2 text-xs font-medium text-primary"><Stethoscope className="h-4 w-4" />Профіль дитини</p><DialogTitle className="break-words text-left text-lg leading-snug tracking-normal">{child.full_name}</DialogTitle><DialogDescription className="text-left text-xs text-muted-foreground">Команда {child.team_number} · {child.is_present ? 'Присутній(я)' : 'Відсутній(я)'}</DialogDescription></DialogHeader>
+    <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-6">
+      <section className="space-y-3"><div className="flex items-center justify-between gap-2"><h2 className="flex items-center gap-2 text-sm font-semibold tracking-normal"><Cross className="h-4 w-4 text-destructive" />Медична помітка</h2>{attention && <span className="rounded-md bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">Потребує уваги</span>}</div>
+        <div className={`flex items-center gap-3 rounded-md border p-3 ${attention ? 'border-destructive/25 bg-destructive/5' : 'border-border bg-muted/40'}`}><Checkbox id="medical-attention" checked={attention} onCheckedChange={(v) => setAttention(v === true)} /><Label htmlFor="medical-attention" className="cursor-pointer text-sm leading-snug">Потребує уваги супроводу</Label></div>
+        <div className="space-y-2"><Label htmlFor="medical-note" className="text-xs text-muted-foreground">Нотатка лікаря</Label><Textarea id="medical-note" rows={4} maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} className="min-h-28 resize-none bg-card text-sm leading-relaxed" /></div>
         {medical?.needs_attention && <Button variant="outline" onClick={() => setAttention(false)}>Прибрати червоний плюсик</Button>}
         {conflict && <div role="alert" className="space-y-2"><p className="text-sm text-destructive">Помітку вже змінив інший лікар. Ваш текст залишився в полі.</p><Button variant="outline" onClick={() => { baseline.current = { note: medical?.note ?? '', attention: medical?.needs_attention ?? false }; setNote(baseline.current.note); setAttention(baseline.current.attention); setVersion(medical?.version ?? 0); setConflict(false); }}>Завантажити свіжу помітку</Button></div>}
       </section>
+      <section className="border-t border-border pt-4"><h2 className="mb-3 flex items-center gap-2 text-sm font-semibold tracking-normal"><Users className="h-4 w-4 text-primary" />Супровід команди</h2><p className="break-words text-sm leading-relaxed">{supervisors.join(' · ') || 'Не призначений'}</p></section>
+      <section className="border-t border-border pt-4"><h2 className="mb-4 flex items-center gap-2 text-sm font-semibold tracking-normal"><ClipboardList className="h-4 w-4 text-primary" />Дані дитини</h2><dl className="grid grid-cols-2 gap-x-4 gap-y-4">{rows.filter(([, v]) => v).map(([label, value]) => <div key={label} className={label === 'Зі списку' || label === 'Нотатки супроводу' ? 'col-span-2 min-w-0' : 'min-w-0'}><dt className="mb-1 text-xs text-muted-foreground">{label}</dt><dd className="whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{label === 'Телефон' ? <a className="inline-flex items-center gap-1.5 text-primary" href={`tel:${value}`}><Phone className="h-3.5 w-3.5 shrink-0" />{value}</a> : value}</dd></div>)}</dl></section>
+      {child.raw_data && <section className="border-t border-border pt-4"><h2 className="mb-3 text-sm font-semibold tracking-normal">Додаткові дані</h2><dl className="space-y-3">{Object.entries(child.raw_data).map(([k, v]) => <div key={k} className="min-w-0"><dt className="break-words text-xs text-muted-foreground">{k}</dt><dd className="text-sm break-words [overflow-wrap:anywhere]">{typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}</dd></div>)}</dl></section>}
     </div>
-    <footer className="flex gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0"><Button variant="outline" onClick={close} disabled={busy} className="flex-1 h-11">Закрити</Button><Button className="flex-1 h-11" disabled={busy || conflict} onClick={async () => { setBusy(true); try { await onSave(note, attention, version); } catch (e) { if (e instanceof Error && e.message === 'medical_note_conflict') { setConflict(true); onConflict(); } else toast.error('Не збережено. Перевірте зв’язок і повторіть.'); } finally { setBusy(false); } }}>{busy ? 'Збереження…' : 'Зберегти'}</Button></footer>
+    <footer className="flex gap-2 border-t border-border bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0"><Button variant="outline" onClick={close} disabled={busy} className="flex-1 h-11">Закрити</Button><Button className="flex-1 h-11" disabled={busy || conflict} onClick={async () => { setBusy(true); try { await onSave(note, attention, version); } catch (e) { if (e instanceof Error && e.message === 'medical_note_conflict') { setConflict(true); onConflict(); } else toast.error('Не збережено. Перевірте зв’язок і повторіть.'); } finally { setBusy(false); } }}>{busy ? <Loader2 className="motion-safe:animate-spin" /> : <Check />}{busy ? 'Збереження…' : 'Зберегти'}</Button></footer>
   </DialogContent></Dialog>;
 }
