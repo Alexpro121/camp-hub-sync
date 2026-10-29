@@ -36,6 +36,8 @@ export interface Child {
   iron_dollars: number;
   telegram_username: string | null;
   supervisor_notes: string | null;
+  /** Хто написав нотатку: 'registry' — реєстрація, 'staff' — супровід. */
+  notes_origin?: string | null;
   raw_data: any;
   created_at: string;
   updated_at: string;

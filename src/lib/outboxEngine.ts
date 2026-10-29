@@ -276,7 +276,7 @@ class OutboxManager {
       const { error } = await withTimeout(
         supabase
           .from('children')
-          .update({ supervisor_notes: noteValue })
+          .update({ supervisor_notes: noteValue, notes_origin: 'staff' })
           .eq('id', item.entityId)
       );
       if (error) throw error;
