@@ -392,10 +392,11 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             ))}
           </div>
           {multiShift && (
-            <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
-              <button onClick={() => setShiftId(null)} className={chip(shiftId === null)}>Усі зміни</button>
-              {Object.entries(shifts).map(([id, n]) => <button key={id} onClick={() => setShiftId(id)} className={chip(shiftId === id)}>{n}</button>)}
-            </div>
+            <button onClick={onChangeShift}
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground transition-transform active:scale-[0.99]">
+              <span className="min-w-0 truncate">Зміна: <span className="font-semibold">{shiftId ? (shifts[shiftId] ?? '…') : 'Усі зміни'}</span></span>
+              <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </button>
           )}
         </div>
       </header>
@@ -411,7 +412,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
           <>
             {searching && <p className="mb-2 text-xs text-muted-foreground">Найкращі збіги серед усіх дітей · Enter — відмітити першого</p>}
             <ul key={`${filter}|${team}|${shiftId}|${searching ? 's' : 'b'}`} className={`space-y-2 transition-opacity duration-150 ${q !== dq ? 'opacity-60' : ''}`}>
-              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift ? shifts[k.shift_id] : undefined} onToggle={onRowToggle} onOpen={onRowOpen} />)}
+              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift && !shiftId ? shifts[k.shift_id] : undefined} onToggle={onRowToggle} onOpen={onRowOpen} />)}
             </ul>
             {results.length > limit && (
               <button onClick={() => setLimit((l) => l + 100)} className="mt-3 h-11 w-full rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">
@@ -421,7 +422,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
           </>
         )}
       </main>
-      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
+      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
     </div>
   );
 }
