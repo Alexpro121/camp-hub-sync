@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronDown, History, Loader2, ReceiptText
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useHaptics } from '@/hooks/useHaptics';
-import TransactionDetailsDialog, { receiptNumber, txMerchant, type IronTx } from './TransactionDetailsDialog';
+import TransactionDetailsDialog, { receiptNumber, txMerchant, txActor, type IronTx } from './TransactionDetailsDialog';
 
 interface Props {
   childId: string;
@@ -115,6 +115,9 @@ const TransactionHistory = ({ childId, bare = false, limit = 30, collapsible = f
                     <div className="min-w-0 flex-1">
                       <span className="block text-xs sm:text-sm font-bold text-foreground truncate">
                         {txMerchant(tx)}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground break-words mt-0.5">
+                        {negative ? 'Списав /ла' : 'Нарахував /ла'}: {txActor(tx)}
                       </span>
                       <span className="block text-[10px] text-muted-foreground tabular-nums font-medium mt-0.5">
                         {receiptNumber(tx.id)} · {new Date(tx.created_at).toLocaleString('uk-UA', {

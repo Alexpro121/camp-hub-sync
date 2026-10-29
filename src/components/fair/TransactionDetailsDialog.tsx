@@ -25,8 +25,10 @@ export const receiptNumber = (id: string) => {
 export const txMerchant = (tx: IronTx) => {
   if (tx.reason?.includes('Air Pay')) return tx.reason;
   if (tx.reason === 'Ярмарок' || tx.reason === 'Покупка на ярмарку') return 'Ярмарок · Залізна зміна';
-  return tx.performed_by || tx.reason || 'Супровід';
+  return tx.reason || (tx.amount_change >= 0 ? 'Нарахування айрон-доларів' : 'Списання айрон-доларів');
 };
+
+export const txActor = (tx: IronTx) => tx.performed_by?.trim() || 'Автор не збережений';
 
 /** Форматування дати та часу */
 export const txDateTime = (iso: string) => {
@@ -57,7 +59,7 @@ const Row = ({
     className={`flex items-center justify-between gap-4 py-2.5 ${onClick ? 'cursor-pointer active:opacity-70 transition-opacity' : ''}`}
   >
     <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-    <span className={`text-xs font-semibold text-right break-words text-foreground flex items-center gap-1.5 ${mono ? 'font-mono tabular-nums' : ''}`}>
+    <span className={`min-w-0 text-xs font-semibold text-right break-words text-foreground flex items-center gap-1.5 ${mono ? 'font-mono tabular-nums' : ''}`}>
       {value}
       {onClick && <Copy className="w-3 h-3 text-muted-foreground" />}
     </span>
@@ -131,7 +133,7 @@ const TransactionDetailsDialog = memo(({ tx, onClose }: Props) => {
             />
             <Row label="Дата та час" value={txDateTime(tx.created_at)} mono />
             <Row label="Призначення" value={tx.reason || 'Операція на ярмарку'} />
-            <Row label="Отримувач / Каса" value={txMerchant(tx)} />
+            <Row label={isIncome ? 'Нарахував /ла' : 'Списав /ла'} value={txActor(tx)} />
             
             {typeof tx.balance_after === 'number' && (
               <Row 
