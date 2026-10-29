@@ -852,6 +852,30 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_password_resets: {
+        Row: {
+          changed_at: string | null
+          created_at: string
+          salt: string
+          temp_hash: string
+          user_id: string
+        }
+        Insert: {
+          changed_at?: string | null
+          created_at?: string
+          salt: string
+          temp_hash: string
+          user_id: string
+        }
+        Update: {
+          changed_at?: string | null
+          created_at?: string
+          salt?: string
+          temp_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       talent_entries: {
         Row: {
           attachments: Json
