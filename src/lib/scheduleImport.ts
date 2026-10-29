@@ -42,13 +42,13 @@ function record(value: unknown): value is Record<string, unknown> {
 export function previewScheduleImport(input: string, fallbackDate: string): ImportPreview {
   const result: ImportPreview = { days: [], errors: [], warnings: [], total: 0, duplicates: 0 };
   const parsed = safeParseScheduleJson(input);
-  if (!parsed.ok) { result.errors.push(parsed.error.message); return result; }
+  if (parsed.ok === false) { result.errors.push(parsed.error.message); return result; }
   let root: unknown = parsed.value;
   if (record(root) && Array.isArray(root.days)) root = root.days;
   if (record(root) && Array.isArray(root.events)) root = root.events;
   const entries: unknown[] = Array.isArray(root) ? root : [root];
-  const bareItems = entries.length > 0 && entries.every((entry) => record(entry) && !('items' in entry));
-  const days = bareItems ? [{ date: fallbackDate, items: entries }] : entries;
+  const bareItems = entries.length > 0 && entries.every((entry) => record(entry) && 'title' in entry && !('items' in entry));
+  const days = bareItems ? entries.map((entry) => ({ date: record(entry) ? entry.date ?? fallbackDate : fallbackDate, items: [entry] })) : entries;
   const grouped = new Map<string, ImportDay>();
   const seen = new Set<string>();
   days.forEach((day, dayIndex) => {
@@ -69,19 +69,19 @@ export function previewScheduleImport(input: string, fallbackDate: string): Impo
       const slots: ImportItem['sub_slots'] = [];
       for (const slot of value.sub_slots ?? []) {
         const time = normalizeTime(slot.time);
-        if (!time || !slot.teams.length) { result.errors.push(`${label}: некоректний час або команди у sub_slots`); return; }
+        if (!time || !slot.teams?.length) { result.errors.push(`${label}: некоректний час або команди у sub_slots`); return; }
         const startMin = Number(range.start.slice(0, 2)) * 60 + Number(range.start.slice(3));
         const slotMin = Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
         const endMin = end ? Number(end.slice(0, 2)) * 60 + Number(end.slice(3)) : null;
         const offset = (slotMin - startMin + 1440) % 1440;
         const duration = endMin == null ? null : (endMin - startMin + 1440) % 1440;
         if (duration != null && offset > duration) { result.errors.push(`${label}: заїзд ${time} за межами події`); return; }
-        slots.push({ ...slot, time });
+        slots.push({ time, teams: slot.teams, title: slot.title, location: slot.location });
       }
       if (!end) result.warnings.push(`${label}: кінець не вказаний`);
       if (end === range.start) result.errors.push(`${label}: початок і кінець збігаються`);
       if (/дітям не говор|дітям не каз|супровід.{0,20}(веде|збирає)|секретн.*інструкц/i.test(`${value.title} ${value.description ?? ''}`)) result.warnings.push(`${label}: перевірте внутрішні вказівки — опис бачитимуть учасники`);
-      const item: ImportItem = { ...value, time_start: range.start, time_end: end, category: normalizeCategory(value.category), has_sub_slots: slots.length > 0, sub_slots: slots };
+      const item: ImportItem = { title: value.title ?? '', description: value.description ?? null, location: value.location ?? null, target_teams: value.target_teams ?? [], time_start: range.start, time_end: end, category: normalizeCategory(value.category), has_sub_slots: slots.length > 0, sub_slots: slots };
       const key = `${date}|${scheduleImportKey(item)}`;
       if (seen.has(key)) { result.duplicates++; return; }
       seen.add(key); target.items.push(item); result.total++;

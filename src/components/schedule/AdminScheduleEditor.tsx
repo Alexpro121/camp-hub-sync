@@ -15,6 +15,7 @@ import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
 import { useActiveShift } from '@/context/ActiveShiftContext';
 import AdminAiStudioImportModal from './AdminAiStudioImportModal';
+import { scheduleImportKey } from '@/lib/scheduleImport';
 
 const todayISO = () => localISO();
 
@@ -130,14 +131,18 @@ const AdminScheduleEditor = () => {
     if (!form) return;
     if (!form.title.trim()) { toast.error('Вкажи назву події'); return; }
     if (!form.time_start?.trim()) { toast.error('Вкажи час початку — без нього подія не з’явиться в розкладі'); return; }
+    const range = normalizeTimeRange(form.time_start);
+    const end = form.time_end.trim() ? normalizeTime(form.time_end) : range.end;
+    if (!range.start || (form.time_end.trim() && !end)) { toast.error('Вкажіть коректний час у форматі ГГ:ХХ'); return; }
+    if (end === range.start) { toast.error('Початок і кінець не можуть збігатися'); return; }
     setBusy(true);
     try {
       const payload = {
         title: form.title.trim(),
         location: form.location.trim() || null,
         // Any input format is accepted: "14.25", "14:25", "1425", "14.25 - 14.56".
-        time_start: normalizeTime(form.time_start) || null,
-        time_end: normalizeTime(form.time_end) || null,
+        time_start: range.start,
+        time_end: end,
         category: form.category,
         target_teams: form.target_teams, // [] = for everyone
       };
@@ -148,8 +153,7 @@ const AdminScheduleEditor = () => {
         const scheduleId = await ensureSchedule();
         // Deduplication: same start time + title on this day → update instead of duplicating.
         const dup = sorted.find(
-          (i) => (i.time_start || '') === (payload.time_start || '') &&
-            (i.title || '').trim().toLowerCase() === payload.title.toLowerCase(),
+          (i) => scheduleImportKey(i) === scheduleImportKey(payload),
         );
         if (dup) {
           const { error } = await supabase.from('schedule_items').update(payload).eq('id', dup.id);
