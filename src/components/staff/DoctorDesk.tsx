@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon, Users, Phone, ChevronRight, X, ClipboardList, Check, Loader2 } from 'lucide-react';
+import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon, Users, Phone, ChevronRight, X, ClipboardList, Check, Loader2, HelpCircle } from 'lucide-react';
+import DoctorTour, { DOCTOR_TOUR_KEY } from './DoctorTour';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +25,7 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
   const [marked, setMarked] = useState(false);
   const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(() => { try { return !localStorage.getItem(DOCTOR_TOUR_KEY); } catch { return false; } });
   const deferredQuery = useDeferredValue(query);
   const loadingRef = useRef(false);
   const revision = useRef(0);
@@ -67,11 +69,13 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
   const markedCount = (data?.children ?? []).filter((c) => (shift === 'all' || c.shift_id === shift) && medical[c.id]?.needs_attention).length;
   const childCount = (data?.children ?? []).filter((c) => shift === 'all' || c.shift_id === shift).length;
   return <main className={`doctor-desk min-h-[100dvh] bg-background text-foreground ${theme === 'light' ? 'staff-light' : ''}`}>
+    <DoctorTour open={tourOpen} onClose={() => setTourOpen(false)} />
     <header className="border-b border-border bg-card px-4 pt-5 pb-4 sm:px-6 sm:pt-7 safe-top">
       <div className="mx-auto max-w-5xl">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Stethoscope className="h-6 w-6" /></div>
           <div className="min-w-0 flex-1"><p className="text-xs font-medium text-primary">Медичний кабінет</p><h1 className="text-xl font-bold tracking-normal sm:text-2xl">Лікар</h1></div>
+          <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={() => setTourOpen(true)} aria-label="Інструктаж" title="Інструктаж"><HelpCircle /></Button>
           <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={toggleTheme} aria-label="Змінити тему" title="Змінити тему">{theme === 'light' ? <Moon /> : <Sun />}</Button>
           <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={onLogout} aria-label="Вийти" title="Вийти"><LogOut /></Button>
         </div>

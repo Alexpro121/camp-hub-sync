@@ -8,7 +8,7 @@ const id = '11111111-1111-4111-8111-111111111111';
 const medical = { child_id: id, note: 'Попередня помітка', needs_attention: true, version: 1, updated_at: '2026-10-29' };
 const dataset = { children: [{ id, shift_id: 'shift1', full_name: 'Коваль Олена', team_number: 4, phone: null, gender: 'girl', iron_dollars: 0, is_present: false }], shifts: [{ id: 'shift1', name: 'WOW' }], assignments: [{ shift_id: 'shift1', team_number: 4, staff_members: { full_name: 'Супровід Коваль', kind: 'supervisor', is_active: true } }], medical: [medical] };
 const props = { name: 'Лікар', theme: 'dark', toggleTheme: vi.fn(), onLogout: vi.fn() };
-beforeEach(() => { call.mockReset(); props.onLogout.mockClear(); call.mockResolvedValue(dataset); });
+beforeEach(() => { call.mockReset(); localStorage.setItem('helpsuprov:doctor-tour-seen', '1'); props.onLogout.mockClear(); call.mockResolvedValue(dataset); });
 afterEach(cleanup);
 
 describe('doctor workflow', () => {
