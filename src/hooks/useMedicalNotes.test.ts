@@ -10,14 +10,13 @@ describe('medical polling', () => {
     const { result, unmount } = renderHook(() => useMedicalNotes());
     await waitFor(() => expect(result.current['1']?.version).toBe(1));
     const first = result.current;
-    vi.useFakeTimers();
-    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
     expect(result.current).toBe(first);
     h.data = [{ ...h.data[0], version: 2, needs_attention: false }];
-    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
     expect(result.current['1'].needs_attention).toBe(false);
     h.data = [];
-    await act(async () => { await vi.advanceTimersByTimeAsync(8000); });
+    await act(async () => { window.dispatchEvent(new Event('online')); });
     expect(result.current).toEqual({});
     unmount();
   });
