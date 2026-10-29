@@ -175,3 +175,17 @@ export async function requireUser(req: Request) {
   }
   return { user: data.user, response: null as Response | null };
 }
+
+/**
+ * Require a signed-in admin or supervisor. Children and parents also hold
+ * sessions (child-login), so a bare valid token is not enough
+ * for endpoints that spend paid AI quota.
+ */
+export async function requireStaff(req: Request) {
+  const auth = await requireUser(req);
+  if (auth.response) return auth;
+  const { data, error } = await admin().from('user_roles').select('role').eq('user_id', auth.user!.id);
+  const ok = !error && (data ?? []).some((r) => r.role === 'admin' || r.role === 'supervisor');
+  if (!ok) return { user: null, response: json({ error: 'forbidden' }, 403) as Response | null };
+  return auth;
+}

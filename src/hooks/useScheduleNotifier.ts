@@ -1,3 +1,4 @@
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { getSessionMeta } from '@/lib/session';
 import { dedupeItems } from '@/lib/schedule';
 import { useEffect, useRef, useState } from 'react';
@@ -92,7 +93,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
           myTeams: slot?.teams ?? null,
           category: i.category ?? null,
           location: i.location ?? null,
-          isFair: FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`),
+          isFair: FAIR_FEATURE_ENABLED && FAIR_RE.test(`${i.title ?? ''} ${i.description ?? ''}`),
         });
       });
       setAlerts(built);

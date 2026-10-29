@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { copyText } from '@/lib/clipboard';
 import { lazyRetry } from '@/lib/lazyRetry';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -15,7 +16,7 @@ import type { Shift, ShiftType } from '@/types/app';
 
 import type { ImportResult, ImportRow } from '@/lib/importer';
 import { shiftStatus } from '@/lib/shift';
-import { resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
+import { teamsOf } from '@/lib/shift-resolver';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { FullScreenLoader } from '@/components/ui/loader';
 import { backfillGenders } from '@/lib/gender';
@@ -119,6 +120,7 @@ const ShiftsTab = () => {
 
   const analyze = async () => {
     if (!name || !start || !end) { toast.error('Заповніть назву та дати зміни'); return; }
+    if (end < start) { toast.error('Кінець зміни раніше за початок'); return; }
     if (!file && !sheetUrl.trim()) { await createOnly(); return; }
     
     setAnalyzing(true);
@@ -150,16 +152,9 @@ const ShiftsTab = () => {
     }
   };
 
-  const syncShortShifts = async (startDate: string, endDate: string) => {
-    await supabase
-      .from('shifts')
-      .update({ start_date: startDate, end_date: endDate, travel_start_date: startDate, hotel_start_date: addDays(startDate, 1) })
-      .in('shift_category', ['short', 'sports'])
-      .is('deleted_at', null);
-  };
-
   const createOnly = async () => {
     if (!name || !start || !end) { toast.error('Заповніть назву та дати'); return; }
+    if (end < start) { toast.error('Кінець зміни раніше за початок'); return; }
     setCreating(true);
     try {
       const detected = preview?.detectedTeams ?? [];
@@ -170,7 +165,6 @@ const ShiftsTab = () => {
         .select()
         .single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
-      if (type === 'long') await syncShortShifts(start, end);
       toast.success('Зміну успішно створено');
       reset();
       load();
@@ -188,7 +182,6 @@ const ShiftsTab = () => {
     try {
       const { data: shift, error: shErr } = await supabase.from('shifts').insert(shiftPayload()).select().single();
       if (shErr || !shift) throw shErr || new Error('Не вдалось створити зміну');
-      if (type === 'long') await syncShortShifts(start, end);
 
       // Пріоритет — рядки з вікна перегляду (ручне налаштування колонок)
       const sourceRows = overrideRows?.length ? overrideRows : preview.rows;
@@ -197,31 +190,40 @@ const ShiftsTab = () => {
       const dbRows = valid.map(r => toDbRow(r, shift.id));
       island.showExcelProgress(45, sourceLabel || 'Google Sheets');
 
-      const { data: existing } = await supabase
-        .from('children').select('id, full_name, team_number').eq('shift_id', shift.id);
+      const { data: existing, error: existingError } = await fetchAllRows<{ id: string; full_name: string | null; team_number: number }>(() =>
+        supabase.from('children').select('id, full_name, team_number').eq('shift_id', shift.id).order('id'));
+      if (existingError) throw existingError;
       const map = new Map<string, string>();
-      (existing || []).forEach((c: any) => map.set(`${c.team_number}|${normalizeName(c.full_name || '')}`, c.id));
+      existing.forEach((c) => map.set(`${c.team_number}|${normalizeName(c.full_name || '')}`, c.id));
 
       const toInsert: any[] = [];
-      let processed = 0;
+      const toUpdate: { id: string; patch: any }[] = [];
       for (const r of dbRows) {
         const id = map.get(`${r.team_number}|${normalizeName(r.full_name)}`);
         if (id) {
-          await supabase.from('children').update({
+          toUpdate.push({ id, patch: {
             is_present: r.is_present, row_number: r.row_number, phone: r.phone,
             team_name: r.team_name, note_from_table: r.note_from_table, raw_data: r.raw_data,
-          }).eq('id', id);
+          } });
         } else {
           toInsert.push(r);
         }
-        processed++;
+      }
+      // Пачками по 10 паралельно: по одному запиту на рядок на слабкому інтернеті займає хвилини,
+      // а помилки раніше ігнорувались і імпорт вважався успішним.
+      let processed = 0;
+      for (let i = 0; i < toUpdate.length; i += 10) {
+        const results = await Promise.all(toUpdate.slice(i, i + 10).map((u) => supabase.from('children').update(u.patch).eq('id', u.id)));
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+        processed += results.length;
         island.showExcelProgress(45 + Math.round((processed / Math.max(1, dbRows.length)) * 45), sourceLabel || 'Google Sheets');
       }
-      if (toInsert.length) {
-        const { error: insErr } = await supabase.from('children').insert(toInsert);
+      for (let i = 0; i < toInsert.length; i += 200) {
+        const { error: insErr } = await supabase.from('children').insert(toInsert.slice(i, i + 200));
         if (insErr) throw insErr;
-        void backfillGenders();
       }
+      if (toInsert.length) void backfillGenders();
 
       await supabase.from('uploaded_files').insert({
         filename: sourceLabel || 'Google Sheets',
@@ -244,14 +246,24 @@ const ShiftsTab = () => {
   };
 
   const remove = async (id: string) => {
-    const { data: kids } = await supabase.from('children').select('id').eq('shift_id', id);
-    const childIds = (kids || []).map((k: any) => k.id);
-    if (childIds.length) {
-      await supabase.from('transfers').delete().in('child_id', childIds);
+    const fail = (step: string, message: string) => {
+      toast.error(`Не вдалося видалити зміну (${step}): ${message}`);
+      load();
+    };
+    const { data: kids, error: kidsError } = await fetchAllRows<{ id: string }>(() => supabase.from('children').select('id').eq('shift_id', id).order('id'));
+    if (kidsError) return fail('учасники', kidsError.message);
+    const childIds = kids.map((k) => k.id);
+    // Пачками: сотні UUID в одному .in() перевищують ліміт довжини URL.
+    for (let i = 0; i < childIds.length; i += 100) {
+      const { error } = await supabase.from('transfers').delete().in('child_id', childIds.slice(i, i + 100));
+      if (error) return fail('переведення', error.message);
     }
-    await supabase.from('children').delete().eq('shift_id', id);
-    await supabase.from('uploaded_files').delete().eq('shift_id', id);
-    await supabase.from('shifts').delete().eq('id', id);
+    const { error: childrenError } = await supabase.from('children').delete().eq('shift_id', id);
+    if (childrenError) return fail('учасники', childrenError.message);
+    const { error: filesError } = await supabase.from('uploaded_files').delete().eq('shift_id', id);
+    if (filesError) return fail('файли', filesError.message);
+    const { error: shiftError } = await supabase.from('shifts').delete().eq('id', id);
+    if (shiftError) return fail('зміна', shiftError.message);
     load();
     toast.success('Зміну видалено разом із даними');
   };
@@ -491,7 +503,7 @@ const ShiftRow = ({ shift: s, onDelete, onChanged }: { shift: Shift; onDelete: (
           {SHIFT_LABELS[(s.shift_category ?? s.shift_type) as ShiftType] ?? SHIFT_LABELS[s.shift_type]} · {s.start_date} → {s.end_date}
         </p>
         <p className="text-[11px] text-slate-500">
-          Команди: {teamsOf(s).join(', ') || '—'} · {resolveShiftPhase(s).phaseTitle}
+          Команди: {teamsOf(s).join(', ') || '—'}
         </p>
         <p className="text-[11px] text-[#FA5A15] font-semibold mt-0.5 flex items-center gap-1">
           <FileSpreadsheet className="w-3 h-3" /> {count ?? '...'} учасників

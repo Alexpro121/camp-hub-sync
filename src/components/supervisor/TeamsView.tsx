@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Child } from '@/types/app';
@@ -110,12 +111,12 @@ const TeamsView = ({
       activeShiftId = active?.id ?? null;
 
       if (!mounted) return;
-      let query = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('row_number');
-      if (activeShiftId) {
-        query = query.eq('shift_id', activeShiftId);
-      }
-      const { data } = await query;
-      if (!data) return;
+      const { data, error: kidsError } = await fetchAllRows<any>(() => {
+        let query = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('row_number').order('id');
+        if (activeShiftId) query = query.eq('shift_id', activeShiftId);
+        return query;
+      });
+      if (kidsError && !data.length) return;
 
       // Frontend dedup as safety net
       const seen = new Set<string>();

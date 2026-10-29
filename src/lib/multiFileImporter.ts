@@ -187,7 +187,8 @@ export function mergeSources(sources: MultiFileSource[]): { rows: ImportRow[]; s
         continue;
       }
 
-      seenExact.set(exactKey, { row, sources: new Set([src.label]) });
+      // Копія: злиття телефонів/приміток і перенумерація не мають змінювати результат аналізу джерела.
+      seenExact.set(exactKey, { row: { ...row }, sources: new Set([src.label]) });
 
       // 2. ДЕТЕКЦІЯ ЗБІГУ МІЖ РІЗНИМИ КОМАНДАМИ (Cross-Team)
       const nameEntries = seenByName.get(normFullName) ?? [];
@@ -253,6 +254,22 @@ export function mergeSources(sources: MultiFileSource[]): { rows: ImportRow[]; s
   }
 
   const finalRows = Array.from(seenExact.values()).map((v) => v.row);
+
+  // Команда зібрана з кількох файлів: «№ за списком» із кожного файлу починається з 1 і збігається,
+  // тож порядок у списку супроводу перемішується. Нумеруємо такі команди заново за порядком файлів.
+  const teamSources = new Map<number, Set<string>>();
+  for (const { row, sources: from } of seenExact.values()) {
+    const set = teamSources.get(row.team_number) ?? new Set<string>();
+    from.forEach((label) => set.add(label));
+    teamSources.set(row.team_number, set);
+  }
+  const counters = new Map<number, number>();
+  for (const row of finalRows) {
+    if ((teamSources.get(row.team_number)?.size ?? 0) < 2) continue;
+    const next = (counters.get(row.team_number) ?? 0) + 1;
+    counters.set(row.team_number, next);
+    row.row_number = next;
+  }
 
   const perTeam: Record<number, number> = {};
   finalRows.forEach((r) => {
@@ -386,11 +403,15 @@ export async function commitMultiFileShift(
     console.error('[MultiImport] Помилка пакетного імпорту, виконується відкат:', err);
 
     // Відкат: безпечно очищаємо частково створені сутності
-    await Promise.allSettled([
-      supabase.from('children').delete().eq('shift_id', shiftId),
-      supabase.from('uploaded_files').delete().eq('shift_id', shiftId),
-      supabase.from('shifts').delete().eq('id', shiftId),
-    ]);
+    // Строго по черзі: паралельне видалення зміни раніше за її учасників блокується зовнішнім ключем,
+    // і порожня «зміна-привид» лишалась у базі.
+    for (const step of [
+      () => supabase.from('children').delete().eq('shift_id', shiftId),
+      () => supabase.from('uploaded_files').delete().eq('shift_id', shiftId),
+      () => supabase.from('shifts').delete().eq('id', shiftId),
+    ]) {
+      try { await step(); } catch { /* продовжуємо відкат */ }
+    }
 
     throw err;
   }

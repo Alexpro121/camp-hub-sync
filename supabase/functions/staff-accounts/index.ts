@@ -76,7 +76,7 @@ async function loadInviteShift(svc: any, shiftId: string | null) {
 // Реальні команди зміни: ті, де є діти; якщо дітей ще не імпортовано — призначені адміном.
 async function shiftTeams(svc: any, shift: any) {
   const [{ data: kids }, { data: asg }] = await Promise.all([
-    svc.from('children').select('team_number').eq('shift_id', shift.id).is('deleted_at', null).limit(5000),
+    readAllPages<{ team_number: number }>((a, b) => svc.from('children').select('team_number').eq('shift_id', shift.id).is('deleted_at', null).order('id').range(a, b)).then((data) => ({ data })),
     svc.from('staff_assignments').select('team_number, staff_members(full_name, kind)').eq('shift_id', shift.id),
   ]);
   const counts = new Map<number, number>();
@@ -194,7 +194,13 @@ Deno.serve(async (req) => {
         const weak = /weak|pwned|guess/i.test(error?.message ?? '');
         return json({ error: weak ? 'weak_password' : 'create_failed' });
       }
-      await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, phone, telegram, kind: inv.kind, registered_via: inv.id });
+      const { error: memberError } = await svc.from('staff_members').insert({ user_id: created.user.id, full_name, login, phone, telegram, kind: inv.kind, registered_via: inv.id });
+      if (memberError) {
+        // Відкат: без запису в staff_members акаунт «осиротів» би, а місце за посиланням згоріло.
+        await svc.auth.admin.deleteUser(created.user.id);
+        await svc.from('staff_invites').update({ uses: inv.uses }).eq('id', inv.id).eq('uses', inv.uses + 1);
+        return json({ error: 'create_failed' });
+      }
       await ensureRole(svc, created.user.id, 'supervisor', { team_number: null });
       const pub = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
       const { data: signIn } = await pub.auth.signInWithPassword({ email: emailFor(login), password });
@@ -363,7 +369,16 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'set_active') {
-      await svc.from('staff_members').update({ is_active: Boolean(body?.is_active) }).eq('user_id', String(body?.user_id));
+      const memberId = z.string().uuid().safeParse(body?.user_id);
+      if (!memberId.success) return json({ error: 'invalid_input' }, 400);
+      const active = Boolean(body?.is_active);
+      const { data: target } = await svc.from('staff_members').select('kind').eq('user_id', memberId.data).maybeSingle();
+      if (!target) return json({ error: 'not_found' }, 404);
+      const { error } = await svc.from('staff_members').update({ is_active: active }).eq('user_id', memberId.data);
+      if (error) return json({ error: 'update_failed' }, 500);
+      // Роль у базі і є доступ: без цього вимкнений супровід ще годинами (і через refresh-токен) нараховував би А$.
+      if (!active) await svc.from('user_roles').delete().eq('user_id', memberId.data).eq('role', 'supervisor');
+      else if (target.kind !== 'doctor') await ensureRole(svc, memberId.data, 'supervisor', { team_number: null });
       return json({ ok: true });
     }
 
@@ -433,7 +448,11 @@ Deno.serve(async (req) => {
       const { error } = await svc.from('staff_members').update(patch).eq('user_id', memberId.data);
       if (error) return json({ error: 'update_failed' }, 500);
       if (patch.kind === 'doctor') await svc.from('user_roles').delete().eq('user_id', memberId.data).eq('role', 'supervisor');
-      else if (patch.kind) await ensureRole(svc, memberId.data, 'supervisor', { team_number: null });
+      else if (patch.kind) {
+        // Вимкненому супроводу роль не повертаємо зміною типу.
+        const { data: cur } = await svc.from('staff_members').select('is_active').eq('user_id', memberId.data).maybeSingle();
+        if (cur?.is_active) await ensureRole(svc, memberId.data, 'supervisor', { team_number: null });
+      }
       return json({ ok: true });
     }
 
@@ -487,7 +506,8 @@ Deno.serve(async (req) => {
 
     if (action === 'unassign') {
       const { data: asg } = await svc.from('staff_assignments').select('staff_user_id, team_number').eq('id', String(body?.assignment_id)).maybeSingle();
-      await svc.from('staff_assignments').delete().eq('id', String(body?.assignment_id));
+      const { error: unassignError } = await svc.from('staff_assignments').delete().eq('id', String(body?.assignment_id));
+      if (unassignError) return json({ error: 'update_failed' }, 500);
       if (asg?.staff_user_id) {
         await svc.from('user_roles').update({ team_number: null })
           .eq('user_id', asg.staff_user_id).eq('role', 'supervisor').eq('team_number', asg.team_number);

@@ -11,6 +11,7 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
 import { networkPulse } from '@/lib/networkEngine';
+import { pushIsland } from '@/lib/islandBus';
 import { runExclusive } from '@/lib/syncLock';
 import { outbox } from '@/lib/outboxEngine';
 import {
@@ -57,6 +58,9 @@ const MAX_DEAD_LETTERS = 50;
 type QueueListener = (queue: QueuedAction[], syncing: boolean) => void;
 const listeners = new Set<QueueListener>();
 let syncing = false;
+/** Після збою мережі нові дії не б'ють по мертвому зв'язку, доки не мине пауза. */
+let netStreak = 0;
+let netBlockedUntil = 0;
 let cache: QueuedAction[] = [];
 
 const writeIdb = createSerialWriter((value) => idbSet(IDB_KEY, value, store));
@@ -127,6 +131,8 @@ function moveToDeadLetter(action: QueuedAction, error: unknown) {
   const list = safeLocalGet<QueuedAction[]>(DEAD_LETTER_KEY) ?? [];
   list.push({ ...action, lastError: String((error as any)?.message ?? error ?? 'unknown') });
   safeLocalSet(DEAD_LETTER_KEY, list.slice(-MAX_DEAD_LETTERS));
+  // Раніше відхилена назавжди дія зникала безшумно — користувач вважав її збереженою.
+  pushIsland(action.op === 'rpc' ? 'Платіж А$ не виконано' : 'Дію не збережено', 'danger', action.label ?? undefined, 8000);
 }
 
 export function getDeadLetters(): QueuedAction[] {
@@ -306,7 +312,7 @@ export function flushQueue(): Promise<{ done: number; failed: number }> {
 async function flushQueueInner(): Promise<{ done: number; failed: number }> {
   await ready;
 
-  if (syncing || isDeviceOffline() || !cache.length) {
+  if (syncing || isDeviceOffline() || !cache.length || Date.now() < netBlockedUntil) {
     return { done: 0, failed: cache.length };
   }
 
@@ -317,17 +323,26 @@ async function flushQueueInner(): Promise<{ done: number; failed: number }> {
   notifyListeners();
 
   let done = 0;
+  let requeued = false;
   const now = Date.now();
   const itemsToProcess = cache.filter((a) => !a.nextAttemptAt || a.nextAttemptAt <= now);
   const completed = new Set<string>();
   const retries = new Map<string, Partial<QueuedAction>>();
+  // Якщо під час польоту запиту дія склеїлась з новішою зміною, видаляти її не можна.
+  const sentValues = new Map(itemsToProcess.map((a) => [a.id, JSON.stringify(a.values)]));
 
   try {
+    let networkFailures = 0;
     for (const action of itemsToProcess) {
-      if (isDeviceOffline()) break;
+      // Два збої мережі поспіль — зв'язку немає: не чекаємо таймаут на кожній дії черги.
+      if (networkFailures >= 2 || isDeviceOffline()) break;
+      lease.renew();
 
       try {
         await run(action);
+        networkFailures = 0;
+        netStreak = 0;
+        netBlockedUntil = 0;
         completed.add(action.id);
         done++;
       } catch (e: any) {
@@ -342,6 +357,9 @@ async function flushQueueInner(): Promise<{ done: number; failed: number }> {
         }
 
         // Тимчасова помилка мережі — дія лишається в черзі назавжди
+        networkFailures++;
+        netStreak++;
+        netBlockedUntil = Date.now() + Math.min(60_000, 3000 * 2 ** Math.min(netStreak, 5));
         retries.set(action.id, {
           attempts,
           nextAttemptAt: Date.now() + backoffDelay(attempts, 4000, MAX_BACKOFF_MS),
@@ -351,6 +369,14 @@ async function flushQueueInner(): Promise<{ done: number; failed: number }> {
     }
   } finally {
     // Фіксуємо завершені дії, щоб вони не повернулись із дзеркала чи іншої вкладки
+    for (const id of [...completed]) {
+      const current = cache.find((a) => a.id === id);
+      if (current && JSON.stringify(current.values) !== sentValues.get(id)) {
+        completed.delete(id);
+        retries.delete(id);
+        requeued = true;
+      }
+    }
     if (completed.size) tombstones.mark(completed);
     const next = cache
       .filter((a) => !completed.has(a.id))
@@ -359,6 +385,9 @@ async function flushQueueInner(): Promise<{ done: number; failed: number }> {
     lease.release();
     writeQueue(next);
   }
+
+  // Зміна, що склеїлась під час польоту, ще не в базі — відправляємо без очікування таймера.
+  if (requeued) setTimeout(() => { void flushQueue(); }, 0);
 
   return { done, failed: cache.length };
 }
@@ -371,6 +400,7 @@ let autoFlushTimer: ReturnType<typeof setTimeout> | null = null;
  */
 export async function kickFlush(): Promise<{ done: number; failed: number }> {
   await ready;
+  netBlockedUntil = 0;
   if (cache.some((a) => a.nextAttemptAt)) {
     writeQueue(cache.map((a) => ({ ...a, nextAttemptAt: undefined })));
   }

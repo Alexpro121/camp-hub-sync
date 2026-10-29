@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { useEffect, useState, useCallback } from 'react';
 import { 
   ArrowLeft, 
@@ -33,17 +34,17 @@ import { exportToExcel } from '@/lib/excel';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
-import CoupeManager from '@/components/coupes/CoupeManager';
-import TrainPublishStatus from '@/components/coupes/TrainPublishStatus';
+const CoupeManager = lazyRetry(() => import('@/components/coupes/CoupeManager'));
+const TrainPublishStatus = lazyRetry(() => import('@/components/coupes/TrainPublishStatus'));
 import { TRAIN_TITLE, TRAIN_FEATURE_ENABLED } from '@/lib/trips';
-import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
+const CoupeSwapSettings = lazyRetry(() => import('@/components/coupes/CoupeSwapSettings'));
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
 import ExitConfirm from '@/components/ExitConfirm';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
-import SupervisorFairView from '@/components/fair/SupervisorFairView';
+const SupervisorFairView = lazyRetry(() => import('@/components/fair/SupervisorFairView'));
 import { clearSavedSession, getSavedRole, getSavedTeam, getSessionMeta, saveSession } from '@/lib/session';
 import SupervisorTour, { tourStorageKey } from '@/components/supervisor/SupervisorTour';
 

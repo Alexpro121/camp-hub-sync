@@ -1,6 +1,6 @@
 import { ImportRowSchema } from '@/lib/schemas/apiSchemas';
 import * as XLSX from 'xlsx';
-import { ADMIN_TEAM, TEAM_MAX, TEAM_MIN, isValidTeamNumber, normalizeName } from '@/lib/normalize';
+import { ADMIN_TEAM, TEAM_MAX, TEAM_MIN, isValidTeamNumber, levenshtein, normalizeName } from '@/lib/normalize';
 
 export type StdKey =
   | 'is_present'
@@ -79,25 +79,68 @@ export function sheetCsvUrl(url: string): string | null {
 /* ---------- Словник синонімів ---------- */
 
 const SYNONYMS: Record<StdKey, string[]> = {
-  is_present: ['навність', 'наявність', 'присутність', 'присутний', 'статус', 'присутствие', 'presence', 'present'],
-  row_number: ['№', '#', 'номер', '№ п/п', 'п/п', 'no', 'nn', 'n'],
-  team_number: ['№ команди', 'номер команди', 'команда №', '№команди', 'загін', 'отряд', 'team', 'команди', 'група'],
-  full_name: [
-    'піп дитини', 'піб дитини', 'піп', 'піб', 'фио', 'фіо',
-    "імʼя та прізвище", "ім'я та прізвище", "ім'я", 'імя', 'прізвище',
-    'name', 'full name', 'дитина', 'учень', 'учасник', 'прізвище імʼя'
+  is_present: [
+    'навність', 'наявність', 'присутність', 'присутний', 'статус', 'присутствие', 'presence', 'present',
+    'прибув', 'прибула', 'приїхав', 'приїхала', 'заїзд', 'відмітка', 'відмітка про прибуття', 'є/немає', 'був', 'attendance',
   ],
-  phone: ['номер телефону дитини', 'телефон дитини', 'номер телефону', 'телефон', 'мобільний', 'моб', 'phone', 'тел'],
+  row_number: ['№', '#', 'номер', '№ п/п', '№п/п', 'п/п', 'п.п', 'no', 'nn', 'n', 'номер за списком', 'порядковий номер', 'id'],
+  team_number: [
+    '№ команди', 'номер команди', 'команда №', '№команди', 'загін', 'отряд', 'team', 'команди', 'група',
+    '№ загону', 'номер загону', 'номер групи', '№ групи', 'team number', 'team no', 'команда (номер)', 'отряд №', '№ отряда',
+  ],
+  full_name: [
+    'піп дитини', 'піб дитини', 'піп', 'піб', 'фио', 'фіо', 'п.і.б', 'ф.і.о',
+    "імʼя та прізвище", "ім'я та прізвище", "ім'я прізвище", "прізвище ім'я по батькові", "прізвище ім'я", "прізвище та ім'я",
+    "ім'я", 'імя', 'прізвище', 'піб учасника', 'піб дитини (повністю)', 'учасник (піб)',
+    'name', 'full name', 'child name', 'дитина', 'учень', 'учасник', 'учасники', 'діти', 'прізвище імʼя',
+  ],
+  phone: [
+    'номер телефону дитини', 'телефон дитини', 'номер телефону', 'телефон', 'мобільний', 'моб', 'phone', 'тел',
+    'контактний телефон', 'мобільний телефон', 'телефон батьків', 'телефон мами', 'телефон тата', 'контакти', 'контакт', 'mobile', 'tel',
+  ],
   team_name: ['команда', 'назва команди', 'team name', 'назва загону', 'проєкт', 'проект', 'напрям'],
-  note_from_table: ['примітка', 'примітки', 'нотатка', 'примечание', 'місто', 'коментар', 'note', 'notes', 'інфо', 'готель', 'пільга'],
+  note_from_table: [
+    'примітка', 'примітки', 'нотатка', 'примечание', 'місто', 'коментар', 'note', 'notes', 'інфо', 'готель', 'пільга',
+    'особливості', 'алергії', 'алергія', 'харчування', 'додатково', 'коментарі', 'city', 'comment', 'comments',
+  ],
 };
 
 const norm = (s: string) =>
   String(s ?? '')
     .toLowerCase()
+    .replace(/[​-‍﻿]/g, '')
     .replace(/["'’`ʼʻ]/g, "'")
     .replace(/\s+/g, ' ')
     .trim();
+
+const LATIN_LOOKALIKES: Record<string, string> = { a: 'а', c: 'с', e: 'е', i: 'і', o: 'о', p: 'р', x: 'х', y: 'у', k: 'к', m: 'м', t: 'т', h: 'н', b: 'в' };
+
+/** Нормалізація заголовка: без розділових знаків, латинські «двійники» в кириличних словах → кирилиця. */
+function hnorm(s: string): string {
+  const base = norm(s).replace(/[.,:;()«»"*]/g, ' ').replace(/\s+/g, ' ').trim();
+  return base
+    .split(' ')
+    .map((w) => (/[а-яіїєґ]/.test(w) ? w.replace(/[acеiopxykmthb]/g, (ch) => LATIN_LOOKALIKES[ch] ?? ch) : w))
+    .join(' ');
+}
+
+const SYNONYMS_N: Record<StdKey, string[]> = Object.fromEntries(
+  (Object.entries(SYNONYMS) as [StdKey, string[]][]).map(([k, list]) => [k, list.map(hnorm)]),
+) as Record<StdKey, string[]>;
+
+/** Заголовок із помилкою друку («Телефн», «Присутнсть») — розпізнаємо за відстанню Левенштейна. */
+function fuzzyKey(n: string): StdKey | null {
+  if (n.length < 5) return null;
+  let best: { key: StdKey; dist: number } | null = null;
+  for (const [key, list] of Object.entries(SYNONYMS_N) as [StdKey, string[]][]) {
+    for (const syn of list) {
+      if (syn.length < 5 || Math.abs(syn.length - n.length) > 2) continue;
+      const d = levenshtein(n, syn);
+      if (d <= (syn.length >= 9 ? 2 : 1) && (!best || d < best.dist)) best = { key, dist: d };
+    }
+  }
+  return best?.key ?? null;
+}
 
 export function localHeaderMap(headers: string[]): Record<string, StdKey> {
   const map: Record<string, StdKey> = {};
@@ -110,19 +153,26 @@ export function localHeaderMap(headers: string[]): Record<string, StdKey> {
   };
 
   for (const h of headers) {
-    const n = norm(h);
+    const n = hnorm(h);
     if (!n) continue;
-    for (const [key, list] of Object.entries(SYNONYMS) as [StdKey, string[]][]) {
+    for (const [key, list] of Object.entries(SYNONYMS_N) as [StdKey, string[]][]) {
       if (list.includes(n) && tryAssign(h, key)) break;
     }
   }
 
   for (const h of headers) {
-    const n = norm(h);
+    const n = hnorm(h);
     if (!n || map[h]) continue;
-    for (const [key, list] of Object.entries(SYNONYMS) as [StdKey, string[]][]) {
-      if (list.some((s) => s.length > 2 && (n.includes(s) || s.includes(n))) && tryAssign(h, key)) break;
+    for (const [key, list] of Object.entries(SYNONYMS_N) as [StdKey, string[]][]) {
+      if (list.some((s) => s.length > 2 && (n.includes(s) || (n.length >= 4 && s.includes(n)))) && tryAssign(h, key)) break;
     }
+  }
+
+  for (const h of headers) {
+    const n = hnorm(h);
+    if (!n || map[h]) continue;
+    const key = fuzzyKey(n);
+    if (key) tryAssign(h, key);
   }
   return map;
 }
@@ -169,6 +219,8 @@ export function isStatsRow(text: string): boolean {
   );
 }
 
+const STAFF_ROLE_WORD = /(^|[\s,.:;(])(?:лідер|лідери|лід|куратор|куратори|супровід|супроводжуючий|супроводжуюча|лікар|медик|психолог|тренер)(?=$|[\s,.:;)])/;
+
 export function isCounselorOrMentorRow(text: string): boolean {
   const s = String(text ?? '').trim().toLowerCase();
   if (!s) return false;
@@ -177,10 +229,10 @@ export function isCounselorOrMentorRow(text: string): boolean {
     s.includes('вожат') ||
     s.includes('виховат') ||
     s.includes('ментор') ||
-    s.includes('лід') ||
-    s.includes('курат') ||
     s.includes('наставник') ||
-    s.includes('інструктор')
+    s.includes('інструктор') ||
+    // «Лідія», «Лідовий» — імена та прізвища дітей: слова-ролі шукаємо лише як окремі слова.
+    STAFF_ROLE_WORD.test(s)
   ) {
     return true;
   }
@@ -270,6 +322,10 @@ export function isLikelyPersonName(text: string): boolean {
 export function normalizePhone(v: any): string | null {
   let s = String(v ?? '').trim();
   if (!s) return null;
+  // У клітинці часто кілька номерів («067…, 050…», «мама 067… / тато 050…»): беремо перший,
+  // інакше цифри склеюються в один неіснуючий номер і вхід батьків за телефоном не працює.
+  const first = s.match(/\+?\d[\d  ().-]{7,}\d/);
+  if (first) s = first[0].trim();
   const plus = s.startsWith('+');
   let d = s.replace(/\D/g, '');
   if (!d) return null;
@@ -282,6 +338,13 @@ export function normalizePhone(v: any): string | null {
 
 const TRUES = ['true', '1', 'да', 'так', '+', 'присутній', 'присутний', 'присутня', 'yes', 'y', 'є', 'v', '✓', 'x'];
 const FALSES = ['false', '0', 'ні', 'нi', 'нет', '-', 'відсутній', 'відсутня', 'no', 'n', ''];
+
+/** Чи схоже значення на відмітку присутності (так/ні, +/-, TRUE/FALSE…). */
+export function isPresenceToken(v: any): boolean {
+  if (typeof v === 'boolean') return true;
+  const s = norm(String(v ?? ''));
+  return s !== '' && (TRUES.includes(s) || FALSES.includes(s));
+}
 
 export function normalizePresence(v: any): boolean {
   if (typeof v === 'boolean') return v;
@@ -354,7 +417,8 @@ async function getPdfJsLib(): Promise<any> {
 /* ---------- Конвертація файлів та PDF у матрицю ---------- */
 
 export function matrixFromCsv(csv: string): any[][] {
-  const wb = XLSX.read(csv, { type: 'string', raw: true });
+  // BOM на початку (CSV UTF-8 з Excel) інакше стає частиною першого заголовка («﻿ПІБ»).
+  const wb = XLSX.read(csv.replace(/^﻿/, ''), { type: 'string', raw: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as any[][];
 }
@@ -458,25 +522,36 @@ export async function matrixFromPdf(fileOrBuffer: File | ArrayBuffer | Uint8Arra
   }
 }
 
-export async function matrixFromFile(file: File): Promise<any[][]> {
+export interface SheetMatrix { name: string; matrix: any[][] }
+
+/** Усі непорожні аркуші книги (аркуш на команду — звична структура таблиць). */
+export function sheetsFromWorkbook(wb: XLSX.WorkBook): SheetMatrix[] {
+  return wb.SheetNames
+    .map((name) => ({ name, matrix: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: false }) as any[][] }))
+    .filter((s) => s.matrix.some((row) => (row || []).some((c) => String(c ?? '').trim())));
+}
+
+export async function sheetsFromFile(file: File): Promise<SheetMatrix[]> {
   const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-  if (isPdf) {
-    return matrixFromPdf(file);
-  }
+  if (isPdf) return [{ name: file.name, matrix: await matrixFromPdf(file) }];
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false }) as any[][];
+  return sheetsFromWorkbook(XLSX.read(buf, { type: 'array' }));
+}
+
+export async function matrixFromFile(file: File): Promise<any[][]> {
+  return (await sheetsFromFile(file))[0]?.matrix ?? [];
 }
 
 export function detectHeaderIndex(matrix: any[][]): number {
   let best = 0,
     bestScore = -1;
-  for (let i = 0; i < Math.min(10, matrix.length); i++) {
+  for (let i = 0; i < Math.min(15, matrix.length); i++) {
     const cells = (matrix[i] || []).map((c) => String(c ?? '').trim()).filter(Boolean);
     if (cells.length < 2) continue;
     const map = localHeaderMap(cells);
-    const score = Object.keys(map).length * 2.5 + cells.length * 0.1;
+    // Рядок даних (ПІБ дитини з 2+ слів, якого немає серед заголовків) — не заголовок.
+    const dataLike = cells.filter((c) => c.includes(' ') && isLikelyPersonName(c) && !Object.keys(localHeaderMap([c])).length).length;
+    const score = Object.keys(map).length * 2.5 + cells.length * 0.1 - dataLike * 3;
     if (score > bestScore) {
       bestScore = score;
       best = i;
@@ -746,6 +821,20 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
 
 /* ---------- Класичний табличний парсер ---------- */
 
+const SURNAME_HEADERS = ['прізвище', 'фамилия', 'surname', 'last name', 'lastname'];
+const GIVEN_HEADERS = ["ім'я", 'імя', 'імʼя', 'имя', 'first name', 'firstname'];
+const PATRONYMIC_HEADERS = ['по батькові', 'по-батькові', 'по батькови', 'отчество', 'patronymic'];
+
+/** Індекси колонок прізвища, імені, по батькові (в цьому порядку), якщо є хоча б прізвище й ім'я. */
+function nameColumns(headers: string[]): number[] | null {
+  const find = (list: string[]) => headers.findIndex((h) => list.includes(norm(h)));
+  const surname = find(SURNAME_HEADERS);
+  const given = find(GIVEN_HEADERS);
+  if (surname < 0 || given < 0) return null;
+  const patronymic = find(PATRONYMIC_HEADERS);
+  return [surname, given, ...(patronymic >= 0 ? [patronymic] : [])];
+}
+
 function parseClassicTable(
   matrix: any[][],
   headerIdx: number,
@@ -757,6 +846,26 @@ function parseClassicTable(
     const key = headerMap[h];
     if (key && colOf[key] === undefined) colOf[key] = i;
   });
+
+  // Окремі колонки «Прізвище» / «Ім'я» / «По батькові»: ПІБ збираємо з них, інакше імпортується лише прізвище.
+  const partCols = nameColumns(headers);
+
+  // Колонка «Команда» з самими номерами — це номер команди, а не назва (інакше всі діти потрапляють у команду 1).
+  if (colOf.team_number === undefined && colOf.team_name !== undefined) {
+    const values = matrix.slice(headerIdx + 1).map((row) => String((row || [])[colOf.team_name!] ?? '').trim()).filter(Boolean);
+    const numeric = values.filter((v) => extractTeamNumberFromText(v) !== null).length;
+    if (values.length && numeric / values.length >= 0.8) {
+      colOf.team_number = colOf.team_name;
+      delete colOf.team_name;
+    }
+  }
+  // Усі колонки з телефонами (дитини, мами, тата): береться перший заповнений коректний номер.
+  const phoneCols = headers
+    .map((h, i) => ({ i, n: norm(h) }))
+    .filter(({ i, n }) => i === colOf.phone || /(^|\s)(тел|phone|моб)/.test(n))
+    .map(({ i }) => i)
+    .sort((a, b) => (a === colOf.phone ? -1 : b === colOf.phone ? 1 : a - b));
+  let lastColTeam = 0;
 
   const rows: ImportRow[] = [];
   const seen = new Map<string, ImportRow>();
@@ -774,7 +883,9 @@ function parseClassicTable(
       raw_data[h] = v;
     });
 
-    let rawName = String(colOf.full_name !== undefined ? r[colOf.full_name] ?? '' : '').trim();
+    let rawName = partCols
+      ? partCols.map((c) => String(r[c] ?? '').trim()).filter(Boolean).join(' ')
+      : String(colOf.full_name !== undefined ? r[colOf.full_name] ?? '' : '').trim();
     if (!rawName) {
       for (let c = 0; c < Math.min(3, r.length); c++) {
         if (isLikelyPersonName(String(r[c] ?? ''))) {
@@ -786,7 +897,14 @@ function parseClassicTable(
 
     const { rowNumber: extractedRowNum, cleanName: fullName, note: inlineNote } = extractLineDetails(rawName);
 
-    let teamNum = colOf.team_number !== undefined ? (parseIntSafe(r[colOf.team_number]) ?? 0) : 0;
+    let teamNum = 0;
+    if (colOf.team_number !== undefined) {
+      const cell = r[colOf.team_number];
+      teamNum = parseIntSafe(cell) ?? extractTeamNumberFromText(String(cell ?? '')) ?? 0;
+      // Об'єднані клітинки в Excel віддають команду лише в першому рядку блоку — далі порожньо.
+      if (teamNum) lastColTeam = teamNum;
+      else if (lastColTeam && rawName) teamNum = lastColTeam;
+    }
     if (!teamNum) {
       for (const cell of r) {
         const cellText = String(cell ?? '');
@@ -824,7 +942,11 @@ function parseClassicTable(
       continue;
     }
 
-    const phone = colOf.phone !== undefined ? normalizePhone(r[colOf.phone]) : null;
+    let phone: string | null = null;
+    for (const c of phoneCols) {
+      phone = normalizePhone(r[c]);
+      if (phone) break;
+    }
     const note = colOf.note_from_table !== undefined ? String(r[colOf.note_from_table] ?? '').trim() || inlineNote : inlineNote;
     const rowNumber = colOf.row_number !== undefined ? parseIntSafe(r[colOf.row_number]) ?? extractedRowNum : extractedRowNum;
 

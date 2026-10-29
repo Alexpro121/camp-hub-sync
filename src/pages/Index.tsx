@@ -15,7 +15,7 @@ const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFl
 const AdminFlow = lazyRetry(() => import('@/components/screens/AdminFlow'));
 const AlumniFlow = lazyRetry(() => import('@/components/alumni/AlumniFlow'));
 
-export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'parent';
+export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni';
 
 /** Головний роутер ролей проєкту «Залізна Зміна» (Учасник / Супровід / Штаб) */
 const Index = () => {
@@ -58,13 +58,6 @@ const Index = () => {
             setScreen('child');
             setRestoring(false);
           }
-          return;
-        }
-
-        // Батьківський вхід вимкнено: стару сесію батьків очищаємо
-        if (savedRole === 'parent') {
-          clearSavedSession();
-          if (!cancelled) { setScreen('role'); setRestoring(false); }
           return;
         }
 

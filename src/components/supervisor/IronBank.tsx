@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useState } from 'react';
 import { Coins, Wallet, Edit2, Check, AlertTriangle, Plus, Minus } from 'lucide-react';
@@ -41,9 +42,11 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
     const load = async () => {
       const { data: shifts } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       const active = pickActiveShift((shifts || []) as any);
-      let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam);
-      if (active?.id) q = q.eq('shift_id', active.id);
-      const { data } = await q;
+      const { data } = await fetchAllRows<{ iron_dollars: number | null }>(() => {
+        let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam).order('id');
+        if (active?.id) q = q.eq('shift_id', active.id);
+        return q;
+      });
       if (!mounted) return;
       const total = (data || []).reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0);
       setDistributed(total);

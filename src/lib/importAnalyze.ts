@@ -1,4 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
+import { normalizeName } from '@/lib/normalize';
+import { inferTable } from '@/lib/columnDetect';
 import {
   buildRows,
   detectHeaderIndex,
@@ -6,7 +8,7 @@ import {
   extractTeamNumberFromText,
   localHeaderMap,
   matrixFromCsv,
-  matrixFromFile,
+  sheetsFromFile,
   matrixFromPdf,
   matrixFromRawText,
   sheetCsvUrl,
@@ -33,6 +35,8 @@ function unrollSideBySideTeams(matrix: any[][]): any[][] | null {
   const teamPositions: { colIndex: number; teamNum: number }[] = [];
 
   firstRow.forEach((cell, idx) => {
+    // Лише явні підписи («Команда 3», «Загін II»): голі числа в першому рядку — це дані (№ і команда дитини).
+    if (!/(команд|загін|загон|team|група)/i.test(cell)) return;
     const num = extractTeamNumberFromText(cell);
     if (num !== null) {
       teamPositions.push({ colIndex: idx, teamNum: num });
@@ -126,12 +130,18 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
   }
 
   const detectedHeaderIdx = detectHeaderIndex(matrix);
-  const effectiveHeaderIdx = detectedHeaderIdx >= 0 ? detectedHeaderIdx : 0;
+  const rawHeaderRow = (matrix[detectedHeaderIdx >= 0 ? detectedHeaderIdx : 0] || [])
+    .map((h: any) => String(h ?? '').trim())
+    .filter(Boolean);
+  // Заголовки доповнюються аналізом вмісту колонок; без заголовків перший рядок лишається даними.
+  const inferred = inferTable(matrix, detectedHeaderIdx, localHeaderMap(rawHeaderRow));
+  matrix = inferred.matrix;
+  const effectiveHeaderIdx = inferred.headerIdx;
   const headers = (matrix[effectiveHeaderIdx] || [])
     .map((h: any) => String(h ?? '').trim())
     .filter(Boolean);
 
-  let headerMap = localHeaderMap(headers);
+  let headerMap = inferred.headerMap;
   let mapSource: 'ai' | 'local' = 'local';
 
   const hasFullName = Object.values(headerMap).includes('full_name');
@@ -170,9 +180,47 @@ export async function analyzeMatrix(rawMatrix: any[][]): Promise<ImportResult> {
   };
 }
 
+/** Номер команди з назви аркуша: «Команда 3», «3», «3 загін». */
+function teamFromSheetName(name: string): number | null {
+  const direct = extractTeamNumberFromText(name);
+  if (direct !== null) return direct;
+  const m = name.trim().match(/^(\d{1,2})(?!\d)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/** Аналіз кількох аркушів і злиття в один список; дублі між аркушами склеюються. */
+export async function analyzeSheets(sheets: { name: string; matrix: any[][] }[]): Promise<ImportResult> {
+  if (sheets.length <= 1) return analyzeMatrix(sheets[0]?.matrix ?? []);
+
+  const parts: ImportResult[] = [];
+  for (const sheet of sheets) {
+    const res = await analyzeMatrix(sheet.matrix);
+    if (!res.rows.length) continue;
+    const sheetTeam = teamFromSheetName(sheet.name);
+    const hasTeamInfo = res.mapSource === 'block' || Object.values(res.headerMap).includes('team_number');
+    parts.push(sheetTeam && !hasTeamInfo
+      ? { ...res, rows: res.rows.map((r) => ({ ...r, team_number: sheetTeam })), detectedTeams: [sheetTeam] }
+      : res);
+  }
+  if (!parts.length) return analyzeMatrix(sheets[0].matrix);
+
+  const seen = new Set<string>();
+  const rows = parts.flatMap((p) => p.rows).filter((r) => {
+    const key = `${r.team_number}|${normalizeName(r.full_name)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return {
+    ...parts[0],
+    rows,
+    skipped: parts.reduce((n, p) => n + p.skipped, 0),
+    detectedTeams: detectTeams(rows),
+  };
+}
+
 export async function analyzeFile(file: File): Promise<ImportResult> {
-  const matrix = await matrixFromFile(file);
-  return analyzeMatrix(matrix);
+  return analyzeSheets(await sheetsFromFile(file));
 }
 
 export async function analyzeRawText(text: string): Promise<ImportResult> {

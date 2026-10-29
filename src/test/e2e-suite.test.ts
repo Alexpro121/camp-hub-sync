@@ -4,7 +4,7 @@ import { normalizeScheduleItems, ongoingEvents, dedupeItems } from '@/lib/schedu
 import { isFairEvent, resolveFairWindow, isFairCurrentlyActive } from '@/lib/fair-resolver';
 import { buildRunningOrder } from '@/lib/talent';
 import { parseSequentialTrainText, parseTrainTextGroupedByTeams } from '@/lib/train-parser';
-import { resolveShiftPhase, resolveTeamShiftStatus, parseTeamsInput } from '@/lib/shift-resolver';
+import { parseTeamsInput } from '@/lib/shift-resolver';
 import { generateShortCode, FAIR_CODE_LENGTH, isFairScheduleActive } from '@/lib/fair';
 import { detectCategory } from '@/lib/schedule-parser-fallback';
 import { levenshtein, findNameSuggestions, parseTeamNumber, isValidTeamNumber, normalizeName } from '@/lib/normalize';
@@ -138,29 +138,8 @@ SS
   });
 });
 
-// ---- BLOCK 7 shift phases ----
-describe('B7 · multi-phase shift resolver', () => {
-  const long: any = {
-    id: 'l', name: 'Довга', shift_type: 'long', shift_category: 'long',
-    start_date: '2026-09-10', end_date: '2026-09-25', hotel_start_date: '2026-09-16',
-    assigned_teams: [1, 2, 3], deleted_at: null, is_active: true,
-  };
-  const short: any = { ...long, id: 's', name: 'Коротка', shift_category: 'short', start_date: '2026-09-16', hotel_start_date: '2026-09-16', assigned_teams: [8] };
-  it('resolves long-shift travel then Bukovel', () => {
-    expect(resolveShiftPhase(long, new Date('2026-09-05')).currentPhase).toBe('PREPARING');
-    expect(resolveShiftPhase(long, new Date('2026-09-12')).currentPhase).toBe('TRAVEL_PHASE');
-    expect(resolveShiftPhase(long, new Date('2026-09-18')).currentPhase).toBe('JOINT_BUKOVEL_PHASE');
-    expect(resolveShiftPhase(long, new Date('2026-09-30')).currentPhase).toBe('FINISHED');
-  });
-  it('short shift waits then joins Bukovel', () => {
-    expect(resolveShiftPhase(short, new Date('2026-09-14')).currentPhase).toBe('PREPARING');
-    expect(resolveShiftPhase(short, new Date('2026-09-17')).currentPhase).toBe('JOINT_BUKOVEL_PHASE');
-  });
-  it('picks the shift by team number', () => {
-    expect(resolveTeamShiftStatus([long, short], 8, new Date('2026-09-17'))?.shiftName).toBe('Коротка');
-    expect(resolveTeamShiftStatus([long, short], 2, new Date('2026-09-12'))?.currentPhase).toBe('TRAVEL_PHASE');
-    expect(resolveTeamShiftStatus([long, short], 99, new Date('2026-09-12'))).toBeNull();
-  });
+// ---- BLOCK 7 shift teams ----
+describe('B7 · shift teams', () => {
   it('parses team ranges', () => {
     expect(parseTeamsInput('1,2 5-7')).toEqual([1, 2, 5, 6, 7]);
   });

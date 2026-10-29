@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Child, Shift } from '@/types/app';
@@ -42,9 +43,11 @@ const TransfersView = ({ myTeam }: Props) => {
       const active = pickActiveShift((shifts || []) as Shift[]);
       setShiftId(active?.id ?? null);
 
-      let q = supabase.from('children').select('*').order('team_number').order('full_name');
-      if (active?.id) q = q.eq('shift_id', active.id);
-      const { data } = await q;
+      const { data } = await fetchAllRows<Child>(() => {
+        let q = supabase.from('children').select('*').order('team_number').order('full_name').order('id');
+        if (active?.id) q = q.eq('shift_id', active.id);
+        return q;
+      });
       setChildren((data || []) as Child[]);
 
       const { data: teams } = await supabase.rpc('get_available_transfer_teams', {

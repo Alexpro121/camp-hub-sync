@@ -1,3 +1,4 @@
+import { lazyRetry } from '@/lib/lazyRetry';
 import { GENDER_LABEL } from '@/lib/gender';
 import { UserRound } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -38,18 +39,16 @@ import { FullScreenLoader } from '@/components/ui/loader';
 import IronPixelAvatar from '@/components/ui/IronPixelAvatar';
 import IronAvatarReveal from '@/components/ui/IronAvatarReveal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
+const ChildCoupeCard = lazyRetry(() => import('@/components/coupes/ChildCoupeCard'));
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import ExitConfirm from '@/components/ExitConfirm';
 import ChildPass from '@/components/child/ChildPass';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
-import { useTeamPhase } from '@/hooks/useTeamPhase';
-import PhaseBanner from '@/components/shift/PhaseBanner';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
-import ChildFairCard from '@/components/fair/ChildFairCard';
+const ChildFairCard = lazyRetry(() => import('@/components/fair/ChildFairCard'));
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { 
@@ -109,7 +108,6 @@ const ChildFlow = ({ onBack }: Props) => {
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
   const fair = useAggressiveFairUnlock(FAIR_FEATURE_ENABLED && !!child);
-  const { status: phase } = useTeamPhase(child?.team_number ?? null);
 
   // Сповіщення про події розкладу у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
@@ -408,7 +406,7 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsList>
 
           <TabsContent value="profile" className="space-y-4 mt-4 animate-fade-in">
-            {TRAIN_FEATURE_ENABLED && (!phase || phase.currentPhase !== 'PREPARING') && (
+            {TRAIN_FEATURE_ENABLED && (
               <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
             )}
 
@@ -450,9 +448,6 @@ const ChildFlow = ({ onBack }: Props) => {
           </TabsContent>
 
           <TabsContent value="schedule" className="mt-4 space-y-3">
-            {phase?.currentPhase === 'PREPARING' ? (
-              <PhaseBanner status={phase} teamNumber={child.team_number} />
-            ) : (
               <ScheduleView
                 myTeam={child.team_number}
                 lockTeam
@@ -460,7 +455,6 @@ const ChildFlow = ({ onBack }: Props) => {
                   if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) setActiveTab('fair');
                 }}
               />
-            )}
           </TabsContent>
 
           {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (

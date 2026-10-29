@@ -147,7 +147,7 @@ export function createChannel(name: string, onMessage: (data: any) => void) {
  * М'який міжвкладковий лок, щоб дві вкладки не відправляли одну дію двічі.
  * Лізинг короткий (за замовчуванням 30 с) — «мертва» вкладка не блокує синхронізацію назавжди.
  */
-export function acquireFlushLease(key: string, ttlMs = 30000): { release: () => void } | null {
+export function acquireFlushLease(key: string, ttlMs = 30000): { release: () => void; renew: () => void } | null {
   const now = Date.now();
   try {
     const raw = localStorage.getItem(key);
@@ -157,6 +157,10 @@ export function acquireFlushLease(key: string, ttlMs = 30000): { release: () => 
     }
     localStorage.setItem(key, String(now));
     return {
+      // Довгий скид на слабкому інтернеті не має втрачати лізинг посеред роботи.
+      renew() {
+        try { localStorage.setItem(key, String(Date.now())); } catch { /* ignore */ }
+      },
       release() {
         try {
           localStorage.removeItem(key);
@@ -167,7 +171,7 @@ export function acquireFlushLease(key: string, ttlMs = 30000): { release: () => 
     };
   } catch {
     // Без localStorage працюємо без локу (гірше, але не блокуємо синхронізацію)
-    return { release: () => {} };
+    return { release: () => {}, renew: () => {} };
   }
 }
 

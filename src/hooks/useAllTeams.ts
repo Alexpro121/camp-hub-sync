@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -22,7 +23,7 @@ export function useAllTeams(enabled = true): AllTeamsState {
     (async () => {
       const [shiftsRes, kidsRes] = await Promise.all([
         supabase.from('shifts').select('assigned_teams, deleted_at'),
-        supabase.from('children').select('team_number'),
+        fetchAllRows<{ team_number: number }>(() => supabase.from('children').select('team_number').order('id')),
       ]);
       if (!active) return;
       const set = new Set<number>();

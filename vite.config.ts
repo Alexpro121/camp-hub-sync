@@ -33,6 +33,8 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        // Ярмарок і потяг вимкнені: їхній код не вантажимо в кеш телефонів
+        globIgnores: ["**/{ChildCoupeCard,ChildFairCard,SupervisorFairView,CoupeManager,CoupeSwapSettings,TrainPublishStatus,TrainTab,AdminTrainView,AdminPrintQRCodes,FairHowTo,ApplePayScannerModal,useTrainSettings,useAggressiveFairUnlock}-*.js"],
         navigateFallbackDenylist: [/^\/~oauth/],
         runtimeCaching: [
           {

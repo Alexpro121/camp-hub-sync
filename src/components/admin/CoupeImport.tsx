@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,7 +98,7 @@ const CoupeImport = ({ onSaved }: { onSaved?: () => void } = {}) => {
 
       if (!list.length) { toast.error('Не вдалося розпізнати жодного пасажира'); return; }
 
-      const { data: kids } = await supabase.from('children').select('id, full_name, team_number');
+      const { data: kids } = await fetchAllRows<{ id: string; full_name: string; team_number: number }>(() => supabase.from('children').select('id, full_name, team_number').is('deleted_at', null).order('id'));
       const verified = verifyAgainstRoster(list, (kids || []) as RosterChild[]);
       // Inherit the team from the matched roster record when the text had none.
       const rosterById = new Map((kids || []).map((k: any) => [k.id, k.team_number]));

@@ -6,6 +6,7 @@ import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
 import { sentenceCase, toMinutes } from '@/lib/scheduleCategories';
 import type { NormalizedScheduleItem } from '@/lib/schedule';
 import { isEventLive, isFairEvent } from '@/lib/fair-resolver';
+import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 
 /** Left accent rail per category — deliberately restrained, four families only. */
 const ACCENT: Record<string, string> = {
@@ -65,7 +66,7 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
   const mySlot = team != null ? slots.find((s) => s.teams?.map(Number).includes(Number(team))) : undefined;
   const accent = ACCENT[item.category || 'general'] ?? ACCENT.general;
   const CategoryIcon = CATEGORY_ICONS[item.category as keyof typeof CATEGORY_ICONS] ?? CalendarDays;
-  const isFair = isFairEvent(item);
+  const isFair = FAIR_FEATURE_ENABLED && isFairEvent(item);
 
   /**
    * The fair CTA lives strictly inside the OVERALL event range (e.g. 18:26–18:56).

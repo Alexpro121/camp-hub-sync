@@ -1,4 +1,4 @@
-import { corsHeaders, requireUser } from '../_shared/accounts.ts';
+import { corsHeaders, requireStaff } from '../_shared/accounts.ts';
 import { fetchGroqWithFallback, hasGroqKeys } from '../_shared/groq-pool.ts';
 
 const MODEL = 'llama-3.3-70b-versatile';
@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const auth = await requireUser(req);
+    const auth = await requireStaff(req);
     if (auth.response) return auth.response;
 
     const { text = '', defaultDate = null } = await req.json();

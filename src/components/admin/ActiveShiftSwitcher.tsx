@@ -2,7 +2,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Layers } from 'lucide-react';
 import { useActiveShift } from '@/context/ActiveShiftContext';
-import { CATEGORY_LABELS, shiftCategoryOf } from '@/lib/shift-resolver';
 import { shiftStatus } from '@/lib/shift';
 import { useHaptics } from '@/hooks/useHaptics';
 
@@ -26,7 +25,7 @@ const ActiveShiftSwitcher = () => {
         <SelectContent>
           {shifts.map((s) => (
             <SelectItem key={s.id} value={s.id} className="text-xs">
-              {s.name} · {CATEGORY_LABELS[shiftCategoryOf(s)]}
+              {s.name}
             </SelectItem>
           ))}
         </SelectContent>

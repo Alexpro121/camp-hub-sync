@@ -1,7 +1,7 @@
 import type { Child } from '@/types/app';
 import type { IronTx } from '@/components/fair/TransactionDetailsDialog';
 
-export type AppRole = 'child' | 'supervisor' | 'admin' | 'parent';
+export type AppRole = 'child' | 'supervisor' | 'admin';
 
 const ROLE_KEY = 'helpsuprov:role';
 const SESSION_META_KEY = 'helpsuprov:session-meta';
@@ -184,9 +184,11 @@ export const getSavedRole = (): AppRole | null => {
 
   try {
     const role = localStorage.getItem(ROLE_KEY);
-    if (role === 'child' || role === 'supervisor' || role === 'admin' || role === 'parent') {
+    if (role === 'child' || role === 'supervisor' || role === 'admin') {
       return role as AppRole;
     }
+    // Застарілий збережений вхід батьків (функцію прибрано) — чистимо разом зі збереженою сесією.
+    if (role === 'parent') clearSavedSession();
     return null;
   } catch {
     return null;

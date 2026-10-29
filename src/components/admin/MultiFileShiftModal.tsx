@@ -154,6 +154,10 @@ export const MultiFileShiftModal: React.FC<Props> = ({ open, onOpenChange, onCre
       toast.error('Заповніть назву та обов’язкові дати зміни');
       return;
     }
+    if (end < start) {
+      toast.error('Кінець зміни раніше за початок');
+      return;
+    }
     if (!merged.rows.length) {
       toast.error('Додайте хоча б один валідний файл з учасниками');
       return;

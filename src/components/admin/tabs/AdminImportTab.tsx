@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { copyText } from '@/lib/clipboard';
 import { useEffect, useState } from 'react';
 import { Trash2, Wand2, Loader2, AlertTriangle, Copy, Search, Pencil, RefreshCw, KeyRound, Check } from 'lucide-react';
@@ -30,8 +31,11 @@ const DataTab = () => {
   const haptics = useHaptics();
 
   const load = async () => {
-    const { data } = await supabase.from('children').select('team_number');
-    setCount(data?.length || 0);
+    const [{ count: total }, { data }] = await Promise.all([
+      supabase.from('children').select('id', { count: 'exact', head: true }),
+      fetchAllRows<{ team_number: number }>(() => supabase.from('children').select('team_number').order('id')),
+    ]);
+    setCount(total ?? data.length);
     setTeamsCount(new Set((data || []).map((d: any) => d.team_number)).size);
   };
   useEffect(() => { load(); }, []);
@@ -132,17 +136,23 @@ const DataTab = () => {
   );
 
   const wipe = async () => {
-    await supabase.from('children').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('transfers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await Promise.allSettled([
-      supabase.from('train_coupes').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-      supabase.from('iron_dollar_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-      supabase.from('uploaded_files').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-      supabase.from('transfer_requests').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-    ]);
-    haptics.notification('success');
-    toast.success('Базу успішно очищено');
+    const NIL = '00000000-0000-0000-0000-000000000000';
+    // Спочатку залежні таблиці, учасників — останніми: інакше зовнішні ключі блокують видалення.
+    const dependents = ['transfer_requests', 'transfers', 'iron_dollar_transactions', 'train_coupes', 'uploaded_files', 'notifications'] as const;
+    const failed: string[] = [];
+    for (const table of dependents) {
+      const { error } = await supabase.from(table).delete().neq('id', NIL);
+      if (error) failed.push(`${table}: ${error.message}`);
+    }
+    const { error: childrenError } = await supabase.from('children').delete().neq('id', NIL);
+    if (childrenError) failed.push(`children: ${childrenError.message}`);
+    if (failed.length) {
+      haptics.notification('error');
+      toast.error(`Очищення виконано не повністю (${failed.length}): ${failed[0]}`);
+    } else {
+      haptics.notification('success');
+      toast.success('Базу успішно очищено');
+    }
     load();
   };
 

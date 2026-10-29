@@ -1,7 +1,8 @@
 import type { Shift } from '@/types/app';
 
-/** Local (Kyiv) calendar date, not UTC — avoids showing «yesterday» between 00:00 and 03:00. */
-const localISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const kyivFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv', year: 'numeric', month: '2-digit', day: '2-digit' });
+/** Календарна дата в Києві (як на сервері), а не за годинником пристрою: інакше зміна «перемикається» не опівночі. */
+const localISO = (d: Date) => kyivFmt.format(d);
 
 /**
  * Determines if a shift is currently active based on real date,

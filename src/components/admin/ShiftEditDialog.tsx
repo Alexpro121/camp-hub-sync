@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -239,11 +240,15 @@ function ImportTab({ shift, teamCounts, onDone }: { shift: Shift; teamCounts: Ma
       const rows = (override?.length ? override : preview.rows)
         .filter((r) => r.full_name && r.team_number)
         .map((r) => toDbRow({ ...r, team_number: Number(r.team_number) + offset }, shift.id));
-      const { data: existing } = await supabase.from('children').select('id, full_name, team_number, deleted_at').eq('shift_id', shift.id).limit(5000);
+      // Постранично: .limit(5000) все одно обрізається до 1000, і учасники довантажувались дублями.
+      const { data: existing, error: existingError } = await fetchAllRows<any>(() =>
+        supabase.from('children').select('id, full_name, team_number, deleted_at').eq('shift_id', shift.id).order('id'));
+      if (existingError) throw existingError;
       const byName = new Map<string, any>();
-      (existing ?? []).forEach((c: any) => byName.set(`${c.team_number}|${nameKey(c.full_name || '')}`, c));
+      existing.forEach((c: any) => byName.set(`${c.team_number}|${nameKey(c.full_name || '')}`, c));
       const toInsert: any[] = []; const seen = new Set<string>();
-      let updated = 0, skipped = 0;
+      const updates: { id: string; patch: any }[] = [];
+      let skipped = 0;
       for (const r of rows) {
         // Однофамільці в різних командах — різні діти.
         const k = `${r.team_number}|${nameKey(r.full_name)}`;
@@ -257,16 +262,28 @@ function ImportTab({ shift, teamCounts, onDone }: { shift: Shift; teamCounts: Ma
           if (r.phone) patch.phone = r.phone;
           if (r.note_from_table) patch.note_from_table = r.note_from_table;
           if (r.team_name) patch.team_name = r.team_name;
-          if (Object.keys(patch).length) { await supabase.from('children').update(patch).eq('id', ex.id); updated++; } else skipped++;
+          if (Object.keys(patch).length) updates.push({ id: ex.id, patch }); else skipped++;
         } else toInsert.push(r);
       }
+      // Пачками по 10 паралельно і з перевіркою помилок: раніше помилка оновлення тихо ігнорувалась.
+      for (let i = 0; i < updates.length; i += 10) {
+        const results = await Promise.all(updates.slice(i, i + 10).map((u) => supabase.from('children').update(u.patch).eq('id', u.id)));
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+      }
+      const updated = updates.length;
       for (let i = 0; i < toInsert.length; i += 50) {
         const { error } = await supabase.from('children').insert(toInsert.slice(i, i + 50));
         if (error) throw error;
       }
       const newTeams = [...new Set([...(shift.assigned_teams ?? []), ...toInsert.map((r) => r.team_number)])].sort((a, b) => a - b);
-      if (newTeams.length !== (shift.assigned_teams ?? []).length) await supabase.from('shifts').update({ assigned_teams: newTeams }).eq('id', shift.id);
-      await supabase.from('uploaded_files').insert({ filename: label, shift_id: shift.id, rows_count: toInsert.length });
+      if (newTeams.length !== (shift.assigned_teams ?? []).length) {
+        const { error: teamsError } = await supabase.from('shifts').update({ assigned_teams: newTeams }).eq('id', shift.id);
+        if (teamsError) throw teamsError;
+      }
+      // Журнал файлів — довідковий: його збій не має скасовувати вже виконаний імпорт.
+      const { error: logError } = await supabase.from('uploaded_files').insert({ filename: label, shift_id: shift.id, rows_count: toInsert.length });
+      if (logError) console.warn('[ShiftEdit] uploaded_files:', logError.message);
       if (toInsert.length) void backfillGenders();
       setReport({ added: toInsert.length, updated, skipped });
       toast.success(`Додано ${toInsert.length}, оновлено ${updated}`);

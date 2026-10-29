@@ -14,6 +14,7 @@
 import { createStore, get as idbGet, set as idbSet } from 'idb-keyval';
 import { supabase } from '@/integrations/supabase/client';
 import { networkPulse } from '@/lib/networkEngine';
+import { pushIsland } from '@/lib/islandBus';
 import { runExclusive } from '@/lib/syncLock';
 import {
   acquireFlushLease,
@@ -83,6 +84,9 @@ class OutboxManager {
   private listeners = new Set<Listener>();
   private flushListeners = new Set<FlushListener>();
   private syncing = false;
+  /** Після збою мережі нові дії не б'ють по мертвому зв'язку, доки не мине пауза. */
+  private netStreak = 0;
+  private netBlockedUntil = 0;
   private writeIdb = createSerialWriter((value) => idbSet(QUEUE_KEY, value, store));
   private channel = createChannel(CHANNEL_NAME, (data) => this.onChannelMessage(data));
   /** ID уже відправлених дій — злиття дзеркал не має їх воскрешати. */
@@ -204,7 +208,8 @@ class OutboxManager {
     const list = safeLocalGet<OutboxItem[]>(DEAD_LETTER_KEY) ?? [];
     list.push({ ...item, lastError: String((error as any)?.message ?? error ?? 'unknown') });
     safeLocalSet(DEAD_LETTER_KEY, list.slice(-MAX_DEAD_LETTERS));
-  }
+ 
+  pushIsland(item.type === 'AIR_CHARGE' ? 'Платіж А$ не виконано' : 'Дію не збережено', 'danger', undefined, 8000); }
 
   /** Дії, які не вдалося застосувати (для діагностики в адмінці). */
   getDeadLetters(): OutboxItem[] {
@@ -316,6 +321,7 @@ class OutboxManager {
   /** Негайна синхронізація: скидає паузи бекофу після повернення мережі. */
   async kick(): Promise<{ done: number; failed: number }> {
     await this.ready;
+    this.netBlockedUntil = 0;
     if (this.queue.some((i) => i.nextAttemptAt)) {
       this.queue = this.queue.map((i) => ({ ...i, nextAttemptAt: undefined }));
       await this.persist();
@@ -337,7 +343,7 @@ class OutboxManager {
 
   private async flushInner(): Promise<{ done: number; failed: number }> {
     await this.ready;
-    if (this.syncing || !this.queue.length) return { done: 0, failed: this.queue.length };
+    if (this.syncing || !this.queue.length || Date.now() < this.netBlockedUntil) return { done: 0, failed: this.queue.length };
     // Відправляємо, доки пристрій не втратив мережу за сигналом ОС:
     // помилкова оцінка якості зв'язку не має зупиняти синхронізацію.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -354,16 +360,27 @@ class OutboxManager {
     const now = Date.now();
     const snapshot = this.queue.filter((i) => !i.nextAttemptAt || i.nextAttemptAt <= now);
     const completedIds = new Set<string>();
+    // Знімок payload на момент відправки: якщо під час польоту запиту елемент склеївся
+    // з новішою дією, його не можна видаляти — нова зміна ще не в базі.
+    const sentPayload = new Map(snapshot.map((i) => [i.id, JSON.stringify(i.payload)]));
     const retries = new Map<string, Partial<OutboxItem>>();
     let done = 0;
+    let requeued = false;
 
     try {
+      let networkFailures = 0;
       for (const item of snapshot) {
+        // Два збої мережі поспіль — зв'язку немає: не чекаємо таймаут на кожній дії черги.
+        if (networkFailures >= 2) break;
+        lease.renew();
         // Якщо під час циклу мережа знову зникла в тунелі — зупиняємось без паніки
         if (typeof navigator !== 'undefined' && navigator.onLine === false) break;
 
         try {
           await this.run(item);
+          networkFailures = 0;
+          this.netStreak = 0;
+          this.netBlockedUntil = 0;
           completedIds.add(item.id);
           done++;
         } catch (e: any) {
@@ -376,6 +393,9 @@ class OutboxManager {
             continue;
           }
 
+          networkFailures++;
+          this.netStreak++;
+          this.netBlockedUntil = Date.now() + Math.min(60_000, 3000 * 2 ** Math.min(this.netStreak, 5));
           retries.set(item.id, {
             tries,
             nextAttemptAt: Date.now() + backoffDelay(tries, 4000, MAX_BACKOFF_MS),
@@ -385,6 +405,14 @@ class OutboxManager {
       }
     } finally {
       // ✅ БЕЗПЕЧНЕ ОНОВЛЕННЯ: видаляємо ТІЛЬКИ оброблені ID, зберігаючи всі нові дії!
+      for (const id of [...completedIds]) {
+        const current = this.queue.find((i) => i.id === id);
+        if (current && JSON.stringify(current.payload) !== sentPayload.get(id)) {
+          completedIds.delete(id);
+          retries.delete(id);
+          requeued = true;
+        }
+      }
       if (completedIds.size) this.tombstones.mark(completedIds);
       this.queue = this.queue
         .filter((item) => !completedIds.has(item.id))
@@ -394,6 +422,9 @@ class OutboxManager {
       lease.release();
       await this.persist();
     }
+
+    // Зміна, що склеїлась під час польоту, ще не в базі — відправляємо без очікування таймера.
+    if (requeued) setTimeout(() => { void this.flush(); }, 0);
 
     if (done > 0 || retries.size > 0) {
       this.flushListeners.forEach((l) => l(done, this.queue.length));

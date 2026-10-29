@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useState } from 'react';
 import { Loader2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, ChevronDown, Pencil } from 'lucide-react';
 
@@ -8,7 +9,7 @@ import type { Child, Shift } from '@/types/app';
 import ChildEditDialog from '@/components/supervisor/ChildEditDialog';
 
 import { shiftStatus } from '@/lib/shift';
-import { CATEGORY_LABELS, resolveShiftPhase, teamsOf } from '@/lib/shift-resolver';
+import { teamsOf } from '@/lib/shift-resolver';
 
 import { SHIFT_LABELS } from '@/components/admin/tabs/shared';
 
@@ -35,8 +36,8 @@ const StatsTab = () => {
   const load = async () => {
     const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number'),
-      supabase.from('transfers').select('child_id'),
+      fetchAllRows<any>(() => supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number').order('id')),
+      fetchAllRows<{ child_id: string }>(() => supabase.from('transfers').select('child_id').order('id')),
     ]);
 
     const transfersByChild = new Map<string, number>();
@@ -76,7 +77,8 @@ const StatsTab = () => {
     let reloadTimer: ReturnType<typeof setTimeout> | undefined;
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(() => { void load(); }, 300);
+      // Повне перечитування всіх змін — рідко: супровід відмічає присутність безперервно.
+      reloadTimer = setTimeout(() => { if (document.visibilityState === 'visible') void load(); }, 5000);
     };
     const ch = supabase.channel('stats-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, scheduleReload)
@@ -217,7 +219,7 @@ const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStat
             {SHIFT_LABELS[r.shift.shift_type]} · {r.shift.start_date} → {r.shift.end_date}
           </p>
           <p className="text-[11px] text-[#FA5A15] font-medium mt-0.5">
-            {CATEGORY_LABELS[resolveShiftPhase(r.shift).category]} (Команди: {formatTeams(teamsOf(r.shift))}): {r.total} учасників
+            (Команди: {formatTeams(teamsOf(r.shift))}): {r.total} учасників
           </p>
         </div>
       </div>
