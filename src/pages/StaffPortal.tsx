@@ -15,6 +15,7 @@ import { compressAvatar, KIND_LABEL, StaffKind, staffCall as call, staffErr } fr
 import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 import ExitConfirm from '@/components/ExitConfirm';
+import ForcePasswordChange from '@/components/staff/ForcePasswordChange';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
@@ -25,7 +26,7 @@ interface Assignment {
   shift: { id: string; name: string; shift_type: string; start_date: string; end_date: string };
   stats: { children: number; iron_total: number; transfers: number; talents: number };
 }
-interface Cabinet { full_name: string; login: string; kind: StaffKind; phone: string | null; telegram: string | null; avatar_url: string | null; assignments: Assignment[] }
+interface Cabinet { full_name: string; login: string; kind: StaffKind; phone: string | null; telegram: string | null; avatar_url: string | null; must_change_password?: boolean; assignments: Assignment[] }
 
 const todayStr = () => new Date().toLocaleDateString('en-CA');
 const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
@@ -156,6 +157,14 @@ const StaffPortal = () => {
   }, [cabinet]);
 
   if (booting) return <FullScreenLoader label="Завантаження кабінету..." />;
+
+  if (cabinet?.must_change_password) {
+    return (
+      <main className={cn('min-h-[100dvh] bg-background', theme === 'light' && 'staff-light')}>
+        <ForcePasswordChange onDone={() => setCabinet((c) => (c ? { ...c, must_change_password: false } : c))} onLogout={logout} />
+      </main>
+    );
+  }
 
   if (cabinet?.kind === 'doctor') {
     return <Suspense fallback={<FullScreenLoader label="Відкриваємо медичний список..." />}><DoctorDesk name={cabinet.full_name} theme={theme} toggleTheme={toggleTheme} onLogout={logout} /></Suspense>;
