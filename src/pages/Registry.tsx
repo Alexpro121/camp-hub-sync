@@ -243,20 +243,20 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const load = useCallback(async () => {
     try {
       await flush();
-      const d = await call({ action: 'list', token });
+      const d = await call({ action: 'list', token, ...(shiftId ? { shift_id: shiftId } : {}) });
       const sh = Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name]));
       const children: Kid[] = d.children ?? [];
       setShifts(sh);
       setKids(applyQueue(children));
       sinceRef.current = children.reduce((m, k) => (k.updated_at && k.updated_at > m ? k.updated_at : m), '');
       const at = Date.now(); setSyncedAt(at); setOnline(true);
-      writeList({ at, children, shifts: sh });
+      writeList(shiftId, { at, children, shifts: sh });
       loaded.current = true;
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
-      else if (!loaded.current && !readList()) toast.error('Не вдалося завантажити список. Повторюю…');
+      else if (!loaded.current && !readList(shiftId)) toast.error('Не вдалося завантажити список. Повторюю…');
     }
-  }, [token, onLogout, flush]);
+  }, [token, shiftId, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
   const pullRef = useRef(pull); pullRef.current = pull;
