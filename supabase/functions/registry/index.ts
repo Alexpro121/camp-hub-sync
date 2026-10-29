@@ -70,6 +70,37 @@ Deno.serve(async (req) => {
       return json({ shifts, children: all });
     }
 
+    // Пакет дій одним запитом: менше обривів на поганому інтернеті.
+    // Нотатки: якщо хтось інший змінив нотатку після того, як ми почали редагувати (base),
+    // не перезаписуємо, а дописуємо — так 4 людини паралельно не стирають одна одну.
+    if (body.action === 'batch') {
+      const items: any[] = Array.isArray(body.items) ? body.items.slice(0, 200) : [];
+      const ids = items.map((i) => i?.id).filter((x) => typeof x === 'string');
+      if (!ids.length) return json({ results: [] });
+      const { data: rows } = await svc.from('children').select('id, supervisor_notes, shifts!inner(is_active, deleted_at)')
+        .in('id', ids).eq('shifts.is_active', true).is('shifts.deleted_at', null).is('deleted_at', null);
+      const cur = new Map((rows ?? []).map((r: any) => [r.id, r]));
+      const results = await Promise.all(items.map(async (it) => {
+        const row: any = cur.get(it?.id);
+        if (!row) return { id: it?.id, status: 'not_found' };
+        const patch: Record<string, unknown> = {};
+        if (typeof it.is_present === 'boolean') patch.is_present = it.is_present;
+        if (typeof it.supervisor_notes === 'string') {
+          let note = it.supervisor_notes.slice(0, 2000);
+          const now = row.supervisor_notes ?? '';
+          if (typeof it.base_note === 'string' && now !== it.base_note && now !== note && !note.includes(now)) {
+            note = (now ? `${now}\n— ` : '') + note;
+          }
+          patch.supervisor_notes = note.slice(0, 4000);
+        }
+        if (!Object.keys(patch).length) return { id: it.id, status: 'ok' };
+        const { data, error } = await svc.from('children').update(patch).eq('id', it.id)
+          .select('id, is_present, supervisor_notes, updated_at').maybeSingle();
+        return error ? { id: it.id, status: 'error' } : { id: it.id, status: 'ok', child: data };
+      }));
+      return json({ results });
+    }
+
     if (body.action === 'update') {
       const patch: Record<string, unknown> = {};
       if (typeof body.is_present === 'boolean') patch.is_present = body.is_present;
