@@ -74,7 +74,7 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
   kid: Kid; query: string; shiftName?: string; i: number; onToggle: (k: Kid) => void; onOpen: (k: Kid) => void;
 }) {
   return (
-    <li className="animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-both" style={{ animationDelay: `${Math.min(i, 10) * 25}ms` }}>
+    <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-both">
       <div className={`flex items-center gap-3 rounded-2xl border p-3 transition-colors ${kid.is_present ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
         <button onClick={() => onToggle(kid)} aria-label={kid.is_present ? 'Зняти присутність' : 'Позначити присутнім'}
           className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-all duration-200 active:scale-90 ${kid.is_present ? 'border-success bg-success text-success-foreground' : 'border-muted-foreground/40 text-transparent'}`}>
@@ -105,15 +105,16 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   const save = async () => { setSaving(true); try { await onSaveNote(kid, note); } finally { setSaving(false); } };
+  const close = () => (dirty ? save() : onClose());
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/70 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/70 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={close}>
       <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-8 duration-300 sm:rounded-3xl">
         <div className="flex items-start gap-3 border-b border-border p-4">
           <div className="min-w-0 flex-1">
             <h2 className="break-words text-lg font-bold text-foreground">{kid.full_name}</h2>
             <p className="text-sm text-muted-foreground">Команда {kid.team_number}{shiftName ? ` · ${shiftName}` : ''}</p>
           </div>
-          <button onClick={onClose} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
+          <button onClick={close} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-4 overflow-y-auto p-4">
           <button onClick={() => onToggle(kid)}
@@ -144,60 +145,145 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
   );
 }
 
+type Filter = 'all' | 'absent' | 'present';
+const QUEUE_KEY = 'ironshift:registry-queue';
+type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string }>;
+const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
+const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+
 function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [kids, setKids] = useState<Kid[] | null>(null);
   const [shifts, setShifts] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<Filter>('absent');
+  const [team, setTeam] = useState<number | null>(null);
+  const [shiftId, setShiftId] = useState<string | null>(null);
+  const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [queued, setQueued] = useState(() => Object.keys(readQueue()).length);
   const dq = useDeferredValue(q);
   const inputRef = useRef<HTMLInputElement>(null);
   const indexCache = useRef(new Map<string, Indexed>());
+  const loaded = useRef(false);
+
+  // Невідправлені дії накладаємо поверх свіжого списку з сервера.
+  const applyQueue = (list: Kid[]) => {
+    const pq = readQueue();
+    return list.map((k) => (pq[k.id] ? { ...k, ...pq[k.id] } : k));
+  };
+
+  const flush = useCallback(async () => {
+    const pq = readQueue();
+    const ids = Object.keys(pq);
+    for (const id of ids) {
+      try {
+        await call({ action: 'update', token, id, ...pq[id] });
+        const cur = readQueue(); delete cur[id]; writeQueue(cur);
+      } catch (e: any) {
+        if (e.message === 'unauthorized') return onLogout();
+        if (e.message === 'not_found') { const cur = readQueue(); delete cur[id]; writeQueue(cur); continue; }
+        break;
+      }
+    }
+    setQueued(Object.keys(readQueue()).length);
+  }, [token, onLogout]);
 
   const load = useCallback(async () => {
     try {
+      await flush();
       const d = await call({ action: 'list', token });
       setShifts(Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name])));
-      setKids(d.children ?? []);
+      setKids(applyQueue(d.children ?? []));
+      loaded.current = true;
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
-      else if (!kids) toast.error('Не вдалося завантажити список');
+      else if (!loaded.current) toast.error('Не вдалося завантажити список. Повторюю…');
     }
-  }, [token, onLogout, kids]);
+  }, [token, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
   useEffect(() => {
     loadRef.current();
-    const t = setInterval(() => document.visibilityState === 'visible' && loadRef.current(), 30_000);
-    return () => clearInterval(t);
+    const tick = () => document.visibilityState === 'visible' && loadRef.current();
+    const t = setInterval(tick, 20_000);
+    window.addEventListener('online', tick);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(t); window.removeEventListener('online', tick); document.removeEventListener('visibilitychange', tick); };
   }, []);
 
+  // «/» або будь-яка літера фокусує пошук — зручно на ноутбуці.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (openId || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+      if (e.key === '/' || e.key.length === 1) { inputRef.current?.focus(); if (e.key === '/') e.preventDefault(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openId]);
+
   const indexOf = useCallback((k: Kid) => {
-    const key = `${k.id}|${k.full_name}`;
+    const key = `${k.id}|${k.full_name}|${k.phone ?? ''}`;
     let v = indexCache.current.get(key);
     if (!v) { v = buildIndex(k.full_name, k.phone); indexCache.current.set(key, v); }
     return v;
   }, []);
 
-  const results = useMemo(() => (kids ? searchItems(kids, indexOf, dq, 40) : []), [kids, dq, indexOf]);
-  const present = useMemo(() => kids?.filter((k) => k.is_present).length ?? 0, [kids]);
+  const scoped = useMemo(() => (kids ?? []).filter((k) => !shiftId || k.shift_id === shiftId), [kids, shiftId]);
+  const teams = useMemo(() => {
+    const m = new Map<number, { total: number; present: number }>();
+    for (const k of scoped) { const t = m.get(k.team_number) ?? { total: 0, present: 0 }; t.total++; if (k.is_present) t.present++; m.set(k.team_number, t); }
+    return [...m.entries()].sort((a, b) => a[0] - b[0]);
+  }, [scoped]);
+  const filtered = useMemo(() => scoped.filter((k) =>
+    (team === null || k.team_number === team) && (filter === 'all' || (filter === 'present') === k.is_present)), [scoped, team, filter]);
+
+  // Пошук іде по всіх дітях (фільтр «хто не прийшов» не ховає знайдених), браузинг — по фільтру.
+  const searching = dq.trim().length > 0;
+  const results = useMemo(() => {
+    if (searching) return searchItems(team === null ? scoped : scoped.filter((k) => k.team_number === team), indexOf, dq, 40);
+    return filtered;
+  }, [searching, scoped, filtered, team, indexOf, dq]);
+  useEffect(() => setLimit(60), [filter, team, shiftId, dq]);
+
+  const present = useMemo(() => scoped.filter((k) => k.is_present).length, [scoped]);
+  const total = scoped.length;
 
   const patch = (id: string, p: Partial<Kid>) => setKids((ks) => ks?.map((k) => (k.id === id ? { ...k, ...p } : k)) ?? ks);
 
-  const toggle = useCallback(async (k: Kid) => {
+  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }) => {
+    const pq = readQueue(); pq[id] = { ...pq[id], ...p }; writeQueue(pq); setQueued(Object.keys(pq).length);
+    await flush();
+    if (readQueue()[id]) toast.warning('Немає зв\'язку — збережу автоматично, щойно з\'явиться інтернет', { id: 'registry-offline' });
+  }, [flush]);
+
+  const toggle = useCallback((k: Kid, fromSearch = false) => {
     const next = !k.is_present;
     patch(k.id, { is_present: next });
-    if (navigator.vibrate) navigator.vibrate(15);
-    try { await call({ action: 'update', token, id: k.id, is_present: next }); if (next) toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} — зареєстровано`, { duration: 1500 }); }
-    catch { patch(k.id, { is_present: !next }); toast.error('Не збереглося, спробуйте ще раз'); }
-  }, [token]);
+    navigator.vibrate?.(next ? 20 : [10, 40, 10]);
+    void send(k.id, { is_present: next });
+    if (next) {
+      toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} · команда ${k.team_number}`, {
+        duration: 3000,
+        action: { label: 'Скасувати', onClick: () => { patch(k.id, { is_present: false }); void send(k.id, { is_present: false }); } },
+      });
+      // Швидкий потік: відмітив знайдену дитину — поле пошуку готове до наступної.
+      if (fromSearch) { setQ(''); requestAnimationFrame(() => inputRef.current?.focus()); }
+    }
+  }, [send]);
 
   const saveNote = useCallback(async (k: Kid, note: string) => {
-    try { await call({ action: 'update', token, id: k.id, supervisor_notes: note }); patch(k.id, { supervisor_notes: note }); toast.success('Нотатку збережено'); setOpenId(null); }
-    catch { toast.error('Не збереглося, спробуйте ще раз'); }
-  }, [token]);
+    patch(k.id, { supervisor_notes: note });
+    await send(k.id, { supervisor_notes: note });
+    toast.success('Нотатку збережено', { duration: 1500 });
+    setOpenId(null);
+  }, [send]);
 
   const openKid = kids?.find((k) => k.id === openId) ?? null;
-  const total = kids?.length ?? 0;
+  const multiShift = Object.keys(shifts).length > 1;
+  const visible = results.slice(0, limit);
+  const chip = (active: boolean) => `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors active:scale-95 ${active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`;
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -205,36 +291,67 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
         <div className="mx-auto max-w-2xl px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <div className="mb-2 flex items-center gap-2">
             <h1 className="flex-1 text-lg font-bold text-foreground">Реєстрація</h1>
+            {queued > 0 && <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning" title="Чекають на інтернет">⏳ {queued}</span>}
             <span className="rounded-full bg-success/15 px-3 py-1 text-sm font-semibold tabular-nums text-success">{present} / {total}</span>
             <button onClick={onLogout} aria-label="Вийти" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><LogOut className="h-5 w-5" /></button>
           </div>
-          <div className="h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-success transition-[width] duration-500" style={{ width: total ? `${(present / total) * 100}%` : 0 }} />
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-success transition-[width] duration-700 ease-out" style={{ width: total ? `${(present / total) * 100}%` : '0%' }} />
           </div>
           <div className="relative mt-3">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <input ref={inputRef} autoFocus value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
-              onKeyDown={(e) => { if (e.key === 'Enter' && results[0]) setOpenId(results[0].id); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && results[0]) { e.shiftKey ? setOpenId(results[0].id) : (!results[0].is_present ? toggle(results[0], true) : setOpenId(results[0].id)); }
+                if (e.key === 'Escape') setQ('');
+              }}
               placeholder="Прізвище, ім'я або телефон…" aria-label="Пошук дитини" autoComplete="off" autoCorrect="off" spellCheck={false}
               className="h-14 w-full rounded-2xl border border-input bg-card pl-11 pr-11 text-base text-foreground outline-none focus:ring-2 focus:ring-ring" />
             {q && <button onClick={() => { setQ(''); inputRef.current?.focus(); }} aria-label="Очистити" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-muted-foreground"><X className="h-5 w-5" /></button>}
           </div>
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+            {([['absent', `Не прийшли · ${total - present}`], ['present', `Прийшли · ${present}`], ['all', 'Усі']] as [Filter, string][]).map(([f, l]) => (
+              <button key={f} onClick={() => setFilter(f)} className={chip(filter === f)}>{l}</button>
+            ))}
+            <span className="mx-1 w-px shrink-0 bg-border" />
+            <button onClick={() => setTeam(null)} className={chip(team === null)}>Усі команди</button>
+            {teams.map(([t, s]) => (
+              <button key={t} onClick={() => setTeam(team === t ? null : t)} className={chip(team === t)}>
+                {t} <span className="opacity-70 tabular-nums">{s.present}/{s.total}</span>
+              </button>
+            ))}
+          </div>
+          {multiShift && (
+            <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+              <button onClick={() => setShiftId(null)} className={chip(shiftId === null)}>Усі зміни</button>
+              {Object.entries(shifts).map(([id, n]) => <button key={id} onClick={() => setShiftId(id)} className={chip(shiftId === id)}>{n}</button>)}
+            </div>
+          )}
         </div>
       </header>
-      <main className="mx-auto max-w-2xl px-4 py-4">
+      <main className="mx-auto max-w-2xl px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {!kids ? (
           <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[70px] animate-pulse rounded-2xl bg-muted" />)}</div>
-        ) : !dq.trim() ? (
-          <p className="pt-10 text-center text-muted-foreground">Почніть вводити ім'я — порядок слів, розкладка і одруківки не важливі.</p>
         ) : results.length === 0 ? (
-          <p className="pt-10 text-center text-muted-foreground">Нікого не знайдено за «{dq}»</p>
+          <div className="pt-12 text-center text-muted-foreground animate-in fade-in">
+            {searching ? <>Нікого не знайдено за «{dq}».<br /><span className="text-sm">Спробуйте лише прізвище або цифри телефону.</span></>
+              : filter === 'absent' ? <span className="text-success font-semibold">🎉 Усі вже зареєстровані!</span> : 'Тут поки порожньо'}
+          </div>
         ) : (
-          <ul key={dq} className={`space-y-2 transition-opacity ${q !== dq ? 'opacity-60' : ''}`}>
-            {results.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={Object.keys(shifts).length > 1 ? shifts[k.shift_id] : undefined} onToggle={toggle} onOpen={(x) => setOpenId(x.id)} />)}
-          </ul>
+          <>
+            {searching && <p className="mb-2 text-xs text-muted-foreground">Найкращі збіги серед усіх дітей · Enter — відмітити першого</p>}
+            <ul key={`${dq}|${filter}|${team}|${shiftId}`} className={`space-y-2 transition-opacity ${q !== dq ? 'opacity-60' : ''}`}>
+              {visible.map((k, i) => <Row key={k.id} i={i} kid={k} query={dq} shiftName={multiShift ? shifts[k.shift_id] : undefined} onToggle={(x) => toggle(x, searching)} onOpen={(x) => setOpenId(x.id)} />)}
+            </ul>
+            {results.length > limit && (
+              <button onClick={() => setLimit((l) => l + 100)} className="mt-3 h-11 w-full rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">
+                Показати ще ({results.length - limit})
+              </button>
+            )}
+          </>
         )}
       </main>
-      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={toggle} onSaveNote={saveNote} />}
+      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
     </div>
   );
 }
