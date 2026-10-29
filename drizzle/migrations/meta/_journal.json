@@ -50,6 +50,13 @@
       "when": 1793274431364,
       "tag": "0006_add_notes_origin_to_children",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793283076195,
+      "tag": "0007_record_verified_transaction_authors",
+      "breakpoints": true
     }
   ]
 }
