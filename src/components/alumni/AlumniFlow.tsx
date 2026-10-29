@@ -104,7 +104,7 @@ const AlumniFlow = ({ onBack }: Props) => {
       setRaffleOpen(true);
       haptics.notification('success');
       pushIsland(
-        kind === 'alumni_raffle' ? `🎁 ${payload.title}` : `📢 ${payload.title}`,
+        `📢 ${payload.title}`,
         'gradient',
         'Штаб · випускники',
       );
