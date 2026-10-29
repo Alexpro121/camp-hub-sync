@@ -117,6 +117,8 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const isPaused = useRef<boolean>(false);
   
   const haptics = useHaptics();
+  const hapticsRef = useRef(haptics);
+  hapticsRef.current = haptics;
   const { online, pending } = useNetworkStatus();
 
   const clearTimer = useCallback(() => { 
@@ -132,6 +134,7 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
     isPaused.current = false;
     
     if (nextState === 'HIDDEN' || nextState === 'LOADING_ONLY' || nextState === 'EXCEL_IMPORT') return;
+    if (expandedNow) { isPaused.current = true; remainingTime.current = getSmartDuration(nextState); return; }
 
     const duration = overrideMs ?? getSmartDuration(nextState, expandedNow);
     remainingTime.current = duration;
@@ -183,13 +186,11 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
 
   /** Плавне перемикання між згорнутим і розгорнутим станами */
   const toggleExpanded = useCallback(() => {
-    haptics.impact('light');
-    setExpanded((prev) => {
-      const next = !prev;
-      startAutoDismissTimer(state, next);
-      return next;
-    });
-  }, [haptics, startAutoDismissTimer, state]);
+    hapticsRef.current.impact('soft');
+    const next = !expanded;
+    setExpanded(next);
+    startAutoDismissTimer(state, next);
+  }, [expanded, startAutoDismissTimer, state]);
 
   // Спеціалізовані методи виклику станів
   const showLoader = useCallback(() => set('LOADING_ONLY'), [set]);
@@ -204,24 +205,24 @@ export const DynamicIslandProvider = ({ children }: { children: ReactNode }) => 
   const showOffline = useCallback((queued: number) => set('OFFLINE', { queued }), [set]);
 
   const showSuccess = useCallback((title: string, subtitle?: string) => {
-    haptics.notification('success');
+    hapticsRef.current.notification('success');
     set('SUCCESS_TOAST', { title, subtitle });
-  }, [set, haptics]);
+  }, [set]);
 
   const showError = useCallback((title: string, subtitle?: string, errorDetails?: string) => {
-    haptics.notification('error');
+    hapticsRef.current.notification('error');
     set('ERROR_TOAST', { title, subtitle, errorDetails });
-  }, [set, haptics]);
+  }, [set]);
 
   const showBroadcast = useCallback((color: BroadcastColor, message: string, author: string) => {
-    haptics.impact('heavy');
+    hapticsRef.current.impact('soft');
     set('BROADCAST', { color, message, author });
-  }, [set, haptics]);
+  }, [set]);
 
   const showEventAlert = useCallback((alert: EventAlert) => {
-    haptics.notification('warning');
+    hapticsRef.current.notification('warning');
     set('EVENT_ALERT', { ...alert });
-  }, [set, haptics]);
+  }, [set]);
 
   // 1. Детектор мережі: перехід в офлайн / відновлення онлайн
   const wasOffline = useRef(false);
