@@ -1,5 +1,5 @@
 # Admin panel reorganization
-- [ ] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects.
+- [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
 - [x] Add admin-assigned doctor login, all-child search and profiles with correct shift/team supervisors.
 - [x] Add doctor-only medical notes and removable red plus marks visible to supervisors; verify schema privileges and focused tests.
 - [ ] Verify doctor save/remove and supervisor display end-to-end (blocked: no requesting-user app account/session available; sign in as doctor in preview).

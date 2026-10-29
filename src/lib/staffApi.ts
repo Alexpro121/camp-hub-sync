@@ -36,6 +36,7 @@ export const STAFF_ERR: Record<string, string> = {
   shift_needs_teams: 'Спочатку додайте команди до зміни',
   not_staff: 'Цей акаунт не є акаунтом супроводу',
   assign_failed: 'Не вдалося додати до команди',
+  admin_cannot_be_doctor: 'Для лікаря потрібен окремий акаунт без прав адміністратора',
   need_limit: 'Вкажіть кількість реєстрацій або термін дії',
   bad_avatar: 'Не вдалося зберегти фото',
   too_many_attempts: 'Забагато спроб. Зачекайте хвилину',

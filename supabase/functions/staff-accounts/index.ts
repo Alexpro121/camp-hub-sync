@@ -262,7 +262,10 @@ Deno.serve(async (req) => {
     if (action === 'cabinet') {
       const { data: member } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
       if (!member) return json({ error: 'not_staff' }, 403);
-      if (actingMember?.kind === 'doctor') return json({ ...member, assignments: [] });
+      if (actingMember?.kind === 'doctor') {
+        const [withAvatar] = await resolveAvatars(svc, [{ ...member }], () => user.id);
+        return json({ ...withAvatar, assignments: [] });
+      }
       const { data: asg } = await svc
         .from('staff_assignments')
         .select('id, team_number, shift_id, shifts(id, name, shift_type, start_date, end_date, deleted_at)')
@@ -425,6 +428,7 @@ Deno.serve(async (req) => {
       if ('avatar_url' in body && body.avatar_url === null) patch.avatar_url = null;
       const memberId = z.string().uuid().safeParse(body?.user_id);
       if (!memberId.success) return json({ error: 'invalid_input' }, 400);
+      if (patch.kind === 'doctor' && await isAdmin(memberId.data)) return json({ error: 'admin_cannot_be_doctor' }, 400);
       const { error } = await svc.from('staff_members').update(patch).eq('user_id', memberId.data);
       if (error) return json({ error: 'update_failed' }, 500);
       if (patch.kind === 'doctor') await svc.from('user_roles').delete().eq('user_id', memberId.data).eq('role', 'supervisor');
