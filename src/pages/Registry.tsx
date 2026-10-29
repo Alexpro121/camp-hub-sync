@@ -189,7 +189,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   // Невідправлені дії накладаємо поверх свіжого списку з сервера.
   const applyQueue = (list: Kid[]) => {
     const pq = readQueue();
-    return list.map((k) => (pq[k.id] ? { ...k, ...pq[k.id] } : k));
+    return list.map((k) => { const x = pq[k.id]; if (!x) return k; const { base_note: _b, ...rest } = x; return { ...k, ...rest }; });
   };
 
   const flush = useCallback(async () => {
@@ -283,10 +283,10 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
 
   const patch = (id: string, p: Partial<Kid>) => setKids((ks) => ks?.map((k) => (k.id === id ? { ...k, ...p } : k)) ?? ks);
 
-  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }) => {
+  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }, baseNote?: string) => {
     const pq = readQueue();
     const base = p.supervisor_notes !== undefined && pq[id]?.base_note === undefined
-      ? (kidsRef.current?.find((k) => k.id === id)?.supervisor_notes ?? '') : pq[id]?.base_note;
+      ? (baseNote ?? '') : pq[id]?.base_note;
     pq[id] = { ...pq[id], ...p, ...(base !== undefined ? { base_note: base } : {}) }; writeQueue(pq); setQueued(Object.keys(pq).length);
     await flush();
     if (readQueue()[id]) toast.warning('Немає зв\'язку — збережу автоматично, щойно з\'явиться інтернет', { id: 'registry-offline' });
@@ -308,8 +308,9 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
   }, [send]);
 
   const saveNote = useCallback(async (k: Kid, note: string) => {
+    const base = k.supervisor_notes ?? '';
     patch(k.id, { supervisor_notes: note });
-    await send(k.id, { supervisor_notes: note });
+    await send(k.id, { supervisor_notes: note }, base);
     toast.success('Нотатку збережено', { duration: 1500 });
     setOpenId(null);
   }, [send]);
