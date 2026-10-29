@@ -1,14 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2, Eye, AlertTriangle } from "lucide-react";
+import { ClipboardCopy, ExternalLink, Loader2, CheckCircle2, Eye, AlertTriangle, Sparkles, Square } from "lucide-react";
 import { toast } from "sonner";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
 import { previewScheduleImport } from "@/lib/scheduleImport";
 import { saveScheduleImport } from "@/lib/saveScheduleImport";
 import { useActiveShift } from "@/context/ActiveShiftContext";
+import { generateSchedule } from '@/lib/generateSchedule';
 
 const AI_STUDIO_URL = "https://aistudio.google.com/prompts/new_chat";
 
@@ -24,10 +25,40 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   const [rawText, setRawText] = useState("");
   const [json, setJson] = useState("");
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const controller = useRef<AbortController | null>(null);
   const saving = useRef(false);
   const [checkedJson, setCheckedJson] = useState<string | null>(null);
   const preview = useMemo(() => checkedJson === json ? previewScheduleImport(json, date) : null, [checkedJson, json, date]);
-  const changeOpen = (next: boolean) => { if (!saving.current) onOpenChange(next); };
+  const changeOpen = (next: boolean) => {
+    if (saving.current) return;
+    if (!next) controller.current?.abort();
+    onOpenChange(next);
+  };
+  useEffect(() => () => { controller.current?.abort(); }, []);
+  useEffect(() => { if (!open) controller.current?.abort(); }, [open]);
+
+  const generate = async () => {
+    if (controller.current || busy || !rawText.trim()) return;
+    const request = new AbortController();
+    controller.current = request;
+    setGenerating(true);
+    setGenerationError('');
+    setCheckedJson(null);
+    setJson('');
+    try {
+      const result = await generateSchedule(rawText.trim(), date, request.signal, (text) => {
+        if (!request.signal.aborted) setJson(text);
+      });
+      if (!request.signal.aborted) { setJson(result); setCheckedJson(result); }
+    } catch (error: unknown) {
+      setJson('');
+      if (!request.signal.aborted) setGenerationError(error instanceof Error ? error.message : 'Не вдалося згенерувати розклад');
+    } finally {
+      if (controller.current === request) { controller.current = null; setGenerating(false); }
+    }
+  };
 
   const openAiStudio = () => {
     try {
@@ -71,7 +102,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   };
 
   const publish = async () => {
-    if (saving.current || !preview || preview.errors.length || !preview.total) return;
+    if (saving.current || generating || !preview || preview.errors.length || !preview.total) return;
     saving.current = true;
     setBusy(true);
     try {
@@ -100,7 +131,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent aria-describedby={undefined} className="max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader>
-          <DialogTitle>Імпорт розкладу через AI Studio</DialogTitle>
+          <DialogTitle>Імпорт розкладу</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -110,7 +141,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             </Label>
             <Textarea
               id="schedule-raw-text"
-              disabled={busy}
+              disabled={busy || generating}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               placeholder="Встав сюди текст розкладу на один або кілька днів (наприклад 11.08 – 15.08)…"
@@ -119,10 +150,23 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
           </div>
 
           <div className="space-y-2">
+            {generating ? <Button variant="outline" onClick={() => controller.current?.abort()} className="w-full h-11">
+              <Square className="size-4 mr-2" /> Зупинити генерацію
+            </Button> : <Button onClick={generate} disabled={busy || !rawText.trim() || rawText.length > 25000} className="w-full h-12">
+              <Sparkles className="size-4 mr-2" /> Згенерувати розклад
+            </Button>}
+            <p className="text-xs text-muted-foreground">Gemini 3.5 Flash-Lite</p>
+            {generating && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Розпізнаємо дати, події та команди…</p>}
+            {rawText.length > 25000 && <p role="alert" className="text-sm text-destructive">Текст завеликий — розділіть його на частини до 25 000 символів.</p>}
+            {generationError && <p role="alert" className="text-sm text-destructive break-words">{generationError}</p>}
+          </div>
+
+          <details className="space-y-2">
+            <summary className="cursor-pointer text-sm text-muted-foreground">Імпорт вручну через AI Studio</summary>
             <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
               Крок 2 — згенеруй JSON у ШІ
             </Label>
-            <Button onClick={copyPrompt} className="w-full h-11 text-xs font-bold uppercase">
+            <Button disabled={busy || generating} onClick={copyPrompt} className="w-full h-11 text-xs font-bold uppercase">
               <ClipboardCopy className="w-4 h-4 mr-1.5" /> Скопіювати запит для ШІ
             </Button>
             <Button
@@ -133,7 +177,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             >
               <ExternalLink className="w-4 h-4 mr-1.5" /> Перейти в Google AI Studio
             </Button>
-          </div>
+          </details>
 
           <div className="space-y-1.5">
             <Label htmlFor="schedule-json" className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -141,7 +185,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             </Label>
             <Textarea
               id="schedule-json"
-              disabled={busy}
+              disabled={busy || generating}
               value={json}
               onChange={(e) => { setJson(e.target.value); setCheckedJson(null); }}
               placeholder='[{"date":"…","items":[…]}, …]'
@@ -149,7 +193,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             />
           </div>
 
-          <Button variant="outline" onClick={() => setCheckedJson(json)} disabled={busy || !json.trim()} className="w-full h-11">
+          <Button variant="outline" onClick={() => setCheckedJson(json)} disabled={busy || generating || !json.trim()} className="w-full h-11">
             <Eye className="size-4 mr-2" /> Перевірити розклад
           </Button>
 
@@ -182,7 +226,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
             </section>
           )}
 
-          <Button onClick={publish} disabled={busy || !preview || preview.errors.length > 0 || !preview.total} className="w-full h-12 text-xs font-bold uppercase">
+          <Button onClick={publish} disabled={busy || generating || !preview || preview.errors.length > 0 || !preview.total} className="w-full h-12 text-xs font-bold uppercase">
             {busy ? <><Loader2 className="size-4 mr-2 animate-spin" /> Зберігаємо чернетку…</> : <><CheckCircle2 className="size-4 mr-2" /> Зберегти перевірену чернетку</>}
           </Button>
         </div>

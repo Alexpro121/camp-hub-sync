@@ -352,7 +352,7 @@ const AdminScheduleEditor = () => {
         onClick={() => setAiOpen(true)}
         className="w-full h-10 text-xs font-bold uppercase"
       >
-        <Sparkles className="w-4 h-4 mr-1.5" /> Імпорт через AI Studio (JSON)
+        <Sparkles className="w-4 h-4 mr-1.5" /> Імпорт розкладу з Gemini
       </Button>
 
       <Button
@@ -381,7 +381,7 @@ const AdminScheduleEditor = () => {
           <p className="text-sm font-semibold">На {humanDate(date)} розклад ще не створено.</p>
           <div className="space-y-2">
             <Button className="w-full h-11 text-xs font-bold uppercase" onClick={() => setAiOpen(true)}>
-              <FileDown className="w-4 h-4 mr-1.5" /> Імпорт розкладу через AI Studio
+              <FileDown className="w-4 h-4 mr-1.5" /> Імпорт розкладу з Gemini
             </Button>
             <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => setForm(emptyForm())}>
               <Plus className="w-4 h-4 mr-1.5" /> Додати першу подію вручну
