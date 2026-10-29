@@ -2,6 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
 import { providerMessage, requestSchedule } from './gemini.ts';
+import { logScheduleDiagnostic, monitorScheduleStream } from './monitor.ts';
 
 const bodySchema = z.object({
   rawText: z.string().trim().min(1).max(25000),
@@ -30,14 +31,20 @@ Deno.serve(async (req) => {
     if (!parsed.success) return json('Вкажіть текст до 25 000 символів і коректну дату', 400);
     const key = Deno.env.get('GEMINI_API_KEY');
     if (!key) return json('Додайте ключ Google AI Studio для генерації', 503);
+    const requestId = crypto.randomUUID();
     const response = await requestSchedule(key, parsed.data.rawText, parsed.data.date, req.signal);
     if (!response.ok) {
+      logScheduleDiagnostic({ requestId, stage: 'http', code: response.status });
       await response.body?.cancel();
-      return json(providerMessage(response.status), response.status);
+      const failure = json(providerMessage(response.status), response.status);
+      failure.headers.set('x-schedule-request-id', requestId);
+      failure.headers.set('Access-Control-Expose-Headers', 'x-schedule-request-id');
+      return failure;
     }
     if (!response.body) return json('Gemini повернув порожню відповідь', 502);
-    return new Response(response.body, { headers: {
+    return new Response(monitorScheduleStream(response.body, requestId), { headers: {
       ...corsHeaders, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
+      'x-schedule-request-id': requestId, 'Access-Control-Expose-Headers': 'x-schedule-request-id',
     } });
   } catch (error) {
     if (req.signal.aborted || (error instanceof Error && error.name === 'AbortError')) return json('Генерацію зупинено', 499);
