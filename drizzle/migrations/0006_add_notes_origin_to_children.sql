@@ -1,0 +1,2 @@
+ALTER TABLE public.children ADD COLUMN notes_origin text CHECK (notes_origin IS NULL OR notes_origin IN ('registry','staff'));
+COMMENT ON COLUMN public.children.notes_origin IS 'Origin of supervisor_notes: registry = written at the registration desk, staff = written by a supervisor. NULL = legacy/unknown.';
