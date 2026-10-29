@@ -364,9 +364,9 @@ export function subscribeAlumniBroadcast(
     if (stopped || fetching) return;
     fetching = true;
     try {
-      let q = db.from('alumni_broadcasts').select('*').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1);
+      let q = db.from('alumni_broadcasts').select('*').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
       if (opts.year) q = q.or(`target_year.is.null,target_year.eq.${opts.year}`);
-      const { data, error } = await q;
+      const { data, error } = await q.limit(1);
       if (!error && data?.[0]) deliver(data[0] as Row);
     } catch { /* retry on reconnect */ }
     finally { fetching = false; }
