@@ -1,5 +1,5 @@
 import { lazyRetry } from '@/lib/lazyRetry';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Coins, Loader2, LogOut, Mic2, ArrowLeftRight, Users, ChevronRight, Crown, Sun, Moon, Camera, Pencil, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,22 +52,32 @@ const StaffPortal = () => {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     (async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        if (data.user) {
-          await loadCabinet();
+        if (data.user && !controller.signal.aborted) {
+          const result = await call<Cabinet | { cabinet: null }>({ action: 'cabinet', allow_missing: true }, { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          if ('cabinet' in result) return;
+          setCabinet(result);
           const savedTeam = localStorage.getItem('helpsuprov:supervisor-team');
-          if (savedTeam) setActiveTeam(parseInt(savedTeam, 10));
+          const team = savedTeam ? Number(savedTeam) : null;
+          if (team !== null && Number.isInteger(team) && result.assignments.some((assignment) => assignment.team_number === team)) setActiveTeam(team);
         }
-      } catch { /* не супровід, показуємо форму */ }
-      setBooting(false);
+      } catch (error: unknown) {
+        if (!controller.signal.aborted && error instanceof Error && !['not_staff', 'unauthorized', 'aborted'].includes(error.message)) toast.error(staffErr(error));
+      } finally {
+        if (!controller.signal.aborted) setBooting(false);
+      }
     })();
+    return () => controller.abort();
   }, [loadCabinet]);
 
   const [showPass, setShowPass] = useState(false);
   const handleLogin = async () => {
-    if (!login.trim() || !password) { toast.error('Введіть логін або ПІБ та пароль'); return; }
+    if (busy) return;
+    if ((!adminMode && !login.trim()) || !password) { toast.error('Введіть логін або ПІБ та пароль'); return; }
     setBusy(true);
     try {
       if (adminMode) {
@@ -88,11 +98,12 @@ const StaffPortal = () => {
         return;
       }
       const data = await call({ action: 'login', login: login.trim(), password });
-      await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+      const { error: sessionError } = await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
+      if (sessionError) throw new Error('session_failed');
       await loadCabinet();
       toast.success(`Вітаємо, ${data.full_name}!`);
     } catch (e: any) {
-      toast.error(e?.message === 'too_many_attempts' ? 'Забагато спроб. Зачекайте хвилину' : 'Невірний логін або пароль');
+      toast.error(e?.message === 'too_many_attempts' ? 'Забагато спроб. Зачекайте хвилину' : ['not_staff', 'forbidden', 'cabinet_unavailable', 'session_failed'].includes(e?.message) ? staffErr(e) : 'Невірний логін або пароль');
     } finally {
       setBusy(false);
     }

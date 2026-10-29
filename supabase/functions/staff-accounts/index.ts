@@ -260,8 +260,11 @@ Deno.serve(async (req) => {
 
     // ---------- КАБІНЕТ ----------
     if (action === 'cabinet') {
-      const { data: member } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
-      if (!member) return json({ error: 'not_staff' }, 403);
+      const { data: member, error: memberError } = await svc.from('staff_members').select('full_name, login, kind, phone, telegram, avatar_url').eq('user_id', user.id).maybeSingle();
+      if (memberError) return json({ error: 'cabinet_unavailable' }, 503);
+      // A shared browser can hold a valid child/admin session. Restoring /staff
+      // is a read-only probe, not an attempt to grant staff access.
+      if (!member) return body.allow_missing === true ? json({ cabinet: null }) : json({ error: 'not_staff' }, 403);
       if (actingMember?.kind === 'doctor') {
         const [withAvatar] = await resolveAvatars(svc, [{ ...member }], () => user.id);
         return json({ ...withAvatar, assignments: [] });
