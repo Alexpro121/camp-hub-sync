@@ -1042,3 +1042,39 @@
   --input: 180 9% 80%;
   --ring: 170 70% 28%;
 }
+
+/* Child editor: an opaque, neutral record surface with the saved staff theme. */
+.child-profile {
+  --background: 210 8% 12%;
+  --foreground: 210 12% 96%;
+  --muted: 210 7% 17%;
+  --muted-foreground: 210 8% 70%;
+  --secondary: 210 7% 20%;
+  --secondary-foreground: 210 12% 96%;
+  --border: 210 7% 28%;
+  --input: 210 7% 32%;
+  --radius: 0.5rem;
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, sans-serif;
+  letter-spacing: 0;
+}
+.child-profile.staff-light {
+  --background: 210 10% 98%;
+  --foreground: 210 10% 14%;
+  --muted: 210 8% 94%;
+  --muted-foreground: 210 7% 40%;
+  --secondary: 210 8% 91%;
+  --secondary-foreground: 210 10% 14%;
+  --border: 210 8% 82%;
+  --input: 210 8% 76%;
+  --primary: 20 85% 40%;
+  --primary-foreground: 0 0% 100%;
+  --warning: 32 85% 32%;
+  --destructive: 0 70% 40%;
+  color-scheme: light;
+}
+.child-profile button { transition: transform 150ms var(--ease-out-expo), background-color 150ms var(--ease-out-expo); }
+.child-profile button:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) {
+  .child-profile, .child-profile * { animation: none !important; transition: none !important; }
+}

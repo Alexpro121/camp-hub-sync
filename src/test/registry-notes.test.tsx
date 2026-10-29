@@ -4,7 +4,7 @@
  * бути «з реєстрації».
  */
 import 'fake-indexeddb/auto';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
@@ -103,8 +103,8 @@ describe('нотатка з реєстрації у супроводу', () => {
     open();
     fireEvent.click(await screen.findByRole('button', { name: 'Відкрити картку: Коваль Олена' }));
     await screen.findByText('з реєстрації');
-    await waitFor(() => expect(h.updates.length).toBeGreaterThan(0), { timeout: 4000 });
-    expect(h.updates.every((u) => !('supervisor_notes' in u.payload))).toBe(true);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 900)); });
+    expect(h.updates).toHaveLength(0);
   });
 
   it('нотатку супроводу показує без позначки реєстрації', async () => {

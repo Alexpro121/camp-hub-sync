@@ -57,6 +57,7 @@ const TeamsView = ({
     onOpenTeamChange?.(v);
   };
   const editChild = editChildProp !== undefined ? editChildProp : editChildLocal;
+  const currentEditChild = editChild ? children.find(c => c.id === editChild.id) ?? editChild : null;
   const setEditChild = (v: Child | null) => {
     setEditChildLocal(v);
     onEditChildChange?.(v);
@@ -356,10 +357,11 @@ const TeamsView = ({
         })}
       </div>
 
-      {editChild && (
+      {currentEditChild && (
         <ChildEditDialog
-          child={editChild}
-          medical={medical[editChild.id]}
+          key={currentEditChild.id}
+          child={currentEditChild}
+          medical={medical[currentEditChild.id]}
           open={!!editChild}
           onClose={() => setEditChild(null)}
         />

@@ -1,314 +1,190 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import TransactionHistory from '@/components/fair/TransactionHistory';
 import type { Child } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
-import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
-import { GENDER_LABEL, type Gender } from '@/lib/gender';
+import { queuedIronDollarChange } from '@/lib/offline';
+import type { Gender } from '@/lib/gender';
 import type { MedicalNote } from '@/lib/medical';
+import { useChildProfileDraft } from './useChildProfileDraft';
 
-interface Props {
-  child: Child;
-  open: boolean;
-  onClose: () => void;
-  medical?: MedicalNote;
-}
+const TransactionHistory = lazy(() => import('@/components/fair/TransactionHistory'));
+const genderLabels: Record<Gender, string> = { boy: 'Хлопець', girl: 'Дівчина', unknown: 'Не визначено' };
+interface Props { child: Child; open: boolean; onClose: () => void; medical?: MedicalNote }
 
 const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
-  const [phone, setPhone] = useState(child.phone || '');
-  const [telegram, setTelegram] = useState(child.telegram_username || '');
-  const [notes, setNotes] = useState(child.supervisor_notes || '');
-  const [gender, setGender] = useState<Gender | ''>(((child as any).gender as Gender) || '');
-  const [detecting, setDetecting] = useState(false);
+  const { draft, edit, flush, status, error } = useChildProfileDraft(child, open);
   const [iron, setIron] = useState(String(child.iron_dollars));
+  const ironValue = useRef(iron);
+  const baseline = useRef(child.iron_dollars);
+  const identity = useRef(child.id);
   const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const [balanceError, setBalanceError] = useState('');
+  const [detecting, setDetecting] = useState(false);
+  const [tab, setTab] = useState('edit');
+  const [light, setLight] = useState(false);
   const haptics = useHaptics();
   const island = useDynamicIsland();
-  /** Last balance known to be persisted — deltas are computed against it. */
-  const baseline = useRef(child.iron_dollars);
+  const mounted = useRef(true);
 
-  const ironDirty = useRef(false);
-  // Нове значення з сервера: якщо поле ще не редагували — оновлюємо і поле, і базу.
-  // Якщо редагували — зберігаємо саме дельту, яку ввів супровід, від свіжого балансу.
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
-    if (!ironDirty.current) {
-      baseline.current = child.iron_dollars;
-      setIron(String(child.iron_dollars));
-    } else {
-      const intended = (parseInt(iron, 10) || 0) - baseline.current;
-      baseline.current = child.iron_dollars;
-      setIron(String(child.iron_dollars + intended));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    try { setLight(localStorage.getItem('helpsuprov:staff-theme') === 'light'); } catch { /* default dark */ }
+    setTab('edit');
+  }, [open, child.id]);
+  useEffect(() => {
+    const delta = identity.current === child.id && ironValue.current !== ''
+      ? Number(ironValue.current) - baseline.current : 0;
+    const value = String(child.iron_dollars + (Number.isSafeInteger(delta) ? delta : 0));
+    identity.current = child.id;
+    baseline.current = child.iron_dollars;
+    ironValue.current = value;
+    setIron(value);
+    setBalanceError('');
   }, [child.id, child.iron_dollars]);
 
-  /** Snapshot of the row version this edit session started from (optimistic lock). */
-  const clientUpdatedAt = useRef(child.updated_at ?? new Date().toISOString());
-  useEffect(() => { clientUpdatedAt.current = child.updated_at ?? new Date().toISOString(); }, [child.id, child.updated_at]);
-
-  const writeProfile = async () => {
-    // Нотатку надсилаємо лише коли її справді редагували: інакше просто відкрита
-    // картка перезаписала б свіжу нотатку з реєстрації й зняла б позначку «з реєстрації».
-    const noteChanged = notes !== (child.supervisor_notes ?? '');
-    const res = await queuedWrite({
-      table: 'children',
-      op: 'update',
-      matchId: child.id,
-      clientUpdatedAt: clientUpdatedAt.current,
-      mergeFields: noteChanged ? ['supervisor_notes'] : undefined,
-      label: `Профіль · ${child.full_name}`,
-      values: {
-        phone: phone || null,
-        telegram_username: telegram || null,
-        ...(noteChanged ? { supervisor_notes: notes || null } : {}),
-        gender: gender || null,
-      },
-    });
-    // Our own write is now the server version — don't treat it as a conflict next time.
-    if (!res.error) clientUpdatedAt.current = new Date(Date.now() + 1000).toISOString();
-    return res;
+  const changeIron = (value: string) => {
+    ironValue.current = value;
+    setIron(value);
+    setBalanceError('');
   };
-
-  // Auto-save with debounce (profile fields only — the balance is atomic, see below)
-  useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(async () => {
-      setSaving(true);
-      await writeProfile();
-      setSaving(false);
-    }, 800);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phone, telegram, notes, gender, open, child.id]);
-
-  const handleSave = async () => {
+  const saveAndClose = async () => {
+    if (saveLock.current) return;
+    const balance = Number(ironValue.current);
+    if (!ironValue.current.trim() || !Number.isSafeInteger(balance) || balance < 0) {
+      setBalanceError('Введіть ціле число, не менше нуля.');
+      setTab('edit');
+      return;
+    }
+    saveLock.current = true;
     setSaving(true);
-    const { error } = await writeProfile();
-    if (error) { setSaving(false); toast.error('Помилка'); return; }
-
-
-    // Balance goes through the atomic server function: concurrent supervisors
-    // can never overwrite each other, and a retry can never double-credit.
-    const delta = (parseInt(iron, 10) || 0) - baseline.current;
-    let queued = false;
-    if (delta !== 0) {
-      const { data: auth } = await supabase.auth.getUser();
-      const res = await queuedIronDollarChange({
-        childId: child.id,
-        amount: delta,
-        reason: 'Кабінет супроводу',
-        supervisorId: auth?.user?.id ?? null,
-        label: `${delta > 0 ? '+' : ''}${delta} IRON · ${child.full_name}`,
-      });
-      // The server refuses to push a balance below zero — surface it plainly.
-      if (/insufficient_funds/.test(String((res.error as any)?.message ?? ''))) {
-        setSaving(false);
-        setIron(String(baseline.current));
-        toast.error('Недостатньо Айрон-доларів на балансі дитини');
-        return;
+    setBalanceError('');
+    try {
+      if (!await flush()) return;
+      const delta = balance - baseline.current;
+      if (delta !== 0) {
+        const result = await queuedIronDollarChange({ childId: child.id, amount: delta,
+          reason: 'Кабінет супроводу', label: `Баланс: ${child.full_name}` });
+        if (result.error && !result.queued) {
+          const message = result.error && typeof result.error === 'object' && 'message' in result.error
+            ? String(result.error.message) : '';
+          setBalanceError(message.includes('insufficient_funds')
+            ? 'Недостатньо Айрон-доларів на балансі дитини.' : 'Не вдалося змінити баланс. Спробуйте ще раз.');
+          setTab('edit');
+          return;
+        }
+        baseline.current = balance;
+        island.showSuccess(delta > 0 ? `Нараховано ${delta} A$` : `Списано ${Math.abs(delta)} A$`,
+          result.queued ? 'Збережено на пристрої, очікує синхронізації' : child.full_name);
       }
-      queued = res.queued;
-      baseline.current = parseInt(iron, 10) || 0;
+      onClose();
+    } catch {
+      setBalanceError('Не вдалося зберегти зміни. Спробуйте ще раз.');
+      setTab('edit');
+    } finally {
+      saveLock.current = false;
+      if (mounted.current) setSaving(false);
     }
-
-    setSaving(false);
-
-    if (delta !== 0) {
-      island.showSuccess(
-        `${delta > 0 ? 'Нараховано' : 'Списано'} ${delta > 0 ? '+' : ''}${delta} A$!`,
-        queued ? `${child.full_name} · збережено офлайн` : child.full_name,
-      );
-    } else {
-      toast.success('Збережено');
-    }
-    onClose();
   };
-
-  const adjustIron = (delta: number) => {
-    haptics.impact('light');
-    const cur = parseInt(iron, 10) || 0;
-    ironDirty.current = true;
-    setIron(String(cur + delta));
+  const detectGender = async () => {
+    const id = child.id;
+    setDetecting(true);
+    try {
+      const { data, error: requestError } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: id } });
+      const value: unknown = data?.results?.[id];
+      if (requestError || (value !== 'boy' && value !== 'girl' && value !== 'unknown')) throw new Error('invalid gender');
+      if (mounted.current && identity.current === id) edit('gender', value);
+    } catch {
+      if (mounted.current) setBalanceError('Не вдалося визначити стать. Оберіть її вручну.');
+    } finally { if (mounted.current) setDetecting(false); }
   };
+  const imported = child.raw_data && typeof child.raw_data === 'object' && !Array.isArray(child.raw_data)
+    ? Object.entries(child.raw_data as Record<string, unknown>).filter(([, value]) => value != null && String(value).trim()) : [];
+  const statusLabel = { saved: 'Збережено', dirty: 'Є зміни', saving: 'Зберігаю…', queued: 'Очікує синхронізації', error: 'Не збережено' }[status];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        aria-describedby={undefined}
-        className="
-          fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-          !w-[calc(100dvw-1rem)] max-w-md min-w-0 max-h-[calc(100dvh-1rem)] overflow-x-hidden overflow-y-auto
-          bg-[#0F1523]/95 border border-white/10 backdrop-blur-2xl
-          rounded-2xl sm:rounded-3xl shadow-2xl text-slate-100 p-0 gap-0
-        "
-      >
-        {/* Sticky header */}
-        <DialogHeader className="sticky top-0 z-20 min-w-0 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 bg-[#0F1523]/95 border-b border-white/10 backdrop-blur-2xl">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрити"
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-slate-400 hover:text-slate-100 flex items-center justify-center cursor-pointer transition active:scale-90 z-20"
-          >
-            <X className="w-5 h-5" strokeWidth={2} />
-          </button>
-          <DialogTitle className="min-w-0 break-words text-left text-lg sm:text-xl font-black uppercase pr-14 leading-tight">
-            {child.full_name}
-          </DialogTitle>
-          <p className="min-w-0 break-words pr-12 text-left text-xs text-slate-400">
-            Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
-          </p>
+    <Dialog open={open} onOpenChange={value => { if (!value) void saveAndClose(); }}>
+      <DialogContent hideCloseButton aria-describedby={undefined}
+        onEscapeKeyDown={event => { event.preventDefault(); void saveAndClose(); }}
+        onPointerDownOutside={event => event.preventDefault()}
+        className={`child-profile ${light ? 'staff-light' : ''} !flex flex-col !w-[calc(100dvw-1rem)] !max-w-[520px] min-w-0 max-h-[calc(100dvh-1rem)] !overflow-hidden !rounded-xl border-border bg-background text-foreground !p-0 !gap-0 shadow-elevated`}>
+        <DialogHeader className="relative shrink-0 border-b border-border px-5 py-4 text-left">
+          <Button variant="ghost" size="icon" className="absolute right-3 top-3 h-11 w-11 rounded-lg hover:bg-muted hover:text-foreground" aria-label="Закрити" title="Зберегти й закрити" onClick={() => void saveAndClose()} disabled={saving || detecting}>
+            <X />
+          </Button>
+          <DialogTitle className="break-words pr-12 text-xl font-semibold !tracking-normal leading-snug">{child.full_name}</DialogTitle>
+          <p className="break-words pr-10 text-sm text-muted-foreground">Команда №{child.team_number}{child.team_name ? ` · ${child.team_name}` : ''}</p>
         </DialogHeader>
-
-        <Tabs defaultValue="edit" className="w-full min-w-0 overflow-x-hidden">
-          <div className="px-4 sm:px-5 pt-4">
-            <TabsList className="grid grid-cols-2 w-full h-11 bg-white/5 border border-white/10">
-              <TabsTrigger value="edit" className="text-xs min-h-[44px] data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Дані</TabsTrigger>
-              <TabsTrigger value="history" className="min-w-0 px-2 text-xs min-h-[44px] whitespace-normal leading-tight data-[state=active]:bg-white/10 data-[state=active]:text-slate-100 text-slate-400">Історія транзакцій</TabsTrigger>
+        <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="shrink-0 px-5 pt-3">
+            <TabsList className="grid h-11 w-full grid-cols-2 rounded-lg bg-muted p-1">
+              <TabsTrigger value="edit" className="h-9 rounded-md text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-none">Дані</TabsTrigger>
+              <TabsTrigger value="history" className="h-9 rounded-md text-sm data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-none">Транзакції</TabsTrigger>
             </TabsList>
           </div>
-
-          <TabsContent value="history" className="min-w-0 mt-0 px-4 sm:px-5 py-4 pb-32 sm:pb-5">
-            <TransactionHistory childId={child.id} bare />
-          </TabsContent>
-
-          <TabsContent value="edit" className="min-w-0 mt-0">
-            <div className="min-w-0 space-y-4 px-4 sm:px-5 py-4 pb-32 sm:pb-5">
-              {medical?.needs_attention && <section className="rounded-lg border border-destructive/40 bg-destructive/10 p-3" role="note"><h3 className="text-sm font-semibold text-destructive flex items-center gap-2"><Plus className="h-4 w-4" />Медична помітка лікаря</h3><p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{medical.note || 'Потребує уваги супроводу'}</p></section>}
-              {/* A$ balance with +/- */}
-              <div data-tour="step-4-iron-adjustment" className="p-4 rounded-xl bg-gradient-primary">
-                <Label htmlFor="iron" className="text-primary-foreground/90 flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider">
-                  <Coins className="w-4 h-4" /> А$
-                </Label>
-                <div className="flex min-w-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => adjustIron(-1)}
-                    className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
-                    aria-label="Зменшити"
-                  >
-                    <Minus className="w-6 h-6 text-primary-foreground" />
-                  </button>
-                  <Input
-                    id="iron"
-                    type="number"
-                    inputMode="numeric"
-                    value={iron}
-                    onChange={(e) => { ironDirty.current = true; setIron(e.target.value); }}
-                    className="h-14 min-w-0 text-2xl sm:text-3xl font-black bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground placeholder:text-primary-foreground/40 tabular-nums text-center"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => adjustIron(1)}
-                    className="h-14 w-14 rounded-xl bg-primary-foreground/15 active:bg-primary-foreground/25 active:scale-95 transition-smooth flex items-center justify-center shrink-0 touch-manipulation"
-                    aria-label="Додати"
-                  >
-                    <Plus className="w-6 h-6 text-primary-foreground" />
-                  </button>
-                </div>
-              </div>
-
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+            <TabsContent value="history" className="m-0 min-w-0">
+              <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" aria-label="Завантаження транзакцій" />}><TransactionHistory childId={child.id} bare /></Suspense>
+            </TabsContent>
+            <TabsContent value="edit" className="m-0 min-w-0 space-y-5">
+              {medical?.needs_attention && <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="note">
+                <h3 className="flex items-center gap-2 text-sm font-semibold !tracking-normal text-destructive"><Plus />Медична помітка лікаря</h3>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed">{medical.note || 'Потребує уваги супроводу'}</p>
+              </section>}
               <div className="space-y-2">
-                <Label htmlFor="phone" className="text-slate-300">Номер телефону</Label>
-                <Input id="phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+380..." className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+                <Label htmlFor="phone" className="text-sm text-muted-foreground">Номер телефону</Label>
+                <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={event => edit('phone', event.target.value)} disabled={saving} placeholder="+380" className="h-11 rounded-lg bg-background text-base" />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="tg" className="text-slate-300">Telegram</Label>
-                <Input id="tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="@username" className="h-12 text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+                <Label htmlFor="tg" className="text-sm text-muted-foreground">Telegram</Label>
+                <Input id="tg" value={draft.telegram_username} onChange={event => edit('telegram_username', event.target.value)} disabled={saving} autoCapitalize="none" spellCheck={false} placeholder="@username" className="h-11 rounded-lg bg-background text-base" />
               </div>
-
               <div data-tour="step-4-notes" className="space-y-2">
-                <Label htmlFor="notes" className="flex min-w-0 flex-wrap items-center gap-2 text-slate-300">
-                  Замітки
-                  {child.notes_origin === 'registry' && (child.supervisor_notes ?? '').trim() && (
-                    <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                      з реєстрації
-                    </span>
-                  )}
+                <Label htmlFor="notes" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">Замітки
+                  {child.notes_origin === 'registry' && (child.supervisor_notes ?? '').trim() && <span className="text-xs font-medium text-warning">з реєстрації</span>}
                 </Label>
-                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Особисті нотатки..." className="text-base bg-white/5 border-white/10 text-slate-100 placeholder:text-slate-500" />
+                <Textarea id="notes" value={draft.supervisor_notes} onChange={event => edit('supervisor_notes', event.target.value)} disabled={saving} rows={3} placeholder="Нотатки супроводу" className="min-h-24 resize-y rounded-lg bg-background text-base" />
               </div>
-
-              {/* All raw fields from the imported table */}
-              {child.raw_data && typeof child.raw_data === 'object' && Object.keys(child.raw_data).length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs uppercase tracking-wider text-primary/80">Усі поля з таблиці</Label>
-                  <div className="rounded-lg border border-white/10 bg-white/5 divide-y divide-white/10">
-                    {Object.entries(child.raw_data).map(([k, v]) => (
-                      <div key={k} className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-3 p-2.5 text-xs">
-                        <span className="min-w-0 truncate text-slate-400">
-                          {/^команда$/i.test(k.trim()) ? 'Категорія' : k}
-                        </span>
-                        <span className="min-w-0 break-all font-medium text-slate-200">{String(v)}</span>
-                      </div>
-                    ))}
-                  </div>
+              <div data-tour="step-4-iron-adjustment" className="border-t border-border pt-4">
+                <Label htmlFor="iron" className="mb-2 flex items-center gap-2 text-sm text-muted-foreground"><Coins className="h-4 w-4" />Айрон-долари</Label>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" aria-label="Зменшити" className="h-11 w-11 shrink-0 rounded-lg hover:bg-muted hover:text-foreground" disabled={saving || Number(iron) <= 0} onClick={() => { haptics.impact('light'); changeIron(String(Math.max(0, (Number(iron) || 0) - 1))); }}><Minus /></Button>
+                  <Input id="iron" type="number" min={0} step={1} inputMode="numeric" value={iron} disabled={saving} aria-invalid={!!balanceError} onChange={event => changeIron(event.target.value)} className="h-11 min-w-0 rounded-lg bg-background text-center text-xl font-semibold tabular-nums" />
+                  <Button variant="outline" size="icon" aria-label="Додати" className="h-11 w-11 shrink-0 rounded-lg hover:bg-muted hover:text-foreground" disabled={saving} onClick={() => { haptics.impact('light'); changeIron(String((Number(iron) || 0) + 1)); }}><Plus /></Button>
                 </div>
-              )}
-
-              {child.note_from_table && (
-                <div className="text-xs text-slate-400 bg-white/5 p-3 rounded-lg border border-white/10">
-                  <span className="font-semibold text-slate-300">З таблиці:</span> {child.note_from_table}
-                </div>
-              )}
-
-              {/* Compact gender picker — kept near the bottom of the profile */}
-              <div className="flex min-w-0 flex-wrap items-center gap-2 pt-1">
-                <span className="text-xs text-slate-400 shrink-0">Стать</span>
-                <div className="flex min-w-0 flex-wrap gap-1.5">
-                  {(['boy', 'girl', 'unknown'] as Gender[]).map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setGender(g)}
-                      className={`h-8 px-2.5 rounded-full border text-xs font-semibold transition active:scale-95 ${gender === g ? 'bg-primary/20 border-primary text-slate-100' : 'bg-white/5 border-white/10 text-slate-400'}`}
-                    >
-                      {GENDER_LABEL[g]}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  disabled={detecting}
-                  onClick={async () => {
-                    setDetecting(true);
-                    try {
-                      const { data } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: child.id } });
-                      const g = data?.results?.[child.id] as Gender | undefined;
-                      if (g) { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
-                      else toast.error('Не вдалося визначити');
-                    } catch { toast.error('Не вдалося визначити'); }
-                    setDetecting(false);
-                  }}
-                  className="sm:ml-auto text-[11px] text-primary hover:underline disabled:opacity-50 shrink-0"
-                >
-                  {detecting ? 'Визначаю…' : 'Визначити'}
-                </button>
               </div>
-            </div>
-          </TabsContent>
+              <fieldset className="min-w-0 border-t border-border pt-3" disabled={saving || detecting}>
+                <legend className="px-0 text-sm text-muted-foreground">Стать</legend>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(Object.keys(genderLabels) as Gender[]).map(value => <Button key={value} variant={draft.gender === value ? 'secondary' : 'ghost'} size="sm" aria-pressed={draft.gender === value} onClick={() => edit('gender', value)} className="h-9 rounded-lg px-2.5 text-xs hover:bg-muted hover:text-foreground">{genderLabels[value]}</Button>)}
+                  <Button variant="link" size="sm" onClick={() => void detectGender()} className="h-9 px-1.5 text-xs" disabled={detecting}>{detecting ? 'Визначаю…' : 'Визначити'}</Button>
+                </div>
+              </fieldset>
+              {(imported.length > 0 || child.note_from_table) && <details className="group border-t border-border pt-3">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Дані з реєстраційної таблиці<ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
+                {child.note_from_table && <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{child.note_from_table}</p>}
+                <dl className="mt-3 space-y-3">{imported.map(([key, value]) => <div key={key} className="min-w-0"><dt className="break-words text-xs text-muted-foreground">{/^команда$/i.test(key.trim()) ? 'Категорія' : key}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm [overflow-wrap:anywhere]">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</dd></div>)}</dl>
+              </details>}
+            </TabsContent>
+          </div>
         </Tabs>
-
-        {/* Sticky save bar (mobile-friendly) */}
-        <div className="sticky bottom-0 left-0 right-0 z-20 px-4 sm:px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-[#0F1523]/95 border-t border-white/10 backdrop-blur-2xl">
-          <Button onClick={handleSave} className="w-full h-12 font-bold uppercase" disabled={saving}>
-            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-4 h-4 mr-2" /> Зберегти</>}
-          </Button>
-          <p className="text-center text-[10px] text-slate-400 mt-1.5">Зміни зберігаються автоматично</p>
-        </div>
+        <footer className="shrink-0 border-t border-border px-5 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          {(error || balanceError) && <p role="alert" className="mb-3 break-words text-sm text-destructive">{error || balanceError}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">{status === 'saved' && <Check className="h-3.5 w-3.5" />}{statusLabel}</span>
+            <Button onClick={() => void saveAndClose()} disabled={saving || detecting} className="h-11 rounded-lg text-sm font-semibold">{saving ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Save />}Зберегти й закрити</Button>
+          </div>
+        </footer>
       </DialogContent>
     </Dialog>
   );
 };
-
 export default ChildEditDialog;
