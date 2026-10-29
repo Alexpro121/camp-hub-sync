@@ -9,7 +9,7 @@ import { ScheduleImportReview } from './ScheduleImportReview';
 import { ScheduleStreamPreview } from '@/lib/scheduleStreamPreview';
 import { toast } from "sonner";
 import { generateAiStudioSchedulePrompt } from "@/lib/schedule-prompt-generator";
-import { previewScheduleImport } from "@/lib/scheduleImport";
+import { previewScheduleImport, scheduleImportKey } from "@/lib/scheduleImport";
 import { saveScheduleImport } from "@/lib/saveScheduleImport";
 import { useActiveShift } from "@/context/ActiveShiftContext";
 import { generateSchedule } from '@/lib/generateSchedule';
@@ -32,6 +32,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
   const json = mode === 'ai' ? aiJson : manualJson;
   const setJson = mode === 'ai' ? setAiJson : setManualJson;
   const [liveJson, setLiveJson] = useState('');
+  const [newestEvent, setNewestEvent] = useState('');
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -61,13 +62,20 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     setCheckedJson(null);
     setJson('');
     setLiveJson('');
+    setNewestEvent('');
     setEditing(false);
     const streamPreview = new ScheduleStreamPreview(date);
     try {
       const result = await generateSchedule(rawText.trim(), date, request.signal, (text) => {
         if (!request.signal.aborted) {
           const events = streamPreview.update(text);
-          if (events) setLiveJson(events);
+          if (events) {
+            setLiveJson(events);
+            const latest = previewScheduleImport(events, date);
+            const source: { date: string; title: string; time_start: string; location?: string; target_teams?: number[] }[] = JSON.parse(events);
+            const last = source.at(-1);
+            if (last && latest.total) setNewestEvent(`${last.date}|${scheduleImportKey(last)}`);
+          }
         }
       });
       if (!request.signal.aborted) { setJson(result); setCheckedJson(result); }
@@ -164,19 +172,19 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent aria-describedby={undefined} className="flex max-w-4xl max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
+      <DialogContent aria-describedby={undefined} className="flex h-[min(780px,calc(100dvh-1rem))] max-w-4xl max-h-[calc(100dvh-1rem)] flex-col gap-0 overflow-hidden p-0 sm:p-0" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }} onInteractOutside={(event) => { if (busy) event.preventDefault(); }}>
         <DialogHeader className="border-b border-border px-5 py-5 pr-12">
           <DialogTitle className="flex items-center gap-2 text-xl"><CalendarDays className="size-5 text-primary" />Розклад зміни</DialogTitle>
         </DialogHeader>
-        <Tabs value={mode} onValueChange={(value) => { if (!generating && !busy) { setMode(value); setEditing(false); } }} className="flex min-h-0 flex-col">
-          <div className="border-b border-border px-5 py-3">
+        <Tabs value={mode} onValueChange={(value) => { if (!generating && !busy) { setMode(value); setEditing(false); } }} className="flex min-h-0 flex-1 flex-col">
+          <div className="shrink-0 border-b border-border px-5 py-3">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="ai" disabled={busy || generating}><Sparkles className="mr-2 size-4" />Генерація ШІ</TabsTrigger>
               <TabsTrigger value="manual" disabled={busy || generating}><FileJson className="mr-2 size-4" />Ручний ввід</TabsTrigger>
             </TabsList>
           </div>
-          <div className="grid min-h-0 overflow-y-auto md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="min-w-0 space-y-4 border-b border-border p-5 md:border-b-0 md:border-r">
+          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.8fr)_minmax(0,1.2fr)] overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:grid-rows-[minmax(0,1fr)]">
+            <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain border-b border-border p-5 md:border-b-0 md:border-r">
               <div className="space-y-2">
                 <Label htmlFor="schedule-raw-text">Текст розкладу</Label>
                 <Textarea id="schedule-raw-text" disabled={busy || generating} value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder="08:00 Підйом\n08:30–09:00 Сніданок\n09:30 Команда 1 — майстер-клас…" className="min-h-[180px] text-sm leading-relaxed" />
@@ -194,8 +202,8 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
               </TabsContent>
               {rawText.length > 25000 && <p role="alert" className="text-sm text-destructive">Текст завеликий — розділіть його на частини до 25 000 символів.</p>}
             </div>
-            <div className="min-w-0 p-5">
-              {displayedPreview ? <ScheduleImportReview preview={displayedPreview} live={generating} editing={editing} onEditingChange={setEditing} onEdit={editEvent} /> : <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CalendarDays className="size-8" /><p className="text-sm">{generating ? 'Очікуємо першу подію…' : 'Попередній перегляд'}</p>{generating && <Loader2 className="size-4 animate-spin" />}</div>}
+            <div className="min-h-0 min-w-0 overflow-hidden p-4 md:p-5">
+              {displayedPreview ? <ScheduleImportReview preview={displayedPreview} newestEvent={newestEvent} live={generating} editing={editing} onEditingChange={setEditing} onEdit={editEvent} /> : <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CalendarDays className="size-8" /><p className="text-sm">{generating ? 'Очікуємо першу подію…' : 'Попередній перегляд'}</p>{generating && <Loader2 className="size-4 animate-spin" />}</div>}
             </div>
           </div>
         </Tabs>
