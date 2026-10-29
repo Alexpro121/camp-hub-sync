@@ -15,6 +15,7 @@ import { FullScreenLoader } from "@/components/ui/loader";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 
 const StaffPortal = lazyRetry(() => import("./pages/StaffPortal.tsx"));
+const Registry = lazyRetry(() => import("./pages/Registry.tsx"));
 const StaffRegister = lazyRetry(() => import("./pages/StaffRegister.tsx"));
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 2, refetchOnWindowFocus: false } } });
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/staff" element={<StaffPortal />} />
             <Route path="/staff/join/:token" element={<StaffRegister />} />
+            <Route path="/registry" element={<Registry />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes></Suspense></AppErrorBoundary>
