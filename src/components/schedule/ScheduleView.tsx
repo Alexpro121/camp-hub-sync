@@ -1,8 +1,8 @@
 import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
-import { Card } from '@/components/ui/card';
-import { CalendarDays, Users, Building2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CalendarDays, Users, Building2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -300,30 +300,31 @@ const ScheduleView = ({
   if (!schedules.length && !teamBookings.length) {
     return (
       <div className="w-full space-y-3 select-none pb-32">
-        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl shadow-sm space-y-2">
+        <section className="py-12 text-center border-y border-border space-y-2">
           <CalendarDays className="w-10 h-10 text-muted-foreground/40 mx-auto" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">Розклад ще не опубліковано</p>
           <p className="text-xs text-muted-foreground">Супровід готує план активностей на цю зміну</p>
-        </Card>
+        </section>
       </div>
     );
   }
 
-  const tabCls = 'shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-200 active:scale-95 select-none min-h-[38px] flex items-center justify-center';
+  const tabCls = 'h-10 shrink-0 rounded-md px-3 text-xs font-semibold transition-colors motion-reduce:transition-none';
 
   return (
-    <div className="w-full space-y-3.5 select-none pb-36 overflow-x-hidden">
+    <div className="w-full space-y-4 select-none pb-36 overflow-x-hidden">
       
       {/* ================= 1. ШАПКА ================= */}
       <div className="w-full flex items-center justify-between gap-2 px-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground">
-            Розклад подій
+          <span className="text-xl font-semibold text-foreground">
+            Розклад
           </span>
         </div>
 
         {HALL_FEATURE_ENABLED && isStaff && myTeam != null && (
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={() => {
               haptics.impact('light');
@@ -338,7 +339,7 @@ const ScheduleView = ({
                 {myBookingsCount}
               </span>
             )}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -354,23 +355,24 @@ const ScheduleView = ({
               const p = dayParts(d);
               const active = d === activeDay;
               return (
-                <button
+                <Button
+            variant="ghost"
                   key={d}
                   ref={active ? activeDayRef : undefined}
                   onClick={() => {
                     haptics.impact('light');
                     setActiveDay(d);
                   }}
-                  className={`shrink-0 select-none rounded-2xl border px-3.5 py-2 leading-none transition-all active:scale-95 flex flex-col items-center justify-center min-w-[58px] ${
+                  className={`h-auto shrink-0 select-none rounded-lg border px-4 py-3 leading-none transition-colors motion-reduce:transition-none flex flex-col items-center justify-center min-w-[62px] ${
                     active
-                      ? 'bg-[#FA5A15] text-white border-[#FA5A15] shadow-[0_0_14px_rgba(250,90,21,0.4)] scale-[1.02]'
+                      ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-border/50 bg-card/80 hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <span className="text-[9px] uppercase font-mono font-bold opacity-85">{p.weekday}</span>
-                  <span className="font-mono text-sm font-black tabular-nums my-1">{p.day}</span>
+                  <span className="font-mono text-xl font-bold tabular-nums my-1.5">{p.day}</span>
                   <span className="text-[8px] font-medium opacity-85">{p.month}</span>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -379,7 +381,7 @@ const ScheduleView = ({
 
       {/* ================= 3. ФІЛЬТР ЗА КОМАНДАМИ ================= */}
       {lockTeam ? (
-        <div data-tour="step-schedule-filters-teams" className="w-full flex items-center gap-2 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-md px-3.5 py-2.5 shadow-sm">
+        <div data-tour="step-schedule-filters-teams" className="w-full flex items-center gap-2 border-b border-border pb-3">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
           <p className="text-xs font-semibold text-foreground">
             Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
@@ -388,7 +390,8 @@ const ScheduleView = ({
       ) : (
         <div data-tour="step-schedule-filters-teams" className="w-full overflow-x-auto no-scrollbar overscroll-x-contain py-1">
           <div className="flex items-center gap-1.5 px-1 w-max">
-            <button
+            <Button
+            variant="ghost"
               onClick={() => {
                 haptics.selection();
                 setFilterTeam(null);
@@ -400,10 +403,11 @@ const ScheduleView = ({
               }`}
             >
               Всі команди
-            </button>
+            </Button>
 
             {myTeam != null && (
-              <button
+              <Button
+            variant="ghost"
                 onClick={() => {
                   haptics.selection();
                   setFilterTeam(myTeam);
@@ -415,11 +419,12 @@ const ScheduleView = ({
                 }`}
               >
                 Моя команда (№{myTeam})
-              </button>
+              </Button>
             )}
 
             {TEAMS.filter((t) => t !== myTeam).map((t) => (
-              <button
+              <Button
+            variant="ghost"
                 key={t}
                 onClick={() => {
                   haptics.selection();
@@ -432,7 +437,7 @@ const ScheduleView = ({
                 }`}
               >
                 К#{t}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -440,42 +445,28 @@ const ScheduleView = ({
 
       {/* ================= 4. ВІДЖЕТ «ДАЛІ ЗА РОЗКЛАДОМ» ================= */}
       {nextUp && (
-        <Card className="rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/[0.08] via-card/85 to-card/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-xl">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              Далі за розкладом
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">через {countdown(nextUp.inMin)}</span>
+        <section className="border-y border-border py-4">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5 font-medium"><ArrowRight className="h-3.5 w-3.5 text-primary" /> Далі за розкладом</span>
+            <span className="shrink-0 font-mono tabular-nums">через {countdown(nextUp.inMin)}</span>
           </div>
-
-          <div className="mt-1 flex items-end justify-between gap-3">
-            <div className="min-w-0 pr-2">
-              <p className="truncate text-sm sm:text-base font-bold tracking-tight text-foreground">
-                {sentenceCase(nextUp.event.title)}
-              </p>
-              <p className="font-mono text-xs font-semibold tabular-nums text-muted-foreground mt-0.5">
-                {nextUp.event.timeStart} – {nextUp.event.timeEnd}
-              </p>
-            </div>
-
-            <p className="shrink-0 font-mono text-2xl sm:text-3xl font-black tabular-nums leading-none text-primary">
-              {countdown(nextUp.inMin)}
-            </p>
+          <div className="mt-2 flex items-start gap-4">
+            <span className="shrink-0 font-mono text-2xl font-bold tabular-nums text-primary">{nextUp.event.timeStart}</span>
+            <p className="min-w-0 break-words text-base font-semibold leading-snug text-foreground">{sentenceCase(nextUp.event.title)}</p>
           </div>
-        </Card>
+        </section>
       )}
 
       {/* Якщо немає подій на обраний день */}
       {timelineRows.length === 0 && (
-        <Card className="p-8 text-center bg-card/85 backdrop-blur-md border-border/60 rounded-3xl space-y-2">
+        <section className="py-12 text-center border-y border-border space-y-2">
           <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
           <p className="text-sm font-bold text-foreground">
             {idsForDate(activeDay).length
               ? 'Подій на цей день немає'
               : 'Розклад на цей день готується супроводом проєкту'}
           </p>
-        </Card>
+        </section>
       )}
 
       {/* ================= 5. ХРОНОЛОГІЧНИЙ СПИСОК ПОДІЙ ================= */}
