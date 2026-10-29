@@ -81,6 +81,7 @@ const SupervisorTour = ({
   const [cardSize, setCardSize] = useState({ w: 340, h: 240 });
   const cardRef = useRef<HTMLDivElement>(null);
   const prevOpenRef = useRef(false);
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
   const haptics = useHaptics();
 
   // Демонстраційний учасник для стабільного проходження туру
@@ -165,13 +166,29 @@ const SupervisorTour = ({
       targetTab: 'teams',
       selector: '[data-tour="step-4-notes"]',
       fallbackSelector: '[data-tour="step-4-iron-adjustment"]',
-      title: 'Конфіденційні нотатки',
-      text: 'Фіксуй важливі спостереження (здоров\'я, таланти, особливості). Доступ мають ТІЛЬКИ супровід команди та штаб проєкту.',
+      title: 'Нотатки та помітки з реєстрації',
+      text: 'Фіксуй важливі спостереження. Нотатка, записана на реєстрації, має позначку «з реєстрації» — її можна відредагувати. Доступ мають лише супровід команди та штаб.',
       icon: ShieldCheck,
       delay: 200,
       demo: 'notes',
       onEnter: () => setEditChild(activeChild),
       onLeave: () => setEditChild(null),
+    },
+    {
+      targetTab: 'teams',
+      selector: '[data-tour="step-2-my-team"]',
+      title: 'Червоний плюсик від лікаря',
+      text: 'Якщо біля імені дитини світиться червоний ➕ — лікар залишив медичну помітку. Відкрий картку дитини, щоб прочитати «Лікар: …». Прибрати плюсик може лише лікар.',
+      icon: ShieldCheck,
+      onEnter: () => { setEditChild(null); setBankOpen(false); onTabChange('teams'); setOpenTeam(myTeam); },
+    },
+    {
+      targetTab: 'teams',
+      selector: '[data-tour="step-2-my-team"]',
+      title: 'Робота без інтернету',
+      text: 'Присутність, нотатки та А$ зберігаються на телефоні навіть без мережі й самі надсилаються, щойно з’явиться зв’язок. Не закривай застосунок до синхронізації.',
+      icon: Radio,
+      onEnter: () => onTabChange('teams'),
     },
     {
       targetTab: 'teams',
@@ -233,21 +250,11 @@ const SupervisorTour = ({
       ripple: true,
       onEnter: () => onTabChange('schedule'),
     },
-    ...(talentAvailable ? [{
-      targetTab: 'talent',
-      selector: '[data-tour="step-talent-section"]',
-      title: 'Вечір талантів та Медіа-хаб',
-      text: 'Реєструй номери команди, завантажуй мінусовки та фони у захищений медіа-хаб (зберігання 7 діб). Розширення файлів заблоковані — редагується лише назва.',
-      icon: Mic2,
-      delay: 150,
-      ripple: true,
-      onEnter: () => onTabChange('talent'),
-    } as TourStep] : []),
     {
       targetTab: 'transfers',
       selector: '[data-tour="step-6-transfers-root"]',
-      title: 'Трансфери та обміни',
-      text: 'Переводь учасника в іншу команду або роби рівноцінний обмін «учасник на учасника» в пару кліків.',
+      title: 'Заміна та переведення',
+      text: 'Вкладка відкривається на «Заміні»: обмін учасника на учасника з іншої команди. «Переведення» — перенос в іншу команду. Обидві дії підтверджує адмін, а ти отримаєш сповіщення з результатом.',
       icon: Users,
       demo: 'transfers',
       onEnter: () => onTabChange('transfers'),
@@ -288,7 +295,7 @@ const SupervisorTour = ({
       demo: 'finale',
       onEnter: () => onTabChange('notifications'),
     },
-  ] as TourStep[]).filter((s) => (FAIR_FEATURE_ENABLED || s.targetTab !== 'fair') && (TRAIN_FEATURE_ENABLED || s.targetTab !== 'coupes')), [myTeam, activeChild, talentAvailable, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
+  ] as TourStep[]).filter((s) => (FAIR_FEATURE_ENABLED || s.targetTab !== 'fair') && (TRAIN_FEATURE_ENABLED || s.targetTab !== 'coupes')), [myTeam, activeChild, onTabChange, setOpenTeam, setEditChild, setBankOpen]);
 
 
   const total = steps.length;
@@ -432,9 +439,13 @@ const SupervisorTour = ({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      // Enter на сфокусованій кнопці вже викликає її click — не перескакуємо два кроки
+      if (e.key === 'Enter' && t?.closest('button')) return;
       if (e.key === 'Escape') { e.preventDefault(); skip(); }
-      else if (e.key === 'ArrowRight' || e.key === 'Enter') next();
-      else if (e.key === 'ArrowLeft') prev();
+      else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); next(); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -533,8 +544,8 @@ const SupervisorTour = ({
       {/* Блокувальник кліків */}
       <div
         className="absolute inset-0"
+        style={{ touchAction: 'none' }}
         onClick={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.preventDefault()}
       />
 
       {/* Картка підказки / нижній док на смартфонах */}
@@ -544,9 +555,17 @@ const SupervisorTour = ({
           isMobile ? '' : 'top-0 left-0'
         }`}
         style={cardStyle}
+        onTouchStart={(e) => { swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+        onTouchEnd={(e) => {
+          const st = swipeRef.current; swipeRef.current = null;
+          if (!st) return;
+          const dx = e.changedTouches[0].clientX - st.x;
+          const dy = e.changedTouches[0].clientY - st.y;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) { if (dx < 0) next(); else prev(); }
+        }}
       >
 
-        <div key={index} className="space-y-3">
+        <div key={index} className="space-y-3 tour-content-in">
           {/* Заголовок та крок */}
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/30 flex items-center justify-center shrink-0">
@@ -580,13 +599,20 @@ const SupervisorTour = ({
             <TourDemoStage demo={step.demo} stepKey={index} teamNumber={myTeam} />
           )}
 
-          {/* Прогрес */}
-          <div className="h-1.5 rounded-full bg-white/10 overflow-hidden ring-1 ring-white/5">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#FA5A15] to-[#FF7D3B] transition-all duration-300 shadow-[0_0_12px_rgba(250,90,21,0.6)]"
-              style={{ width: `${((index + 1) / total) * 100}%` }}
-            />
+          {/* Прогрес: крапки, на які можна натиснути */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap" aria-label={`Крок ${index + 1} з ${total}`}>
+            {steps.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => goTo(i)}
+                aria-label={`Перейти до кроку ${i + 1}`}
+                aria-current={i === index ? 'step' : undefined}
+                className={`h-1.5 rounded-full transition-all duration-300 ${i === index ? 'w-6 bg-[#FA5A15] shadow-[0_0_10px_rgba(250,90,21,0.6)]' : i < index ? 'w-1.5 bg-[#FA5A15]/60' : 'w-1.5 bg-white/20'}`}
+              />
+            ))}
           </div>
+          <p className="text-[10px] text-slate-500 text-center -mt-1">{isMobile ? 'Гортай картку вліво/вправо' : '← → або Enter для навігації, Esc — вийти'}</p>
 
           {/* Кнопки дій (мін. 48px, завжди доступні навіть при довгому контенті) */}
           <div className="sticky bottom-0 -mx-4 sm:-mx-5 px-4 sm:px-5 pt-2 pb-1 bg-[#0A0E18]/95 backdrop-blur-xl flex items-center gap-2">
