@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
 import ExitConfirm from '@/components/ExitConfirm';
-import { mergeRegistryRows } from '@/lib/registrySync';
+import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegistryScope } from '@/lib/registrySync';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
@@ -196,6 +196,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const refreshing = useRef(false);
   const fullRequested = useRef(false);
   const baseline = useRef<CachedList>(cached ?? { at: 0, children: [], shifts: {} });
+  const acknowledgedDuringLoad = useRef<(Partial<Kid> & { id: string })[]>([]);
   const persistChanges = useCallback((changes: Kid[]) => {
     baseline.current = { ...baseline.current, at: Date.now(), children: mergeRegistryRows(baseline.current.children, changes) };
     writeList(shiftId, baseline.current);
@@ -211,12 +212,12 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     if (flushing.current) return flushing.current;
     flushing.current = (async () => {
       const pq = readQueue();
-      const ids = Object.keys(pq);
+      const ids = Object.keys(pq).slice(0, 200);
       if (!ids.length) return;
       try {
         const d = await call({ action: 'batch', token, items: ids.map((id) => ({ id, ...pq[id] })) }, 15_000);
         const cur = readQueue();
-        const acknowledged: Kid[] = [];
+        const acknowledged: (Partial<Kid> & { id: string })[] = [];
         for (const r of d.results ?? []) {
           if (r.status === 'error') continue;
           if (r.child) acknowledged.push(r.child);
@@ -224,14 +225,17 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
           if (JSON.stringify(cur[r.id]) === JSON.stringify(pq[r.id])) delete cur[r.id];
           if (r.child) setKids((ks) => ks?.map((k) => (k.id === r.id && !cur[r.id] ? { ...k, ...r.child } : k)) ?? ks);
         }
-        persistChanges(acknowledged);
+        acknowledgedDuringLoad.current.push(...acknowledged);
+        baseline.current = { ...baseline.current, children: patchRegistryRows(baseline.current.children, acknowledged) };
+        persistRegistryPatches(localStorage, acknowledged);
+        writeList(shiftId, baseline.current);
         writeQueue(cur);
       } catch (e: any) {
         if (e.message === 'unauthorized') onLogout();
       }
     })().finally(() => { flushing.current = null; setQueued(Object.keys(readQueue()).length); });
     return flushing.current;
-  }, [token, onLogout, persistChanges]);
+  }, [token, onLogout, shiftId]);
 
   // Легка дельта: що змінив супровід/інший пристрій реєстрації за останні секунди.
   const pull = useCallback(async () => {
@@ -272,9 +276,10 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     refreshing.current = true;
     try {
       await flush();
+      acknowledgedDuringLoad.current = [];
       const d = await call({ action: 'list', token, ...(shiftId ? { shift_id: shiftId } : {}) });
       const sh = Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name]));
-      const children: Kid[] = d.children ?? [];
+      const children: Kid[] = patchRegistryRows<Kid>(d.children ?? [], acknowledgedDuringLoad.current);
       setShifts(sh);
       setKids(applyQueue(children));
       sinceRef.current = children.reduce((m, k) => (k.updated_at && k.updated_at > m ? k.updated_at : m), '');
@@ -285,7 +290,10 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
       else if (!loaded.current && !readList(shiftId)) toast.error('Не вдалося завантажити список. Повторюю…');
-    } finally { refreshing.current = false; fullRequested.current = false; }
+    } finally {
+      refreshing.current = false;
+      if (fullRequested.current) { fullRequested.current = false; void loadRef.current(); }
+    }
   }, [token, shiftId, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
@@ -514,11 +522,11 @@ export default function Registry() {
     const t = localStorage.getItem(TOKEN_KEY);
     return t && Number(t.split('.')[0]) > Date.now() ? t : null;
   });
-  const [shiftId, setShiftId] = useState<string | null | undefined>(undefined);
+  const [shiftId, setShiftId] = useState<string | null | undefined>(() => token ? readRegistryScope(localStorage) : undefined);
   useEffect(() => { document.title = 'Реєстрація дітей'; }, []);
   const onToken = (t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); };
-  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); setToken(null); setShiftId(undefined); }, []);
-  const pick = useCallback((id: string | null) => setShiftId(id), []);
+  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('ironshift:registry-scope'); setToken(null); setShiftId(undefined); }, []);
+  const pick = useCallback((id: string | null) => { localStorage.setItem('ironshift:registry-scope', id ?? 'all'); setShiftId(id); }, []);
   if (!token) return <Gate onToken={onToken} />;
   if (shiftId === undefined) return <ShiftPick token={token} onPick={pick} onLogout={logout} />;
   return <Desk key={shiftId ?? 'all'} token={token} shiftId={shiftId} onChangeShift={() => setShiftId(undefined)} onLogout={logout} />;

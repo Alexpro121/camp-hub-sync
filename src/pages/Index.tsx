@@ -8,6 +8,7 @@ import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 import ExitConfirm from '@/components/ExitConfirm';
+import { toast } from 'sonner';
 
 const ChildFlow = lazyRetry(() => import('@/components/screens/ChildFlow'));
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -149,7 +150,10 @@ const Index = () => {
       {/* Системна кнопка «Назад» для Telegram Mini App */}
       {screen !== 'role' && <TelegramBackButton onClick={() => setExitOpen(true)} />}
       <ExitConfirm open={exitOpen} onOpenChange={setExitOpen} onConfirm={() => {
-        void supabase.auth.signOut().then(() => goRole());
+        void supabase.auth.signOut().then(({ error }) => {
+          if (error) { toast.error('Не вдалося вийти. Перевірте зв’язок і спробуйте ще раз.'); return; }
+          goRole();
+        }).catch(() => toast.error('Не вдалося вийти. Спробуйте ще раз.'));
       }}>{null}</ExitConfirm>
 
       {/* Роутинг між екранами з плавною появою */}
