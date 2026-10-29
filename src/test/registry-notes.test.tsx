@@ -29,7 +29,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
     from: (t: string) => h.builder(t),
-    channel: () => ({ on: () => ({}), subscribe: () => 'SUBSCRIBED' }),
+    channel: () => { const ch: any = { on: () => ch, subscribe: () => 'SUBSCRIBED' }; return ch; },
     removeChannel: vi.fn(),
     auth: { getUser: async () => ({ data: { user: { id: 'sup-1' } } }) },
     rpc: async () => ({ data: null, error: null }),
