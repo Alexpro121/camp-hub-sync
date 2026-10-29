@@ -74,26 +74,29 @@ const TeamsView = ({
   // Миттєвий старт із локального снепшота (Zero-Wait UI).
   useEffect(() => {
     const snap = outbox.getTeamsSnapshot<Child[]>();
-    if (snap?.data?.length) {
-      setChildren(snap.data);
+    const scoped = snap?.data?.filter((c) => !c.deleted_at && (!forcedShiftId || c.shift_id === forcedShiftId));
+    setChildren(scoped ?? []);
+    if (scoped?.length) {
       setLoading(false);
     }
-  }, []);
+  }, [forcedShiftId]);
 
   useEffect(() => {
     let mounted = true;
     let activeShiftId: string | null = forcedShiftId;
     let loadingRequest = false;
+    let reloadPending = false;
     // Якщо мережа мовчить довше 1.5 с — не тримаємо користувача на спінері.
     const slowTimer = setTimeout(() => {
       if (!mounted) return;
       const snap = outbox.getTeamsSnapshot<Child[]>();
-      if (snap?.data?.length) { setChildren(snap.data); }
+      if (snap?.data?.length) { setChildren(snap.data.filter((c) => !c.deleted_at && (!forcedShiftId || c.shift_id === forcedShiftId))); }
       setLoading(false);
     }, 1500);
 
     const load = async () => {
-      if (!mounted || loadingRequest || !navigator.onLine) return;
+      if (!mounted || !navigator.onLine) return;
+      if (loadingRequest) { reloadPending = true; return; }
       loadingRequest = true;
       try {
       // Load all shifts and pick the truly active one based on real date
@@ -106,7 +109,8 @@ const TeamsView = ({
       const active = forced ?? pickActiveShift((shifts || []) as any);
       activeShiftId = active?.id ?? null;
 
-      let query = supabase.from('children').select('*').order('team_number').order('row_number');
+      if (!mounted) return;
+      let query = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('row_number');
       if (activeShiftId) {
         query = query.eq('shift_id', activeShiftId);
       }
@@ -122,9 +126,13 @@ const TeamsView = ({
         return true;
       });
 
+      if (!mounted) return;
       outbox.saveTeamsSnapshot(unique);
       if (mounted) { setChildren(unique as Child[]); setLoading(false); }
-      } finally { loadingRequest = false; }
+      } finally {
+        loadingRequest = false;
+        if (mounted && reloadPending) { reloadPending = false; void load().catch(() => {}); }
+      }
     };
     load().catch(() => { if (mounted) setLoading(false); });
     let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -139,6 +147,7 @@ const TeamsView = ({
         const existing = childrenRef.current.find((c) => c.id === n?.id);
         if (payload.eventType === 'INSERT' && activeShiftId && n?.shift_id !== activeShiftId) return;
         if (payload.eventType === 'UPDATE' && n?.id && existing && n.shift_id === activeShiftId && existing.team_number === n.team_number && !n.deleted_at) {
+          if (loadingRequest) reloadPending = true;
           setChildren((prev) => {
             const next = prev.map((x) => x.id === n.id && (!x.updated_at || !n.updated_at || x.updated_at <= n.updated_at) ? { ...x, ...n } : x);
             outbox.saveTeamsSnapshot(next);
