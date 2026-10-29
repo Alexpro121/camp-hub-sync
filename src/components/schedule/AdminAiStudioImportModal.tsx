@@ -46,12 +46,14 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     setGenerating(true);
     setGenerationError('');
     setCheckedJson(null);
+    setJson('');
     try {
       const result = await generateSchedule(rawText.trim(), date, request.signal, (text) => {
         if (!request.signal.aborted) setJson(text);
       });
       if (!request.signal.aborted) { setJson(result); setCheckedJson(result); }
     } catch (error: unknown) {
+      setJson('');
       if (!request.signal.aborted) setGenerationError(error instanceof Error ? error.message : 'Не вдалося згенерувати розклад');
     } finally {
       if (controller.current === request) { controller.current = null; setGenerating(false); }
