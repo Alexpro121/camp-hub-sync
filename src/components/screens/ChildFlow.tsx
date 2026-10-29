@@ -308,9 +308,10 @@ const ChildFlow = ({ onBack }: Props) => {
 
   const handleCopy = (text: string, label: string) => {
     if (!text) return;
-    navigator.clipboard.writeText(text);
     haptics.impact('light');
-    toast.success(label);
+    Promise.resolve(navigator.clipboard?.writeText(text))
+      .then(() => toast.success(label))
+      .catch(() => toast.error('Не вдалося скопіювати'));
   };
 
 
@@ -326,442 +327,179 @@ const ChildFlow = ({ onBack }: Props) => {
      ЕКРАН 1: КАБІНЕТ УЧАСНИКА (АВТОРИЗОВАНИЙ СТАН)
   ========================================================================= */
   if (step === 'profile' && child) {
-    const rawEntries = child.raw_data && typeof child.raw_data === 'object'
-      ? Object.entries(child.raw_data as Record<string, any>)
-      : [];
+    const formatRaw = (v: unknown): string => {
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return ''; } }
+      return String(v).trim();
+    };
+    const rawEntries = (child.raw_data && typeof child.raw_data === 'object'
+      ? Object.entries(child.raw_data as Record<string, unknown>)
+      : [])
+      .map(([k, v]) => [k.trim(), formatRaw(v)] as const)
+      .filter(([k, v]) => k && v);
 
     const shortId = child.id.slice(0, 6).toUpperCase();
+    const genderLabel = child.gender ? (GENDER_LABEL[child.gender as keyof typeof GENDER_LABEL] ?? null) : null;
+
+    const t = isDark
+      ? { page: 'bg-[#0B0D12] text-slate-100', card: 'bg-[#12151C] border-white/[0.07]', muted: 'text-slate-400', faint: 'text-slate-500', strong: 'text-white', line: 'divide-white/[0.06] border-white/[0.06]', btn: 'bg-[#12151C] border-white/[0.08] text-slate-200 hover:bg-[#181C25]', press: 'hover:bg-white/[0.03] active:bg-white/[0.05]' }
+      : { page: 'bg-[#F3F4F6] text-slate-900', card: 'bg-white border-slate-200', muted: 'text-slate-500', faint: 'text-slate-400', strong: 'text-slate-900', line: 'divide-slate-100 border-slate-100', btn: 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50', press: 'hover:bg-slate-50 active:bg-slate-100' };
+
+    const Row = ({ label, value, mono, onClick }: { label: string; value: string; mono?: boolean; onClick?: () => void }) => {
+      const body = (
+        <>
+          <span className={`text-[13px] shrink-0 ${t.muted}`}>{label}</span>
+          <span className={`text-[14px] font-medium text-right break-words min-w-0 ${t.strong} ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</span>
+        </>
+      );
+      return onClick ? (
+        <button type="button" onClick={onClick} className={`w-full flex items-start justify-between gap-4 px-4 py-3 min-h-[44px] text-left transition-colors ${t.press}`}>{body}</button>
+      ) : (
+        <div className="flex items-start justify-between gap-4 px-4 py-3 min-h-[44px]">{body}</div>
+      );
+    };
 
     return (
-      <div 
-        className={`relative min-h-[100dvh] w-full max-w-md mx-auto px-3.5 sm:px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] safe-top flex flex-col justify-between gap-3 select-none transition-colors duration-300 overflow-x-hidden ${
-          isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'
-        }`}
-      >
-        {/* Анімований преміальний фоновий градієнт */}
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className={`absolute -top-32 left-1/2 -translate-x-1/2 w-[420px] h-[420px] rounded-full blur-[120px] transition-all duration-700 ${
-            isDark ? 'bg-[#FA5A15]/10' : 'bg-[#FA5A15]/15'
-          }`} />
-          <div className={`absolute -bottom-32 left-1/2 -translate-x-1/2 w-[380px] h-[320px] rounded-full blur-[130px] transition-all duration-700 ${
-            isDark ? 'bg-sky-500/[0.05]' : 'bg-sky-400/15'
-          }`} />
-        </div>
-
-        <div className="relative z-10 flex flex-col gap-3">
-          {/* Верхній навігаційний рядок */}
-          <header className="flex items-center justify-between gap-2">
-            <ExitConfirm onConfirm={() => { haptics.impact('light'); handleExit(); }}>
-              <button
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl active:scale-95 text-xs font-semibold transition-all shadow-sm ${
-                  isDark
-                    ? 'bg-[#0F1523]/80 hover:bg-[#151D2F] border border-white/10 text-slate-300'
-                    : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-                }`}
-              >
-                <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
-                <span>Вийти</span>
-              </button>
-            </ExitConfirm>
-
-            <div className="flex items-center gap-1.5">
-              {/* Перемикач теми */}
-              <button
-                onClick={toggleTheme}
-                aria-label="Змінити тему"
-                className={`p-2 min-h-[40px] min-w-[40px] rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm ${
-                  isDark 
-                    ? 'bg-[#0F1523]/80 hover:bg-[#151D2F] border border-white/10 text-amber-400' 
-                    : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-                }`}
-              >
-                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4 text-slate-700" />}
-              </button>
-
-              {/* ID учасника */}
-              <button
-                onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 text-xs font-mono transition-all shadow-sm ${
-                  isDark 
-                    ? 'bg-[#0F1523]/80 hover:bg-[#151D2F] border border-white/10 text-slate-300' 
-                    : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-                }`}
-              >
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>ID:</span>
-                <span className={`font-bold tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>{shortId}</span>
-                <Copy className="w-3 h-3 text-slate-400" />
-              </button>
-            </div>
-          </header>
-
-          {/* Головна картка ідентифікації */}
-          <div className={`p-4 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-xl relative overflow-hidden transition-all duration-300 ${
-            isDark 
-              ? 'bg-[#0F1523]/90 border border-white/10 shadow-xl' 
-              : 'bg-white/95 border border-slate-200/90 shadow-md'
-          }`}>
-            {/* Статусний рядок */}
-            <div className="flex items-center justify-between mb-3.5">
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded-md bg-[#FA5A15]/15 border border-[#FA5A15]/25 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-[#FA5A15]" strokeWidth={2.2} />
-                </div>
-                <span className={`text-[10px] sm:text-[11px] font-bold tracking-[0.22em] uppercase ${
-                  isDark ? 'text-slate-400' : 'text-slate-500'
-                }`}>
-                  Залізна Зміна
-                </span>
-              </div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[10px] font-semibold text-emerald-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Учасник
-              </span>
-            </div>
-
-            {/* Аватар та ім'я */}
-            <div className="flex items-center gap-3.5 mb-3.5">
-              <div className="relative shrink-0">
-                <IronPixelAvatar name={child.full_name} size={56} bare className="rounded-xl overflow-hidden shadow-md shrink-0" />
-                {child.has_logged_in && (
-                  <span className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#0F1523] flex items-center justify-center shadow">
-                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                  </span>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <h1 className={`text-lg sm:text-xl font-bold leading-tight tracking-tight truncate ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}>
-                  {child.full_name}
-                </h1>
-                <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                  <span className={`px-2.5 py-0.5 rounded-md border text-[11px] font-semibold ${
-                    isDark 
-                      ? 'bg-white/5 border-white/10 text-slate-200' 
-                      : 'bg-slate-100 border-slate-200 text-slate-700'
-                  }`}>
-                    Команда №{child.team_number}
-                  </span>
-                  {child.team_name && (
-                    <span className="px-2 py-0.5 rounded-md bg-[#FA5A15]/15 border border-[#FA5A15]/30 text-[11px] font-semibold text-[#FA5A15] capitalize">
-                      {child.team_name}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Віджет балансу Айрон-доларів */}
-            <div className={`p-3.5 sm:p-4 rounded-xl border flex items-center justify-between gap-3 shadow-inner ${
-              isDark 
-                ? 'bg-[#0A0E18]/90 border-white/10' 
-                : 'bg-slate-50 border-slate-200/90'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#FA5A15]/15 border border-[#FA5A15]/25 flex items-center justify-center shrink-0">
-                  <Coins className="w-5 h-5 text-[#FA5A15]" strokeWidth={2} />
-                </div>
-                <div>
-                  <span className={`text-[10px] font-bold tracking-wider uppercase block leading-none ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}>
-                    Баланс
-                  </span>
-                  <span className={`text-xs font-semibold mt-0.5 block ${
-                    isDark ? 'text-slate-200' : 'text-slate-700'
-                  }`}>
-                    Айрон-долари
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="font-mono text-2xl sm:text-3xl font-black tabular-nums tracking-tight flex items-baseline justify-end gap-1">
-                  <span className="text-[#FA5A15]">{child.iron_dollars}</span>
-                  <span className={`text-xs font-sans font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>А$</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Кнопка іменного Сертифіката 2026 */}
-            <button
-              onClick={() => { haptics.impact('light'); setCertModalOpen(true); }}
-              className={`w-full mt-3 flex items-center justify-center gap-2 py-2.5 min-h-[42px] rounded-xl border text-xs font-bold transition-all active:scale-[0.98] ${
-                isDark 
-                  ? 'bg-gradient-to-r from-white/5 to-white/10 hover:from-white/10 hover:to-white/15 border-white/10 text-slate-100 shadow-sm' 
-                  : 'bg-gradient-to-r from-orange-500/10 to-amber-500/10 hover:bg-orange-50 border-orange-200/80 text-orange-950 shadow-sm'
-              }`}
-            >
-              <Award className="w-4 h-4 text-[#FA5A15]" />
-              <span>Отримати іменний сертифікат</span>
+      <div className={`relative min-h-[100dvh] w-full max-w-md mx-auto px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] safe-top flex flex-col gap-4 overflow-x-hidden transition-colors duration-300 ${t.page}`}>
+        <header className="flex items-center justify-between gap-2">
+          <ExitConfirm onConfirm={() => { haptics.impact('light'); handleExit(); }}>
+            <button className={`inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-xl border text-[13px] font-medium transition-colors active:scale-[0.97] ${t.btn}`}>
+              <ArrowLeft className="w-4 h-4" strokeWidth={2} />
+              Вийти
             </button>
-          </div>
-
-          {/* Навігаційні вкладки (Показуємо тільки дійсно активні модулі) */}
-          <Tabs
-            value={activeTab}
-            className="w-full"
-            onValueChange={(v) => { 
-              haptics.impact('light'); 
-              setActiveTab(v as any); 
-              if (v === 'talent') talent.markSeen(); 
-            }}
+          </ExitConfirm>
+          <button
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Світла тема' : 'Темна тема'}
+            className={`min-h-[40px] min-w-[40px] rounded-xl border flex items-center justify-center transition-colors active:scale-[0.97] ${t.btn}`}
           >
-            <TabsList
-              className={`grid w-full h-11 p-1 rounded-xl shadow-sm border transition-colors ${
-                tabColumnsCount === 2 ? 'grid-cols-2' : tabColumnsCount === 3 ? 'grid-cols-3' : 'grid-cols-4'
-              } ${
-                isDark 
-                  ? 'bg-[#0F1523]/80 border-white/10 text-slate-400' 
-                  : 'bg-slate-200/80 border-slate-300/80 text-slate-600'
-              }`}
-            >
-              <TabsTrigger value="profile" className="text-xs min-h-[36px] font-bold rounded-lg">
-                Профіль
-              </TabsTrigger>
-              
-              <TabsTrigger value="schedule" className="text-xs min-h-[36px] font-bold rounded-lg gap-1">
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Розклад</span>
-              </TabsTrigger>
-              
-              {/* Вкладка ЯРМАРОК — ТІЛЬКИ КОЛИ ВІН ЙДЕ НАЖИВО */}
-              {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (
-                <TabsTrigger 
-                  value="fair" 
-                  className="text-xs min-h-[36px] font-bold rounded-lg relative gap-1.5 text-[#FA5A15] data-[state=active]:bg-[#FA5A15] data-[state=active]:text-white"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5 animate-bounce" strokeWidth={2.2} /> 
-                  <span>Ярмарок</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping absolute top-1 right-1.5" />
-                </TabsTrigger>
-              )}
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+        </header>
 
-              {/* Вкладка ТАЛАНТИ — ТІЛЬКИ КОЛИ ПОДІЯ АКТИВНА */}
-              {talent.active && (
-                <TabsTrigger value="talent" className="text-xs min-h-[36px] font-bold rounded-lg relative gap-1.5">
-                  <Mic2 className="w-3.5 h-3.5" strokeWidth={2} /> 
-                  <span>Таланти</span>
-                  {talent.isNew && (
-                    <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-[#FA5A15] animate-pulse" />
-                  )}
-                </TabsTrigger>
-              )}
-            </TabsList>
+        <section className="animate-fade-in flex items-center gap-4 px-1">
+          <IronPixelAvatar name={child.full_name} size={64} bare className="rounded-2xl overflow-hidden shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h1 className={`text-[22px] font-semibold leading-[1.15] tracking-[-0.02em] break-words ${t.strong}`}>
+              {child.full_name}
+            </h1>
+            <p className={`mt-1 text-[13px] ${t.muted}`}>
+              Команда {child.team_number}{child.team_name ? <span className="capitalize">, {child.team_name}</span> : null}
+            </p>
+          </div>
+        </section>
 
-            {/* ================= ВМІСТ 1: ПРОФІЛЬ ================= */}
-            <TabsContent value="profile" className="space-y-3 mt-3">
-              {/* Потяг УЗ (якщо активна фаза поїздки) */}
-              {TRAIN_FEATURE_ENABLED && (!phase || phase.currentPhase !== 'PREPARING') && (
-                <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
-              )}
+        <section className={`rounded-2xl border overflow-hidden ${t.card}`}>
+          <div className="flex items-end justify-between gap-3 px-4 pt-4 pb-3">
+            <div>
+              <p className={`text-[13px] ${t.muted}`}>Баланс</p>
+              <p className="mt-0.5 font-mono tabular-nums text-[34px] leading-none font-semibold tracking-[-0.03em] text-[#FA5A15]">
+                {child.iron_dollars}
+                <span className={`ml-1.5 font-sans text-sm font-medium tracking-normal ${t.muted}`}>Айрон-доларів</span>
+              </p>
+            </div>
+            <Coins className={`w-5 h-5 mb-1 ${t.faint}`} strokeWidth={1.75} />
+          </div>
+          <button
+            onClick={() => { haptics.impact('light'); setCertModalOpen(true); }}
+            className={`w-full flex items-center justify-between gap-2 px-4 min-h-[48px] border-t text-[14px] font-medium transition-colors ${t.line} ${t.press} ${t.strong}`}
+          >
+            <span className="flex items-center gap-2.5">
+              <Award className="w-4 h-4 text-[#FA5A15]" strokeWidth={2} />
+              Іменний сертифікат
+            </span>
+            <ChevronDown className={`w-4 h-4 -rotate-90 ${t.faint}`} />
+          </button>
+        </section>
 
-              {/* Історія транзакцій Айрон-доларів */}
-              <TransactionHistory childId={child.id} collapsible />
-
-              {/* Персональні дані учасника */}
-              <div className={`p-4 rounded-2xl sm:rounded-3xl border space-y-3 shadow-sm transition-colors ${
-                isDark 
-                  ? 'bg-[#0F1523]/85 border-white/10' 
-                  : 'bg-white/95 border-slate-200/80'
-              }`}>
-                <div className={`flex items-center justify-between border-b pb-2 ${
-                  isDark ? 'border-white/5' : 'border-slate-100'
-                }`}>
-                  <span className={`text-[10px] font-bold tracking-widest uppercase ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}>
-                    Дані учасника
-                  </span>
-                  <span className="text-[10px] text-emerald-500 font-semibold flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" />
-                    Активна зміна
-                  </span>
-                </div>
-
-                {/* Сітка: Номер у списку та Команда */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className={`p-2.5 rounded-xl border ${
-                    isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                  }`}>
-                    <div className={`flex items-center gap-1.5 text-[11px] mb-0.5 ${
-                      isDark ? 'text-slate-400' : 'text-slate-500'
-                    }`}>
-                      <Hash className="w-3.5 h-3.5 text-[#FA5A15]" />
-                      <span>№ у списку</span>
-                    </div>
-                    <p className={`text-base font-bold font-mono ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      {child.row_number?.toString() || '—'}
-                    </p>
-                  </div>
-
-                  <div className={`p-2.5 rounded-xl border ${
-                    isDark ? 'bg-white/[0.03] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                  }`}>
-                    <div className={`flex items-center gap-1.5 text-[11px] mb-0.5 ${
-                      isDark ? 'text-slate-400' : 'text-slate-500'
-                    }`}>
-                      <Users className="w-3.5 h-3.5 text-[#FA5A15]" />
-                      <span>Команда</span>
-                    </div>
-                    <p className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      №{child.team_number}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Контактні деталі */}
-                <div className="space-y-1.5 text-xs pt-0.5">
-                  {child.team_name && (
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-                      isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                    }`}>
-                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <Tag className="w-3.5 h-3.5" />
-                        <span>Категорія:</span>
-                      </div>
-                      <span className={`font-semibold capitalize ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {child.team_name}
-                      </span>
-                    </div>
-                  )}
-
-                  {child.phone && (
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-                      isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                    }`}>
-                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <Phone className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>Телефон:</span>
-                      </div>
-                      <span className={`font-mono font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {child.phone}
-                      </span>
-                    </div>
-                  )}
-
-                  {child.gender && (
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-                      isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                    }`}>
-                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <UserRound className="w-3.5 h-3.5 text-sky-500" />
-                        <span>Стать:</span>
-                      </div>
-                      <span className={`font-semibold text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {GENDER_LABEL[child.gender as keyof typeof GENDER_LABEL] ?? 'Не визначено'}
-                      </span>
-                    </div>
-                  )}
-
-                  {child.note_from_table && (
-                    <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-                      isDark ? 'bg-white/[0.02] border-white/5' : 'bg-slate-50 border-slate-200/80'
-                    }`}>
-                      <div className={`flex items-center gap-2 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                        <MapPin className="w-3.5 h-3.5 text-sky-500" />
-                        <span>Примітка:</span>
-                      </div>
-                      <span className={`font-semibold break-words text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {child.note_from_table}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Усі поля з таблиці (Компактний розкривний список) */}
-              {rawEntries.length > 0 && (
-                <div className={`rounded-2xl border overflow-hidden shadow-sm transition-colors ${
-                  isDark 
-                    ? 'bg-[#0F1523]/85 border-white/10' 
-                    : 'bg-white/95 border-slate-200/80'
-                }`}>
-                  <button
-                    onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
-                    className={`w-full flex items-center justify-between p-3.5 min-h-[44px] transition-colors ${
-                      isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-slate-400" strokeWidth={1.75} />
-                      <span className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        Додаткова інформація ({rawEntries.length})
-                      </span>
-                    </div>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-400 transition-transform duration-300 ${showAllFields ? 'rotate-180' : ''}`}
-                      strokeWidth={1.75}
-                    />
-                  </button>
-
-                  {showAllFields && (
-                    <div className={`border-t divide-y max-h-60 overflow-y-auto ${
-                      isDark ? 'border-white/5 divide-white/5' : 'border-slate-100 divide-slate-100'
-                    }`}>
-                      {rawEntries.map(([k, v]) => (
-                        <div key={k} className="flex items-start justify-between gap-3 p-2.5 px-3.5 text-xs font-mono">
-                          <span className={`text-[11px] min-w-[35%] truncate font-sans ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                            {/^команда$/i.test(k.trim()) ? 'Категорія' : k}:
-                          </span>
-                          <span className={`text-right break-words flex-1 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                            {String(v)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* ================= ВМІСТ 2: РОЗКЛАД ================= */}
-            <TabsContent value="schedule" className="mt-3 space-y-3">
-              {phase?.currentPhase === 'PREPARING' ? (
-                <PhaseBanner status={phase} teamNumber={child.team_number} />
-              ) : (
-                <ScheduleView
-                  myTeam={child.team_number}
-                  lockTeam
-                  onFairAction={() => {
-                    if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) setActiveTab('fair');
-                  }}
-                />
-              )}
-            </TabsContent>
-
-            {/* ================= ВМІСТ 3: ЯРМАРОК (ТІЛЬКИ НАЖИВО) ================= */}
+        <Tabs
+          value={activeTab === 'schedule' || (activeTab === 'fair' && FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) ? activeTab : 'profile'}
+          className="w-full"
+          onValueChange={(v) => { haptics.impact('light'); setActiveTab(v as any); }}
+        >
+          <TabsList className={`grid w-full h-11 p-1 rounded-xl border ${FAIR_FEATURE_ENABLED && fair.isLiveFairRunning ? 'grid-cols-3' : 'grid-cols-2'} ${isDark ? 'bg-[#12151C] border-white/[0.07] text-slate-400' : 'bg-slate-200/70 border-slate-200 text-slate-600'}`}>
+            <TabsTrigger value="profile" className="text-[13px] min-h-[36px] font-medium rounded-lg">Профіль</TabsTrigger>
+            <TabsTrigger value="schedule" className="text-[13px] min-h-[36px] font-medium rounded-lg gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />Розклад
+            </TabsTrigger>
             {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (
-              <TabsContent value="fair" className="mt-3 space-y-3">
-                <ChildFairCard
-                  childId={child.id}
-                  balance={child.iron_dollars}
-                  childName={child.full_name}
-                  childTeam={child.team_number}
-                  isLive={true}
-                />
-                <TransactionHistory childId={child.id} />
-              </TabsContent>
+              <TabsTrigger value="fair" className="text-[13px] min-h-[36px] font-medium rounded-lg gap-1.5">
+                <ShoppingBag className="w-3.5 h-3.5" />Ярмарок
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-4 mt-4 animate-fade-in">
+            {TRAIN_FEATURE_ENABLED && (!phase || phase.currentPhase !== 'PREPARING') && (
+              <ChildCoupeCard childId={child.id} teamNumber={child.team_number} />
             )}
 
-            {/* ================= ВМІСТ 4: ТАЛАНТИ (ТІЛЬКИ ПРИ АКТИВНІЙ ПОДІЇ) ================= */}
-          </Tabs>
-        </div>
+            <TransactionHistory childId={child.id} collapsible />
 
-        {/* Футер */}
-        <footer className={`text-center py-2 text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
-          Всеукраїнський проєкт «Залізна Зміна» · Синхронізовано
+            <section>
+              <h2 className={`px-1 mb-2 text-[13px] font-medium ${t.muted}`}>Мої дані</h2>
+              <div className={`rounded-2xl border divide-y overflow-hidden ${t.card} ${t.line}`}>
+                {child.row_number != null && <Row label="Номер у списку" value={String(child.row_number)} mono />}
+                {child.phone && <Row label="Телефон" value={child.phone} mono onClick={() => handleCopy(child.phone!, 'Телефон скопійовано')} />}
+                {genderLabel && <Row label="Стать" value={genderLabel} />}
+                {child.note_from_table && <Row label="Примітка" value={child.note_from_table} />}
+                <Row label="Мій ID" value={shortId} mono onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)} />
+              </div>
+            </section>
+
+            {rawEntries.length > 0 && (
+              <section className={`rounded-2xl border overflow-hidden ${t.card}`}>
+                <button
+                  onClick={() => { haptics.impact('light'); setShowAllFields((v) => !v); }}
+                  aria-expanded={showAllFields}
+                  className={`w-full flex items-center justify-between px-4 min-h-[48px] transition-colors ${t.press}`}
+                >
+                  <span className={`flex items-center gap-2.5 text-[14px] font-medium ${t.strong}`}>
+                    <FileText className={`w-4 h-4 ${t.faint}`} strokeWidth={1.75} />
+                    Дані з анкети
+                    <span className={`text-[13px] font-normal ${t.faint}`}>{rawEntries.length}</span>
+                  </span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${t.faint} ${showAllFields ? 'rotate-180' : ''}`} strokeWidth={1.75} />
+                </button>
+                {showAllFields && (
+                  <div className={`border-t divide-y animate-fade-in ${t.line}`}>
+                    {rawEntries.map(([k, v]) => (
+                      <Row key={k} label={/^команда$/i.test(k) ? 'Категорія' : k} value={v} />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </TabsContent>
+
+          <TabsContent value="schedule" className="mt-4 space-y-3">
+            {phase?.currentPhase === 'PREPARING' ? (
+              <PhaseBanner status={phase} teamNumber={child.team_number} />
+            ) : (
+              <ScheduleView
+                myTeam={child.team_number}
+                lockTeam
+                onFairAction={() => {
+                  if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) setActiveTab('fair');
+                }}
+              />
+            )}
+          </TabsContent>
+
+          {FAIR_FEATURE_ENABLED && fair.isLiveFairRunning && (
+            <TabsContent value="fair" className="mt-4 space-y-3">
+              <ChildFairCard childId={child.id} balance={child.iron_dollars} childName={child.full_name} childTeam={child.team_number} isLive={true} />
+              <TransactionHistory childId={child.id} />
+            </TabsContent>
+          )}
+        </Tabs>
+
+        <footer className={`mt-auto text-center pt-2 text-[11px] ${t.faint}`}>
+          Залізна Зміна
         </footer>
 
-        {/* Модалка сертифіката */}
-        <CertificateModal
-          open={certModalOpen}
-          onClose={() => setCertModalOpen(false)}
-          initialName={child.full_name}
-        />
+        <CertificateModal open={certModalOpen} onClose={() => setCertModalOpen(false)} initialName={child.full_name} />
 
-        {/* Кінематографічна генерація аватара при першому вході */}
         {isRevealingAvatar && (
           <IronAvatarReveal
             name={child.full_name}
@@ -771,7 +509,6 @@ const ChildFlow = ({ onBack }: Props) => {
             }}
           />
         )}
-
       </div>
     );
   }
