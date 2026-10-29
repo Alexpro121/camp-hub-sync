@@ -87,9 +87,14 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
         </button>
         <button onClick={() => onOpen(kid)} className="min-w-0 flex-1 text-left">
           <div className="truncate font-semibold text-foreground"><Highlight text={kid.full_name} query={query} /></div>
-          <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <span>Команда {kid.team_number}</span>
             {shiftName && <span className="truncate">· {shiftName}</span>}
+            {kid.phone && (
+              <span className="inline-flex items-center gap-1 tracking-tight text-foreground/70">
+                <Phone className="h-3 w-3 shrink-0" />{kid.phone}
+              </span>
+            )}
             {kid.supervisor_notes && <span className="inline-flex items-center gap-0.5 text-warning"><StickyNote className="h-3 w-3" />нотатка</span>}
           </div>
         </button>

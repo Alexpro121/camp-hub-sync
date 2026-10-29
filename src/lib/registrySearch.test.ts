@@ -18,5 +18,7 @@ describe('registry search', () => {
   it('latin transliteration', () => expect(find('kovalenko')[0]).toBe('Коваленко Андрій'));
   it('и/і confusion', () => expect(find('игор')[0]).toBe('Ігор Бондаренко'));
   it('phone digits', () => expect(find('9876543')).toEqual(['Коваленко Андрій']));
+  it('phone without country code', () => expect(find('0671234567')).toEqual(["Лук'ян Шевченко Петрович"]));
+  it('phone with formatting', () => expect(find('+380 67 123 45 67')).toEqual(["Лук'ян Шевченко Петрович"]));
   it('no garbage hits', () => expect(find('зззззз')).toEqual([]));
 });
