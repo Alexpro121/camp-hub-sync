@@ -3,6 +3,7 @@ import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Loader2, LogOut, Phon
 import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
+import ExitConfirm from '@/components/ExitConfirm';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
@@ -368,7 +369,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             {!online && <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground animate-in fade-in" title={syncedAt ? `Список оновлено ${ago(syncedAt)}` : undefined}>Офлайн{syncedAt ? ` · ${ago(syncedAt)}` : ''}</span>}
             {queued > 0 && <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning" title="Чекають на інтернет">⏳ {queued}</span>}
             <span className="rounded-full bg-success/15 px-3 py-1 text-sm font-semibold tabular-nums text-success">{present} / {total}</span>
-            <button onClick={onLogout} aria-label="Вийти" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><LogOut className="h-5 w-5" /></button>
+            <ExitConfirm onConfirm={onLogout}><button aria-label="Вийти" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><LogOut className="h-5 w-5" /></button></ExitConfirm>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div className="h-full rounded-full bg-success transition-[width] duration-700 ease-out" style={{ width: total ? `${(present / total) * 100}%` : '0%' }} />
@@ -478,7 +479,7 @@ function ShiftPick({ token, onPick, onLogout }: { token: string; onPick: (id: st
             </button>
           </div>
         )}
-        <button onClick={onLogout} className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground">Вийти</button>
+        <ExitConfirm onConfirm={onLogout}><button className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground">Вийти</button></ExitConfirm>
       </div>
     </div>
   );

@@ -42,6 +42,7 @@ import ChildCoupeCard from '@/components/coupes/ChildCoupeCard';
 import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
+import ExitConfirm from '@/components/ExitConfirm';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
@@ -350,17 +351,18 @@ const ChildFlow = ({ onBack }: Props) => {
         <div className="relative z-10 flex flex-col gap-3">
           {/* Верхній навігаційний рядок */}
           <header className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => { haptics.impact('light'); handleExit(); }}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl active:scale-95 text-xs font-semibold transition-all shadow-sm ${
-                isDark 
-                  ? 'bg-[#0F1523]/80 hover:bg-[#151D2F] border border-white/10 text-slate-300' 
-                  : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
-              }`}
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
-              <span>Вийти</span>
-            </button>
+            <ExitConfirm onConfirm={() => { haptics.impact('light'); handleExit(); }}>
+              <button
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-xl active:scale-95 text-xs font-semibold transition-all shadow-sm ${
+                  isDark
+                    ? 'bg-[#0F1523]/80 hover:bg-[#151D2F] border border-white/10 text-slate-300'
+                    : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-700'
+                }`}
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
+                <span>Вийти</span>
+              </button>
+            </ExitConfirm>
 
             <div className="flex items-center gap-1.5">
               {/* Перемикач теми */}

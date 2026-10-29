@@ -16,6 +16,7 @@ import { ActiveShiftProvider } from '@/context/ActiveShiftContext';
 import ActiveShiftSwitcher from '@/components/admin/ActiveShiftSwitcher';
 import { getSeenAt } from '@/components/admin/AdminNotificationsView';
 import AdminOverview from '@/components/admin/AdminOverview';
+import ExitConfirm from '@/components/ExitConfirm';
 
 const AdminPrintQRCodes = lazyRetry(() => import('@/components/fair/AdminPrintQRCodes'));
 const AdminScheduleEditor = lazyRetry(() => import('@/components/schedule/AdminScheduleEditor'));
@@ -139,13 +140,15 @@ const AdminFlow = ({ onBack }: Props) => {
         <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 px-3 py-3 backdrop-blur-xl safe-top sm:px-4">
           <div className="mx-auto w-full max-w-5xl min-w-0">
           <div className="flex items-center justify-between">
-            <Button variant="ghost"
-              onClick={handleExit} 
-              className="gap-2 px-2 text-sm text-muted-foreground"
+            <ExitConfirm
+              onConfirm={handleExit}
+              description="Ви впевнені, що хочете вийти з адмін-панелі? Після виходу потрібно буде увійти знову."
             >
-              <ArrowLeft className="w-4 h-4 text-primary" /> 
-              <span>Вийти</span>
-            </Button>
+              <Button variant="ghost" className="gap-2 px-2 text-sm text-muted-foreground">
+                <ArrowLeft className="w-4 h-4 text-primary" />
+                <span>Вийти</span>
+              </Button>
+            </ExitConfirm>
             <div className="flex items-center gap-2">
               <p className="text-sm sm:text-lg font-bold text-foreground">
                 Адмін-панель

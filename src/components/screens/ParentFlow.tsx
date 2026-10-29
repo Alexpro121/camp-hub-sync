@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { saveSession, getSavedRole, getSessionMeta, updateSessionMeta, clearSavedSession } from '@/lib/session';
 import { lazy, Suspense } from 'react';
+import ExitConfirm from '@/components/ExitConfirm';
 
 const ScheduleView = lazyRetry(() => import('@/components/schedule/ScheduleView'));
 
@@ -143,9 +144,11 @@ const ParentFlow = ({ onBack }: { onBack: () => void }) => {
       <div className="max-w-lg mx-auto flex flex-col gap-4">
         <header className="flex items-center justify-between">
           <span className="text-xs text-slate-400">Кабінет батьків</span>
-          <button onClick={logout} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white h-9 px-3 rounded-full border border-white/10">
-            <LogOut className="w-3.5 h-3.5" /> Вийти
-          </button>
+          <ExitConfirm onConfirm={logout}>
+            <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white h-9 px-3 rounded-full border border-white/10">
+              <LogOut className="w-3.5 h-3.5" /> Вийти
+            </button>
+          </ExitConfirm>
         </header>
 
         <section className="rounded-3xl bg-white/[0.04] border border-white/10 p-4">
