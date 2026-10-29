@@ -20,7 +20,7 @@ describe('registry acknowledged baseline', () => {
   it('updates all cached scopes without adding unknown children', () => {
     localStorage.clear();
     for (const scope of ['all', 'A']) localStorage.setItem(`ironshift:registry-list:${scope}`, JSON.stringify({ at: 123, children: [{ id: 'A', is_present: false }] }));
-    persistRegistryPatches(localStorage, [{ id: 'A', is_present: true }, { id: 'B', is_present: true }]);
+    persistRegistryPatches<{ id: string; is_present: boolean }>(localStorage, [{ id: 'A', is_present: true }, { id: 'B', is_present: true }]);
     for (const scope of ['all', 'A']) expect(JSON.parse(localStorage.getItem(`ironshift:registry-list:${scope}`) ?? '{}').children).toEqual([{ id: 'A', is_present: true }]);
   });
   it('distinguishes offline all-shifts selection from a missing choice', () => {
