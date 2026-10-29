@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Award,
-  Gift,
   Loader2,
   Medal,
   Smartphone,
