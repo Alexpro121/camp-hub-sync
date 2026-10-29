@@ -51,7 +51,7 @@ Deno.test('simultaneous registry note edits preserve both contributions', async 
       const SERVICE_KEY = 'test-only';
       const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
     `).replace('Deno.serve(', 'globalThis.registryTestRegister(');
-    await import(`data:application/javascript;base64,${btoa(transformed)}`);
+    await import(`data:application/typescript,${encodeURIComponent(transformed)}`);
     const send = (note: string) => handler(new Request('http://localhost/registry', { method: 'POST', body: JSON.stringify({ action: 'batch', token, items: [{ id: 'child', supervisor_notes: note, base_note: '' }] }) }));
     const responses = await Promise.all([send('Ліки передані'), send('Алергія')]);
     for (const response of responses) assertEquals((await response.json()).results[0].status, 'ok');
