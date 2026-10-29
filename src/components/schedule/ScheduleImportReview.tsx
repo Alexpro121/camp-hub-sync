@@ -26,6 +26,7 @@ interface Props {
 export function ScheduleImportReview({ preview, live, newestEvent, editing, onEditingChange, onEdit }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const newest = useRef<HTMLLIElement>(null);
+  const nearBottom = useRef(true);
   const scrollToNewest = () => {
     const list = scroller.current;
     const card = newest.current;
@@ -33,8 +34,13 @@ export function ScheduleImportReview({ preview, live, newestEvent, editing, onEd
     const top = list.scrollTop + card.getBoundingClientRect().top - list.getBoundingClientRect().top - 48;
     list.scrollTo?.({ top: Math.max(0, top), behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
   };
+  const handleScroll = () => {
+    const list = scroller.current;
+    if (!list) return;
+    nearBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 140;
+  };
   useEffect(() => {
-    if (!live || !newestEvent) return;
+    if (!live || !newestEvent || !nearBottom.current) return;
     const frame = requestAnimationFrame(scrollToNewest);
     return () => cancelAnimationFrame(frame);
   }, [live, newestEvent]);
@@ -47,7 +53,7 @@ export function ScheduleImportReview({ preview, live, newestEvent, editing, onEd
       {!live && <Button variant="outline" size="sm" onClick={() => onEditingChange(!editing)}><Pencil className="mr-2 size-3.5" />{editing ? 'Завершити редагування' : 'Редагувати'}</Button>}
       {live && <Button variant="ghost" size="sm" onClick={scrollToNewest} aria-label="До нової події"><ArrowDown className="size-4" /></Button>}
     </div>
-    <div ref={scroller} role="region" aria-label="Список подій" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+    <div ref={scroller} onScroll={handleScroll} role="region" aria-label="Список подій" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
     {preview.errors.length > 0 && <div role="alert" className="space-y-2 text-sm text-destructive">
       <p className="flex items-center gap-2 font-semibold"><AlertTriangle className="size-4 shrink-0" />Виправте помилки перед збереженням</p>
       <ul className="list-disc space-y-1 break-words pl-5">{preview.errors.map((error, index) => <li key={index}>{error}</li>)}</ul>
@@ -60,7 +66,7 @@ export function ScheduleImportReview({ preview, live, newestEvent, editing, onEd
         const key = `${day.date}|${scheduleImportKey(item)}`;
         const category = categories[item.category as keyof typeof categories] ?? categories.general;
         const Icon = category.icon;
-        return <li ref={key === newestEvent ? newest : undefined} key={editing ? `${day.date}-${index}` : key} className={`rounded-lg border border-border border-l-[3px] bg-card p-3 ${category.accent} motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:zoom-in-95 motion-safe:duration-500`}>
+        return <li ref={key === newestEvent ? newest : undefined} key={editing ? `${day.date}-${index}` : key} className={`rounded-lg border border-border border-l-[3px] bg-card p-3 ${category.accent} si-enter`}>
         {editing ? <div className="space-y-2">
           <Input aria-label={`Назва події ${index + 1}, ${day.date}`} value={item.title} onChange={(event) => onEdit(day.date, index, 'title', event.target.value)} />
           <div className="grid grid-cols-2 gap-2"><Input type="time" aria-label={`Початок події ${index + 1}, ${day.date}`} value={item.time_start} onChange={(event) => onEdit(day.date, index, 'time_start', event.target.value)} /><Input type="time" aria-label={`Кінець події ${index + 1}, ${day.date}`} value={item.time_end ?? ''} onChange={(event) => onEdit(day.date, index, 'time_end', event.target.value)} /></div>

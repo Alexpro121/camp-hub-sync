@@ -1075,3 +1075,8 @@
   .cp-rise, .cp-team { animation: none; opacity: 1; } .cp-team { opacity: .16; transform: rotate(-8deg); }
   .cp-band::after, .cp-rails { animation: none; }
 }
+
+/* ===== Schedule import live preview ===== */
+@keyframes si-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.si-enter { animation: si-enter .45s cubic-bezier(.22,1,.36,1) both; }
+@media (prefers-reduced-motion: reduce) { .si-enter { animation: none; } }
