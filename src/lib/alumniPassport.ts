@@ -150,7 +150,9 @@ export function migratePassport(raw: unknown): AlumniPassportEnvelope | null {
   const obj = raw as Record<string, any>;
   if (obj._schema_version === ALUMNI_SCHEMA_VERSION) {
     const parsed = PassportSchema.safeParse(raw);
-    return parsed.success && verifyChecksum(parsed.data) ? parsed.data : null;
+    if (!parsed.success) return null;
+    const envelope = parsed.data as AlumniPassportEnvelope;
+    return verifyChecksum(envelope) ? envelope : null;
   }
 
   // Формат-джерело: офлайн-знімок Учасника ({ child: {...} })
