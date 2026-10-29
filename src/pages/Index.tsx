@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole } from '@/lib/session';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
+import ExitConfirm from '@/components/ExitConfirm';
 
 const ChildFlow = lazyRetry(() => import('@/components/screens/ChildFlow'));
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -19,6 +20,7 @@ export type Screen = 'role' | 'child' | 'supervisor' | 'admin' | 'alumni' | 'par
 const Index = () => {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<Screen>('role');
+  const [exitOpen, setExitOpen] = useState(false);
   const [restoring, setRestoring] = useState<boolean>(true);
   const [showIntro, setShowIntro] = useState<boolean>(() => shouldShowIntro());
 
@@ -145,7 +147,10 @@ const Index = () => {
       )}
 
       {/* Системна кнопка «Назад» для Telegram Mini App */}
-      {screen !== 'role' && <TelegramBackButton onClick={goRole} />}
+      {screen !== 'role' && <TelegramBackButton onClick={() => setExitOpen(true)} />}
+      <ExitConfirm open={exitOpen} onOpenChange={setExitOpen} onConfirm={() => {
+        void supabase.auth.signOut().then(() => goRole());
+      }}>{null}</ExitConfirm>
 
       {/* Роутинг між екранами з плавною появою */}
       <div className="w-full flex-1 flex flex-col animate-fade-in">

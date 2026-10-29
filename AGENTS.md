@@ -10,3 +10,4 @@
 
 - Admin tabs live in src/components/admin/tabs/ and are lazy-loaded by AdminFlow, which keeps only header, tab switcher and shift context — keeps the admin screen small and avoids merge conflicts.
 - Alumni passports validate structure and checksum before loading or transferring, retain child identity, and refresh newer snapshots; certificate resources are app-owned and cached after first download to support offline reuse.
+- Registry list/delta refreshes share an in-flight guard and persist acknowledged rows before clearing pending edits; full delta pages trigger complete reconciliation to avoid timestamp-boundary loss.

@@ -16,7 +16,7 @@ interface Step { sel: string; icon: React.ComponentType<{ className?: string }>;
 const STEPS: Step[] = [
   { sel: 'header', icon: Stethoscope, title: 'Вітаємо в медичному кабінеті', text: 'Тут видно всіх дітей з активних змін і скільки з них мають медичну помітку. Присутність тут не позначається — це робить реєстрація й супровід.', enter: (a) => { a.closeChild(); a.setMarked(false); } },
   { sel: 'search', icon: Search, title: 'Розумний пошук', text: 'Пишіть прізвище, ім’я або частину телефону. Пошук розуміє помилки, апострофи та неправильну розкладку.', enter: (a) => a.closeChild() },
-  { sel: 'shift', icon: Filter, title: 'Вибір зміни', text: 'Оберіть зміну, щоб бачити лише її дітей, або «Усі зміни».' },
+  { sel: 'shift', icon: Filter, title: 'Вибір зміни', text: 'Оберіть зміну, щоб бачити лише її дітей, або «Усі зміни».', enter: (a) => a.closeChild() },
   { sel: 'marked', icon: Cross, title: 'Фільтр «З поміткою»', text: 'Одним дотиком лишає тільки дітей з червоним ➕ — тих, кому потрібна увага.', enter: (a) => { a.closeChild(); a.setMarked(false); } },
   { sel: 'card', icon: Users, title: 'Картка дитини', text: 'Тут команда, зміна, ПІБ супроводу та телефон. Натисніть на картку, щоб відкрити повний профіль.', enter: (a) => a.closeChild() },
   { sel: 'attention', icon: Cross, title: 'Червоний плюсик для супроводу', text: 'Позначте «Потребує уваги» — біля дитини в супроводу засвітиться червоний ➕. Коли все добре, зніміть позначку або натисніть «Прибрати червоний плюсик».', enter: (a) => a.openFirstChild() },
@@ -64,6 +64,7 @@ export default function DoctorTour({ open, onClose, actions }: { open: boolean; 
       const el = document.querySelector(`[data-doctor-tour="${step.sel}"]`) as HTMLElement | null;
       if (el) { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* noop */ } t = setTimeout(measure, 260); return; }
       setRect(null);
+      if (['attention', 'note', 'supervisors', 'save'].includes(step.sel)) actRef.current.openFirstChild();
       if (tries++ < 20) t = setTimeout(find, 120);
     };
     t = setTimeout(find, 80);

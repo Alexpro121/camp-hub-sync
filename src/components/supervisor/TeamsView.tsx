@@ -82,6 +82,8 @@ const TeamsView = ({
 
   useEffect(() => {
     let mounted = true;
+    let activeShiftId: string | null = forcedShiftId;
+    let loadingRequest = false;
     // Якщо мережа мовчить довше 1.5 с — не тримаємо користувача на спінері.
     const slowTimer = setTimeout(() => {
       if (!mounted) return;
@@ -91,6 +93,9 @@ const TeamsView = ({
     }, 1500);
 
     const load = async () => {
+      if (!mounted || loadingRequest || !navigator.onLine) return;
+      loadingRequest = true;
+      try {
       // Load all shifts and pick the truly active one based on real date
       const { data: shifts } = await supabase
         .from('shifts')
@@ -99,7 +104,7 @@ const TeamsView = ({
       const { pickActiveShift } = await import('@/lib/shift');
       const forced = forcedShiftId ? (shifts || []).find((s: any) => s.id === forcedShiftId && !s.deleted_at) : null;
       const active = forced ?? pickActiveShift((shifts || []) as any);
-      const activeShiftId = active?.id ?? null;
+      activeShiftId = active?.id ?? null;
 
       let query = supabase.from('children').select('*').order('team_number').order('row_number');
       if (activeShiftId) {
@@ -119,6 +124,7 @@ const TeamsView = ({
 
       outbox.saveTeamsSnapshot(unique);
       if (mounted) { setChildren(unique as Child[]); setLoading(false); }
+      } finally { loadingRequest = false; }
     };
     load().catch(() => { if (mounted) setLoading(false); });
     let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -128,21 +134,17 @@ const TeamsView = ({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, (payload: any) => {
         // Присутність/нотатки з реєстрації: оновлюємо одну дитину миттєво, без перезавантаження всього списку.
         const n = payload.new;
-        if (payload.eventType === 'UPDATE' && n?.id && !n.deleted_at) {
-          let hit = false;
+        const old = payload.old;
+        if (activeShiftId && n?.shift_id && n.shift_id !== activeShiftId && old?.shift_id && old.shift_id !== activeShiftId) return;
+        const existing = childrenRef.current.find((c) => c.id === n?.id);
+        if (payload.eventType === 'INSERT' && activeShiftId && n?.shift_id !== activeShiftId) return;
+        if (payload.eventType === 'UPDATE' && n?.id && existing && n.shift_id === activeShiftId && existing.team_number === n.team_number && !n.deleted_at) {
           setChildren((prev) => {
-            const next = prev.map((x) => {
-              if (x.id !== n.id) return x;
-              hit = true;
-              if (x.team_number !== n.team_number) return x;
-              if ((x as any).updated_at && n.updated_at && (x as any).updated_at > n.updated_at) return x;
-              return { ...x, ...n };
-            });
-            if (hit) outbox.saveTeamsSnapshot(next);
-            return hit ? next : prev;
+            const next = prev.map((x) => x.id === n.id && (!x.updated_at || !n.updated_at || x.updated_at <= n.updated_at) ? { ...x, ...n } : x);
+            outbox.saveTeamsSnapshot(next);
+            return next;
           });
-          const old = payload.old;
-          if (hit && !(old?.team_number != null && old.team_number !== n.team_number)) return;
+          return;
         }
         clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => { load().catch(() => {}); }, 600);
@@ -154,7 +156,7 @@ const TeamsView = ({
     document.addEventListener('visibilitychange', resync);
     return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(reloadTimer); supabase.removeChannel(channel);
       window.removeEventListener('online', resync); document.removeEventListener('visibilitychange', resync); };
-  }, []);
+  }, [forcedShiftId]);
 
   /** Присутність: 0 мс у UI, мережа — фоном через Outbox. */
   const togglePresent = (c: Child) => {
@@ -293,18 +295,14 @@ const TeamsView = ({
                       onKeyDown={(e) => { if (isMine && e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditChild(c); } }}
                     >
                       {isMine ? (
-                        <button
-                          type="button"
+                        <Checkbox
                           data-tour={ci === 0 ? 'step-3-presence-toggle' : undefined}
-                          onClick={(e) => { e.stopPropagation(); togglePresent(c); }}
-                          className="p-1 -m-1 touch-manipulation select-none"
+                          checked={c.is_present}
+                          onClick={(e) => e.stopPropagation()}
+                          onCheckedChange={() => togglePresent(c)}
+                          className="h-6 w-6 shrink-0 rounded-md touch-manipulation data-[state=checked]:bg-success data-[state=checked]:border-success data-[state=checked]:text-success-foreground"
                           aria-label={c.is_present ? 'Позначити відсутнім' : 'Позначити присутнім'}
-                        >
-                          <Checkbox
-                            checked={c.is_present}
-                            className={`h-6 w-6 rounded-md pointer-events-none ${c.is_present ? 'bg-success border-success data-[state=checked]:bg-success data-[state=checked]:text-success-foreground shadow-[0_0_12px_hsl(142_71%_45%/0.5)]' : ''}`}
-                          />
-                        </button>
+                        />
                       ) : (
                         <div className={`h-6 w-6 rounded-md border-2 ${c.is_present ? 'bg-success border-success' : 'border-border'}`} />
                       )}

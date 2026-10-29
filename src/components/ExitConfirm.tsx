@@ -20,6 +20,8 @@ interface Props {
   title?: string;
   description?: string;
   confirmLabel?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Єдине підтвердження виходу для всіх кнопок «Вийти» в застосунку. */
@@ -29,10 +31,12 @@ export default function ExitConfirm({
   title = 'Вийти з акаунта?',
   description = 'Ви впевнені? Після виходу потрібно буде увійти знову.',
   confirmLabel = 'Так, вийти',
+  open,
+  onOpenChange,
 }: Props) {
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      {children && <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>}
       <AlertDialogContent className="max-w-sm rounded-3xl border-border/80 p-5 sm:p-6 sm:rounded-3xl data-[state=open]:zoom-in-95">
         <AlertDialogHeader className="items-center sm:items-start space-y-3">
           <span

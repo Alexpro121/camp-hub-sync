@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
 import ExitConfirm from '@/components/ExitConfirm';
+import { mergeRegistryRows } from '@/lib/registrySync';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
@@ -192,6 +193,13 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const loaded = useRef(false);
   const flushing = useRef<Promise<void> | null>(null);
   const sinceRef = useRef('');
+  const refreshing = useRef(false);
+  const fullRequested = useRef(false);
+  const baseline = useRef<CachedList>(cached ?? { at: 0, children: [], shifts: {} });
+  const persistChanges = useCallback((changes: Kid[]) => {
+    baseline.current = { ...baseline.current, at: Date.now(), children: mergeRegistryRows(baseline.current.children, changes) };
+    writeList(shiftId, baseline.current);
+  }, [shiftId]);
 
   // Невідправлені дії накладаємо поверх свіжого списку з сервера.
   const applyQueue = (list: Kid[]) => {
@@ -208,28 +216,36 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       try {
         const d = await call({ action: 'batch', token, items: ids.map((id) => ({ id, ...pq[id] })) }, 15_000);
         const cur = readQueue();
+        const acknowledged: Kid[] = [];
         for (const r of d.results ?? []) {
           if (r.status === 'error') continue;
+          if (r.child) acknowledged.push(r.child);
           // Видаляємо лише якщо за час запиту користувач не змінив цю дитину ще раз.
           if (JSON.stringify(cur[r.id]) === JSON.stringify(pq[r.id])) delete cur[r.id];
           if (r.child) setKids((ks) => ks?.map((k) => (k.id === r.id && !cur[r.id] ? { ...k, ...r.child } : k)) ?? ks);
         }
+        persistChanges(acknowledged);
         writeQueue(cur);
       } catch (e: any) {
         if (e.message === 'unauthorized') onLogout();
       }
     })().finally(() => { flushing.current = null; setQueued(Object.keys(readQueue()).length); });
     return flushing.current;
-  }, [token, onLogout]);
+  }, [token, onLogout, persistChanges]);
 
   // Легка дельта: що змінив супровід/інший пристрій реєстрації за останні секунди.
   const pull = useCallback(async () => {
-    if (!sinceRef.current) return;
+    if (!sinceRef.current || refreshing.current || !navigator.onLine) return;
+    refreshing.current = true;
+    try {
     await flush();
     const d = await call({ action: 'changes', token, since: sinceRef.current, ...(shiftId ? { shift_id: shiftId } : {}) }, 8_000);
     const ch: (Kid & { deleted_at?: string | null })[] = d.children ?? [];
     if (!ch.length) return;
+    // Timestamp ties at a full-page boundary require full reconciliation.
+    if (ch.length >= 500) { fullRequested.current = true; return; }
     sinceRef.current = ch[ch.length - 1].updated_at ?? sinceRef.current;
+    persistChanges(ch);
     const pq = readQueue();
     setKids((ks) => {
       if (!ks) return ks;
@@ -244,9 +260,16 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       return next;
     });
     setSyncedAt(Date.now()); setOnline(true);
-  }, [token, shiftId, flush]);
+    } finally {
+      refreshing.current = false;
+      if (fullRequested.current) { fullRequested.current = false; void loadRef.current(); }
+    }
+  }, [token, shiftId, flush, persistChanges]);
 
   const load = useCallback(async () => {
+    if (!navigator.onLine) return;
+    if (refreshing.current) { fullRequested.current = true; return; }
+    refreshing.current = true;
     try {
       await flush();
       const d = await call({ action: 'list', token, ...(shiftId ? { shift_id: shiftId } : {}) });
@@ -256,12 +279,13 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       setKids(applyQueue(children));
       sinceRef.current = children.reduce((m, k) => (k.updated_at && k.updated_at > m ? k.updated_at : m), '');
       const at = Date.now(); setSyncedAt(at); setOnline(true);
-      writeList(shiftId, { at, children, shifts: sh });
+      baseline.current = { at, children, shifts: sh };
+      writeList(shiftId, baseline.current);
       loaded.current = true;
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
       else if (!loaded.current && !readList(shiftId)) toast.error('Не вдалося завантажити список. Повторюю…');
-    }
+    } finally { refreshing.current = false; fullRequested.current = false; }
   }, [token, shiftId, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
