@@ -1,4 +1,5 @@
 # Admin panel reorganization
+- [ ] Validate alumni passport persistence, correct identity/balance, certificate and offline behavior; fix confirmed defects and run regression tests.
 - [x] Validate all 5 personal staff accounts, the admin and one active child account with authenticated browser sessions: tabs, 390px/desktop screenshots, no runtime errors or horizontal overflow; 336 bounded reads at 4/12 concurrency with zero failures, maximum p95 465ms. Talent reads and privileged cross-role actions denied. Admin detect-gender intercepted to avoid changing child data. 74 frontend and 3 server tests pass.
 - [ ] Check every remaining individual child and legacy team account (not covered: 81 child and 13 legacy supervisor accounts; current browser run covers personal staff and representative child only).
 - [x] Fully disable Talent evening UI and backend access without deleting historical data; authenticated direct read rejected.
