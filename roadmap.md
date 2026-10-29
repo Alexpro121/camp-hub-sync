@@ -1,5 +1,6 @@
 # Admin panel reorganization
-- [ ] Audit site runtime and unnecessary requests; fix confirmed defects, run all tests and verify signed-in supervisor navigation and reconnect without changing child data.
+- [x] Audit confirmed runtime/load defects: serialize registry refreshes and persist acknowledged/delta cache, reconcile full delta pages, skip team discovery in locked schedules, preserve unchanged medical snapshots, avoid redundant team reloads and nested presence buttons, handle selected-shift changes, repair doctor-tour backward navigation and native Telegram exit confirmation. All 91 tests pass; latest build OK. Authenticated doctor profile/tour, cancel logout, offline search and reconnect checked at 393px/1280px without child writes; no page errors. The selected sizikov.oleksii1 account now has doctor role, not supervisor.
+- [ ] Complete live supervisor/admin/child coverage and registry batch/cache reload checks (needs the corresponding account selection and a disposable child fixture; current run was read-only).
 - [x] Refresh doctor workspace visuals: scoped neutral/teal themes, scan-friendly child list, medical-first profile and mobile layout. Verified signed-in doctor search/profile and theme toggle at 1280px/390px; fixed portalled light-theme text contrast, no overflow or runtime errors, 4 medical workflow tests pass, build OK. No child data changed.
 - [x] Show registration-desk notes to the child's team supervisor: "Реєстрація:" line in the team list, "з реєстрації" chip in the child card, supervisor edits it individually and the edit becomes his own; verified live (registry write + supervisor session screenshots) and with 4 automated tests.
 - [x] Validate alumni profile using an authenticated child's real read-only snapshot: mobile/desktop, received broadcast, updated local balance, offline profile and cached PDF, downloaded PDF, transfer between two isolated browser contexts; no page errors. Fixed stale balance/identity, checksum/structure validation, six-digit bridge PIN, scoped latest broadcasts and reconnect, certificate CDN failures and async/object-URL lifecycle. 79 tests pass. Local asset route supplied exact uploaded font during localhost test; hosted asset fetched and validated separately. No backend child data changed.
@@ -10,7 +11,7 @@
 - [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
 - [x] Add admin-assigned doctor login, all-child search and profiles with correct shift/team supervisors.
 - [x] Add doctor-only medical notes and removable red plus marks visible to supervisors; verify schema privileges and focused tests.
-- [ ] Verify doctor save/remove and supervisor display end-to-end (blocked: no doctor account exists; selected test account is supervisor).
+- [ ] Verify doctor save/remove and supervisor display end-to-end (needs a disposable child fixture and selected supervisor account; doctor account now exists, read-only profile/tour verified).
 - [x] Open on selected shift overview with meaningful, fast summary and shortcuts.
 - [x] Make section navigation one-tap on phones, keep all existing sections reachable.
 - [x] Streamline shift creation and staff screens for narrow phones without changing permissions or data behavior.
