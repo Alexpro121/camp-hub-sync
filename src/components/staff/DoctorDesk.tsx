@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Cross, LogOut, RefreshCw, Search, Stethoscope, Sun, Moon, Users, Phone, ChevronRight, X, ClipboardList, Check, Loader2, HelpCircle } from 'lucide-react';
 import DoctorTour, { DOCTOR_TOUR_KEY } from './DoctorTour';
+import ExitConfirm from '@/components/ExitConfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +78,9 @@ export default function DoctorDesk({ name, theme, toggleTheme, onLogout }: Props
           <div className="min-w-0 flex-1"><p className="text-xs font-medium text-primary">Медичний кабінет</p><h1 className="text-lg font-bold leading-tight tracking-normal sm:text-2xl">Лікар</h1></div>
           <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" data-doctor-tour="help" onClick={() => setTourOpen(true)} aria-label="Інструктаж" title="Інструктаж"><HelpCircle /></Button>
           <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={toggleTheme} aria-label="Змінити тему" title="Змінити тему">{theme === 'light' ? <Moon /> : <Sun />}</Button>
-          <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" onClick={onLogout} aria-label="Вийти" title="Вийти"><LogOut /></Button>
+          <ExitConfirm onConfirm={onLogout}>
+            <Button size="icon" variant="ghost" className="shrink-0 hover:bg-muted hover:text-foreground" aria-label="Вийти" title="Вийти"><LogOut /></Button>
+          </ExitConfirm>
         </div>
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2 sm:mt-4 sm:pt-3">
           <p className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm">{name}</p>

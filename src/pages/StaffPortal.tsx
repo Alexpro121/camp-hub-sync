@@ -14,6 +14,7 @@ import StaffAvatar from '@/components/staff/StaffAvatar';
 import { compressAvatar, KIND_LABEL, StaffKind, staffCall as call, staffErr } from '@/lib/staffApi';
 import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
+import ExitConfirm from '@/components/ExitConfirm';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
@@ -231,9 +232,11 @@ const StaffPortal = () => {
               <Button variant="secondary" className="flex-1 min-w-0 rounded-xl" onClick={() => setProfileOpen(true)}>
                 <Pencil className="w-4 h-4 mr-1.5" /> Мої контакти
               </Button>
-              <Button variant="secondary" onClick={logout} className="flex-1 min-w-0 rounded-xl">
-                <LogOut className="w-4 h-4 mr-1.5" /> Вийти
-              </Button>
+              <ExitConfirm onConfirm={logout}>
+                <Button variant="secondary" className="flex-1 min-w-0 rounded-xl">
+                  <LogOut className="w-4 h-4 mr-1.5" /> Вийти
+                </Button>
+              </ExitConfirm>
             </div>
 
             {cabinet.assignments.length === 0 && (

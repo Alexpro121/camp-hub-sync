@@ -40,6 +40,7 @@ import CoupeSwapSettings from '@/components/coupes/CoupeSwapSettings';
 import TabDock, { type DockItem } from '@/components/nav/TabDock';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useIsMobile } from '@/hooks/use-mobile';
+import ExitConfirm from '@/components/ExitConfirm';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import SupervisorFairView from '@/components/fair/SupervisorFairView';
@@ -422,18 +423,24 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
               : 'border-slate-200/80 bg-white/90 shadow-sm'
           }`}>
             <div className="flex items-center justify-between gap-2">
-              <button 
-                onClick={logout} 
-                data-tour="step-8-logout-button" 
-                className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 border text-xs font-semibold transition-all shadow-sm ${
-                  isDark 
-                    ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white' 
-                    : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900'
-                }`}
+              <ExitConfirm
+                onConfirm={logout}
+                title={cabinetMode ? 'Вийти зі зміни?' : 'Вийти з акаунта?'}
+                description={cabinetMode ? 'Повернутися до особистого кабінету?' : 'Ви впевнені? Після виходу потрібно буде увійти знову.'}
+                confirmLabel={cabinetMode ? 'Так, повернутись' : 'Так, вийти'}
               >
-                <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
-                <span>Вийти</span>
-              </button>
+                <button
+                  data-tour="step-8-logout-button"
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-xl active:scale-95 border text-xs font-semibold transition-all shadow-sm ${
+                    isDark
+                      ? 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white'
+                      : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-[#FA5A15]" strokeWidth={2.2} />
+                  <span>Вийти</span>
+                </button>
+              </ExitConfirm>
 
               <div className="flex items-center gap-2">
                 <button
