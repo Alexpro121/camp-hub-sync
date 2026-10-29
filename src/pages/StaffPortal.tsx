@@ -97,14 +97,14 @@ const StaffPortal = () => {
     }
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     localStorage.removeItem('helpsuprov:supervisor-team');
     clearSavedSession();
     await supabase.auth.signOut();
     setCabinet(null);
     setActiveTeam(null);
     setPassword('');
-  };
+  }, []);
 
   const enterShift = async (a: Assignment) => {
     setBusy(true);
