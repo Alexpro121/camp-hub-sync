@@ -151,10 +151,23 @@ const QUEUE_KEY = 'ironshift:registry-queue';
 type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string }>;
 const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
 const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+const LIST_KEY = 'ironshift:registry-list';
+type CachedList = { at: number; children: Kid[]; shifts: Record<string, string> };
+const readList = (): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(LIST_KEY) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
+const writeList = (v: CachedList) => { try { localStorage.setItem(LIST_KEY, JSON.stringify(v)); } catch { /* quota */ } };
+const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'щойно' : m < 60 ? `${m} хв тому` : `${Math.round(m / 60)} год тому`; };
 
 function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
-  const [kids, setKids] = useState<Kid[] | null>(null);
-  const [shifts, setShifts] = useState<Record<string, string>>({});
+  const cached = useMemo(readList, []);
+  const [kids, setKids] = useState<Kid[] | null>(() => (cached ? cached.children.map((k) => ({ ...k, ...readQueue()[k.id] })) : null));
+  const [shifts, setShifts] = useState<Record<string, string>>(cached?.shifts ?? {});
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [syncedAt, setSyncedAt] = useState<number | null>(cached?.at ?? null);
+  useEffect(() => {
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener('online', on); window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [team, setTeam] = useState<number | null>(null);
@@ -193,19 +206,23 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
     try {
       await flush();
       const d = await call({ action: 'list', token });
-      setShifts(Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name])));
-      setKids(applyQueue(d.children ?? []));
+      const sh = Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name]));
+      const children: Kid[] = d.children ?? [];
+      setShifts(sh);
+      setKids(applyQueue(children));
+      const at = Date.now(); setSyncedAt(at); setOnline(true);
+      writeList({ at, children, shifts: sh });
       loaded.current = true;
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
-      else if (!loaded.current) toast.error('Не вдалося завантажити список. Повторюю…');
+      else if (!loaded.current && !readList()) toast.error('Не вдалося завантажити список. Повторюю…');
     }
   }, [token, onLogout, flush]);
 
   const loadRef = useRef(load); loadRef.current = load;
   useEffect(() => {
     loadRef.current();
-    const tick = () => document.visibilityState === 'visible' && loadRef.current();
+    const tick = () => document.visibilityState === 'visible' && navigator.onLine && loadRef.current();
     const t = setInterval(tick, 20_000);
     window.addEventListener('online', tick);
     document.addEventListener('visibilitychange', tick);
@@ -296,6 +313,7 @@ function Desk({ token, onLogout }: { token: string; onLogout: () => void }) {
         <div className="mx-auto max-w-2xl px-4 pb-2 sm:pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
           <div className="mb-2 flex items-center gap-2">
             <h1 className="flex-1 text-lg font-bold text-foreground">Реєстрація</h1>
+            {!online && <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground animate-in fade-in" title={syncedAt ? `Список оновлено ${ago(syncedAt)}` : undefined}>Офлайн{syncedAt ? ` · ${ago(syncedAt)}` : ''}</span>}
             {queued > 0 && <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning" title="Чекають на інтернет">⏳ {queued}</span>}
             <span className="rounded-full bg-success/15 px-3 py-1 text-sm font-semibold tabular-nums text-success">{present} / {total}</span>
             <button onClick={onLogout} aria-label="Вийти" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><LogOut className="h-5 w-5" /></button>
