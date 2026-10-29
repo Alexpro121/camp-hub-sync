@@ -43,6 +43,7 @@ import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import ExitConfirm from '@/components/ExitConfirm';
+import ChildPass from '@/components/child/ChildPass';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useTeamPhase } from '@/hooks/useTeamPhase';
 import PhaseBanner from '@/components/shift/PhaseBanner';
@@ -343,7 +344,7 @@ const ChildFlow = ({ onBack }: Props) => {
 
     const t = isDark
       ? { page: 'bg-[#0B0D12] text-slate-100', card: 'bg-[#12151C] border-white/[0.07]', muted: 'text-slate-400', faint: 'text-slate-500', strong: 'text-white', line: 'divide-white/[0.06] border-white/[0.06]', btn: 'bg-[#12151C] border-white/[0.08] text-slate-200 hover:bg-[#181C25]', press: 'hover:bg-white/[0.03] active:bg-white/[0.05]' }
-      : { page: 'bg-[#F3F4F6] text-slate-900', card: 'bg-white border-slate-200', muted: 'text-slate-500', faint: 'text-slate-400', strong: 'text-slate-900', line: 'divide-slate-100 border-slate-100', btn: 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50', press: 'hover:bg-slate-50 active:bg-slate-100' };
+      : { page: 'bg-[#EEF0F3] text-slate-900', card: 'bg-white border-slate-200', muted: 'text-slate-500', faint: 'text-slate-400', strong: 'text-slate-900', line: 'divide-slate-100 border-slate-100', btn: 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50', press: 'hover:bg-slate-50 active:bg-slate-100' };
 
     const Row = ({ label, value, mono, onClick }: { label: string; value: string; mono?: boolean; onClick?: () => void }) => {
       const body = (
@@ -377,41 +378,18 @@ const ChildFlow = ({ onBack }: Props) => {
           </button>
         </header>
 
-        <section className="animate-fade-in flex items-center gap-4 px-1">
-          <IronPixelAvatar name={child.full_name} size={64} bare className="rounded-2xl overflow-hidden shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h1 className={`text-[22px] font-semibold leading-[1.15] tracking-[-0.02em] break-words ${t.strong}`}>
-              {child.full_name}
-            </h1>
-            <p className={`mt-1 text-[13px] ${t.muted}`}>
-              Команда {child.team_number}{child.team_name ? <span className="capitalize">, {child.team_name}</span> : null}
-            </p>
-          </div>
-        </section>
+        <ChildPass
+          name={child.full_name}
+          teamNumber={child.team_number}
+          teamName={child.team_name}
+          balance={child.iron_dollars}
+          shortId={shortId}
+          isDark={isDark}
+          onCertificate={() => { haptics.impact('light'); setCertModalOpen(true); }}
+          onCopyId={() => handleCopy(shortId, `ID ${shortId} скопійовано`)}
+        />
 
-        <section className={`rounded-2xl border overflow-hidden ${t.card}`}>
-          <div className="flex items-end justify-between gap-3 px-4 pt-4 pb-3">
-            <div>
-              <p className={`text-[13px] ${t.muted}`}>Баланс</p>
-              <p className="mt-0.5 font-mono tabular-nums text-[34px] leading-none font-semibold tracking-[-0.03em] text-[#FA5A15]">
-                {child.iron_dollars}
-                <span className={`ml-1.5 font-sans text-sm font-medium tracking-normal ${t.muted}`}>Айрон-доларів</span>
-              </p>
-            </div>
-            <Coins className={`w-5 h-5 mb-1 ${t.faint}`} strokeWidth={1.75} />
-          </div>
-          <button
-            onClick={() => { haptics.impact('light'); setCertModalOpen(true); }}
-            className={`w-full flex items-center justify-between gap-2 px-4 min-h-[48px] border-t text-[14px] font-medium transition-colors ${t.line} ${t.press} ${t.strong}`}
-          >
-            <span className="flex items-center gap-2.5">
-              <Award className="w-4 h-4 text-[#FA5A15]" strokeWidth={2} />
-              Іменний сертифікат
-            </span>
-            <ChevronDown className={`w-4 h-4 -rotate-90 ${t.faint}`} />
-          </button>
-        </section>
-
+        <div className="cp-rise" style={{ animationDelay: '220ms' }}>
         <Tabs
           value={activeTab === 'schedule' || (activeTab === 'fair' && FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) ? activeTab : 'profile'}
           className="w-full"
@@ -443,8 +421,7 @@ const ChildFlow = ({ onBack }: Props) => {
                 {child.phone && <Row label="Телефон" value={child.phone} mono onClick={() => handleCopy(child.phone!, 'Телефон скопійовано')} />}
                 {genderLabel && <Row label="Стать" value={genderLabel} />}
                 {child.note_from_table && <Row label="Примітка" value={child.note_from_table} />}
-                <Row label="Мій ID" value={shortId} mono onClick={() => handleCopy(shortId, `ID ${shortId} скопійовано`)} />
-              </div>
+                              </div>
             </section>
 
             {rawEntries.length > 0 && (
@@ -493,6 +470,7 @@ const ChildFlow = ({ onBack }: Props) => {
             </TabsContent>
           )}
         </Tabs>
+        </div>
 
         <footer className={`mt-auto text-center pt-2 text-[11px] ${t.faint}`}>
           Залізна Зміна
