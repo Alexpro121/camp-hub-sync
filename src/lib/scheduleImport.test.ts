@@ -10,6 +10,20 @@ const event = { title: 'Майстер-клас', time_start: '9:5', time_end: '
 const preview = (value: unknown) => previewScheduleImport(JSON.stringify(value), date);
 
 describe('validated schedule imports', () => {
+  it('keeps all 44 events and clears equal end times without inventing duration', () => {
+    const items = Array.from({ length: 44 }, (_, index) => ({ title: `Подія ${index + 1}`, time_start: '08:00', time_end: [0, 1, 41, 42, 43].includes(index) ? '08:00' : '09:00' }));
+    const result = preview({ date: '2026-02-24', items });
+    expect(result.errors).toEqual([]);
+    expect(result.total).toBe(44);
+    expect(result.days[0].items.filter((item) => item.time_end === null)).toHaveLength(5);
+    expect(result.warnings).toHaveLength(5);
+  });
+  it('normalizes equal times before clearing the ambiguous end and keeps staggered slots', () => {
+    const result = preview([{ ...event, time_start: '9:5', time_end: '09:05', sub_slots: [{ time: '09:30', teams: [1] }] }]);
+    expect(result.errors).toEqual([]);
+    expect(result.days[0].items[0].time_end).toBeNull();
+    expect(result.days[0].items[0].sub_slots).toHaveLength(1);
+  });
   it.each([
     { date, items: [event] }, [{ date, items: [event] }], { days: [{ date, items: [event] }] }, [event], { events: [event] },
   ])('accepts supported document shapes', (input) => {
