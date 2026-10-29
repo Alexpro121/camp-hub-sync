@@ -1,4 +1,6 @@
 # Admin panel reorganization
+- [ ] Fully disable Talent evening UI and backend access without deleting historical data.
+- [ ] Run controlled stress tests and authenticated supervisor checks using the selected account; record limits and results.
 - [x] Audit tests and doctor flows; fix verified request, stale-state, permissions and list completeness defects (73 frontend tests and 3 server-contract tests pass).
 - [x] Add admin-assigned doctor login, all-child search and profiles with correct shift/team supervisors.
 - [x] Add doctor-only medical notes and removable red plus marks visible to supervisors; verify schema privileges and focused tests.
