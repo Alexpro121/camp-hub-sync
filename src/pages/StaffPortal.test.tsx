@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import StaffPortal from './StaffPortal';
 const { call, getUser } = vi.hoisted(() => ({ call: vi.fn(), getUser: vi.fn() }));
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: { getUser } } }));
-vi.mock('@/lib/staffApi', () => ({ staffCall: call, staffErr: () => 'Помилка', KIND_LABEL: {}, compressAvatar: vi.fn() }));
+vi.mock('@/lib/staffApi', () => ({ staffCall: call, staffErr: () => 'Помилка', KIND_LABEL: {}, compressAvatar: vi.fn(), initials: () => 'ТС' }));
 vi.mock('@/lib/staffTheme', () => ({ useStaffTheme: () => ['dark', vi.fn()] }));
 vi.mock('@/components/ui/loader', () => ({ FullScreenLoader: () => <div role="status">Завантаження</div> }));
 beforeEach(() => { call.mockReset(); getUser.mockResolvedValue({ data: { user: { id: 'non-staff' } } }); localStorage.clear(); });
