@@ -16,7 +16,15 @@ export function useMedicalNotes() {
       const timer = setTimeout(abort, 10000);
       try {
         const { data, error } = await supabase.from('child_medical_notes').select('child_id,note,needs_attention,version,updated_at').abortSignal(request.signal);
-        if (!controller.signal.aborted && !error && data) setNotes(Object.fromEntries(data.map((n) => [n.child_id, n])));
+        if (!controller.signal.aborted && !error && data) setNotes((prev) => {
+          const next = Object.fromEntries(data.map((n) => [n.child_id, n]));
+          const unchanged = Object.keys(prev).length === data.length && data.every((n) => {
+            const old = prev[n.child_id];
+            return old && old.version === n.version && old.note === n.note
+              && old.needs_attention === n.needs_attention && old.updated_at === n.updated_at;
+          });
+          return unchanged ? prev : next;
+        });
         else if (!controller.signal.aborted && error?.code === '42501') setNotes({});
       } finally { loading = false; clearTimeout(timer); controller.signal.removeEventListener('abort', abort); }
     };

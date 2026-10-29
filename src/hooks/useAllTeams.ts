@@ -12,11 +12,13 @@ export interface AllTeamsState {
  * dynamic assigned_teams, with children as a fallback source. No templates.
  * `loading` stays true until the first response, so an empty `data` never means "no teams" prematurely.
  */
-export function useAllTeams(): AllTeamsState {
-  const [state, setState] = useState<AllTeamsState>({ data: [], loading: true, error: null });
+export function useAllTeams(enabled = true): AllTeamsState {
+  const [state, setState] = useState<AllTeamsState>({ data: [], loading: enabled, error: null });
 
   useEffect(() => {
+    if (!enabled) { setState({ data: [], loading: false, error: null }); return; }
     let active = true;
+    setState((s) => ({ ...s, loading: true }));
     (async () => {
       const [shiftsRes, kidsRes] = await Promise.all([
         supabase.from('shifts').select('assigned_teams, deleted_at'),
@@ -32,7 +34,7 @@ export function useAllTeams(): AllTeamsState {
       setState({ data: [...set].sort((a, b) => a - b), loading: false, error: err });
     })().catch((e) => { if (active) setState((s) => ({ ...s, loading: false, error: e?.message ?? 'failed' })); });
     return () => { active = false; };
-  }, []);
+  }, [enabled]);
 
   return state;
 }
