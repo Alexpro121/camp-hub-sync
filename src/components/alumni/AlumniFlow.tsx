@@ -70,6 +70,7 @@ const AlumniFlow = ({ onBack }: Props) => {
 
       if (snapshot?.child) {
         const built = buildAlumniPassport({
+          passport_id: existing?.child_profile.child_id === snapshot.child.id ? existing.passport_id : undefined,
           child_id: snapshot.child.id,
           full_name: snapshot.child.full_name,
           team_number: snapshot.child.team_number,
