@@ -1,4 +1,4 @@
-import { admin, corsHeaders, issueSession, json } from '../_shared/accounts.ts';
+import { admin, corsHeaders, issueSession, json, SERVICE_KEY } from '../_shared/accounts.ts';
 import { verifyInitData } from '../_shared/telegramCore.ts';
 import { BOT_TOKEN, INIT_DATA_MAX_AGE, sessionForUser, syncEnvAdmin } from '../_shared/telegramServer.ts';
 
@@ -9,11 +9,23 @@ import { BOT_TOKEN, INIT_DATA_MAX_AGE, sessionForUser, syncEnvAdmin } from '../_
  *
  * Відповіді:
  *  { state: 'ok', role: 'child', childId, teamNumber, shiftId, session }
- *  { state: 'ok', role: 'staff' | 'admin', kind, fullName, session }
+ *  { state: 'ok', role: 'staff' | 'admin', kind, fullName, session, registryToken } — токен стійки реєстрації для працівників
  *  { state: 'unlinked' }  — акаунт не прив'язаний: треба натиснути «Старт» у боті
- *  { state: 'pending' }   — заявка /register чекає на адміна
+ *  { state: 'pending' }   — заявка на реєстрацію чекає на адміна
  *  { state: 'revoked' }   — акаунт супроводу вимкнено
  */
+/**
+ * Токен стійки реєстрації (той самий формат, що видає функція registry за паролем):
+ * у Telegram стійку відкриває будь-який активний працівник без пароля.
+ */
+const REGISTRY_TOKEN_TTL_MS = 14 * 3600_000;
+async function registryToken(): Promise<string> {
+  const exp = Date.now() + REGISTRY_TOKEN_TTL_MS;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`registry:${exp}`)));
+  return `${exp}.${Array.from(sig).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -65,7 +77,7 @@ Deno.serve(async (req) => {
     // Адміністратори задаються списком Telegram ID (лікар не може бути адміном); прибраний зі списку втрачає роль.
     const isAdmin = await syncEnvAdmin(svc, tgId, member.user_id, member.kind, Boolean(link.admin_from_env));
     const session = await sessionForUser(svc, member.user_id);
-    return json({ state: 'ok', role: isAdmin ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session });
+    return json({ state: 'ok', role: isAdmin ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session, registryToken: await registryToken() });
   } catch (e) {
     console.error('tg-auth failed:', e instanceof Error ? e.message : 'unknown');
     return json({ error: 'login_failed' }, 500);

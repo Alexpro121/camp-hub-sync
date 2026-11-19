@@ -16,7 +16,7 @@ import AppErrorBoundary from "@/components/AppErrorBoundary";
 import TelegramGate from "@/components/telegram/TelegramGate";
 import { isTelegramMiniApp } from "@/lib/telegramAuth";
 
-/** Сторінки, яких у Telegram-боті немає: там реєстрація — командою /register, а стійка реєстрації працює в браузері. */
+/** Сторінки, яких у Telegram-боті немає: реєстрація супроводу там — лише за посиланням від адміна. */
 const WebOnly = ({ children, text }: { children: ReactElement; text: string }) =>
   isTelegramMiniApp() ? <TelegramGate state="unlinked" text={text} /> : children;
 
@@ -45,8 +45,8 @@ const App = () => (
           <AppErrorBoundary><Suspense fallback={<FullScreenLoader label="Завантаження..." />}><Routes>
             <Route path="/" element={<Index />} />
             <Route path="/staff" element={<StaffPortal />} />
-            <Route path="/staff/join/:token" element={<WebOnly text="У боті реєстрація супроводу — командою /register."><StaffRegister /></WebOnly>} />
-            <Route path="/registry" element={<WebOnly text="Стійка реєстрації працює у звичайному браузері."><Registry /></WebOnly>} />
+            <Route path="/staff/join/:token" element={<WebOnly text="У боті реєстрація супроводу — за посиланням від адміністратора."><StaffRegister /></WebOnly>} />
+            <Route path="/registry" element={<Registry />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes></Suspense></AppErrorBoundary>

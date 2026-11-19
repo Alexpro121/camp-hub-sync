@@ -11,7 +11,7 @@ export type TelegramBlockState = 'unlinked' | 'pending' | 'revoked' | 'error';
 
 export type TelegramAuthResult =
   | { state: 'ok'; role: 'child'; childId: string; teamNumber: number | null; shiftId: string | null }
-  | { state: 'ok'; role: 'staff' | 'admin'; kind: string; fullName: string }
+  | { state: 'ok'; role: 'staff' | 'admin'; kind: string; fullName: string; registryToken?: string }
   | { state: Exclude<TelegramBlockState, 'error'> }
   | { state: 'error'; offline: boolean };
 
@@ -37,6 +37,7 @@ interface TgAuthResponse {
   kind?: string;
   fullName?: string;
   session?: { access_token?: string; refresh_token?: string };
+  registryToken?: string;
 }
 
 let pending: Promise<TelegramAuthResult> | null = null;
@@ -80,7 +81,7 @@ async function signIn(): Promise<TelegramAuthResult> {
     if (data.role === 'admin') saveSession('admin');
     // Супровід відновлює кабінет із сесії; збережена роль дитини з цього пристрою не повинна заважати.
     else if (getSavedRole() === 'child') clearSavedSession();
-    return { state: 'ok', role: data.role === 'admin' ? 'admin' : 'staff', kind: String(data.kind ?? ''), fullName: String(data.fullName ?? '') };
+    return { state: 'ok', role: data.role === 'admin' ? 'admin' : 'staff', kind: String(data.kind ?? ''), fullName: String(data.fullName ?? ''), registryToken: data.registryToken };
   }
 
   // Неприв'язаний акаунт: прибираємо будь-яку попередню сесію з цього пристрою.

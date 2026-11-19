@@ -4,15 +4,25 @@ import { BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '
 
 /**
  * Бот — лише оболонка для Mini App. Уся логіка (вхід дитини, реєстрація, підтвердження) — у застосунку (функція tg-app).
- * Бот вміє три речі:
+ * Бот уміє:
  *  - /start (і посилання реєстрації /start reg_<код>) — кнопка відкриття застосунку;
  *  - приймає номер телефону, яким користувач поділився із застосунку (лише власний номер);
+ *  - /registry — кнопка стійки реєстрації, лише для працівників (дітям і стороннім — звичайна кнопка);
  *  - на все інше відповідає кнопкою «Відкрити».
  */
 
 const openButton = (url: string, text = 'Відкрити застосунок') => ({ inline_keyboard: [[{ text, web_app: { url } }]] });
 const send = (chatId: number, text: string, url = WEBAPP_URL, button?: string) =>
   tg('sendMessage', { chat_id: chatId, text, reply_markup: openButton(url, button) });
+
+/** Активний працівник (супровід, каченя, лікар або адмін), прив'язаний до цього Telegram. */
+async function isActiveStaff(tgId: number): Promise<boolean> {
+  const svc = admin();
+  const { data: link } = await svc.from('telegram_links').select('user_id').eq('tg_user_id', tgId).eq('kind', 'staff').eq('status', 'active').maybeSingle();
+  if (!link?.user_id) return false;
+  const { data: member } = await svc.from('staff_members').select('is_active').eq('user_id', link.user_id).maybeSingle();
+  return Boolean(member?.is_active);
+}
 
 // deno-lint-ignore no-explicit-any
 async function handleUpdate(update: any) {
@@ -39,6 +49,14 @@ async function handleUpdate(update: any) {
     );
     await send(user.id, 'Номер отримано ✅ Поверніться в застосунок, щоб завершити реєстрацію.');
     return;
+  }
+
+  // /registry — стійка реєстрації в застосунку, лише для активних працівників (не дітей).
+  if (/^\/registry(?:@[A-Za-z0-9_]+)?\s*$/i.test(String(msg.text ?? '').trim())) {
+    if (await isActiveStaff(user.id)) {
+      await send(user.id, 'Стійка реєстрації дітей. Натисніть кнопку нижче.', `${WEBAPP_URL}/registry`, 'Стійка реєстрації');
+      return;
+    }
   }
 
   // Посилання реєстрації працівників веде в застосунок з кодом; усе інше — звичайне відкриття.

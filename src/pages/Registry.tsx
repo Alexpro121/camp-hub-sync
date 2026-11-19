@@ -5,6 +5,8 @@ import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registry
 import { toast } from 'sonner';
 import ExitConfirm from '@/components/ExitConfirm';
 import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegistryScope } from '@/lib/registrySync';
+import { isTelegramMiniApp, telegramSignIn } from '@/lib/telegramAuth';
+import TelegramGate from '@/components/telegram/TelegramGate';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
@@ -23,6 +25,23 @@ async function call(body: Record<string, unknown>, timeoutMs = 12_000) {
   if (error) throw new Error('network');
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+/** У Telegram стійку відкриває будь-який активний працівник: токен видає сервер за підписаним Telegram ID, без пароля. */
+function TelegramRegistryGate({ onToken }: { onToken: (t: string) => void }) {
+  const [denied, setDenied] = useState<'error' | 'revoked' | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    telegramSignIn().then((r) => {
+      if (cancelled) return;
+      if (r.state === 'ok' && r.role !== 'child' && r.registryToken) onToken(r.registryToken);
+      else setDenied(r.state === 'error' ? 'error' : 'revoked');
+    });
+    return () => { cancelled = true; };
+  }, [onToken]);
+  if (denied === 'revoked') return <TelegramGate state="revoked" text="Стійка реєстрації доступна лише супроводу, каченятам, лікарям і адміністраторам." />;
+  if (denied === 'error') return <TelegramGate state="error" />;
+  return <div className="min-h-[100dvh] grid place-items-center bg-[#05070D]"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
 }
 
 function Gate({ onToken }: { onToken: (t: string) => void }) {
@@ -524,10 +543,10 @@ export default function Registry() {
   });
   const [shiftId, setShiftId] = useState<string | null | undefined>(() => token ? readRegistryScope(localStorage) : undefined);
   useEffect(() => { document.title = 'Реєстрація дітей'; }, []);
-  const onToken = (t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); };
+  const onToken = useCallback((t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); }, []);
   const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('ironshift:registry-scope'); setToken(null); setShiftId(undefined); }, []);
   const pick = useCallback((id: string | null) => { localStorage.setItem('ironshift:registry-scope', id ?? 'all'); setShiftId(id); }, []);
-  if (!token) return <Gate onToken={onToken} />;
+  if (!token) return isTelegramMiniApp() ? <TelegramRegistryGate onToken={onToken} /> : <Gate onToken={onToken} />;
   if (shiftId === undefined) return <ShiftPick token={token} onPick={pick} onLogout={logout} />;
   return <Desk key={shiftId ?? 'all'} token={token} shiftId={shiftId} onChangeShift={() => setShiftId(undefined)} onLogout={logout} />;
 }
