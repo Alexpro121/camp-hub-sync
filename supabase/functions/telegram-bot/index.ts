@@ -1,7 +1,7 @@
 import { admin } from '../_shared/accounts.ts';
 import { normPhone, parseStartPayload, safeEqual, type TgUser } from '../_shared/telegramCore.ts';
-import { ADMIN_TG_IDS, BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
-import { demoChild, SWAP_LABEL, type SwapRole } from '../_shared/telegramDemo.ts';
+import { BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
+import { canSwap, demoChild, SWAP_LABEL, type SwapRole } from '../_shared/telegramDemo.ts';
 
 /**
  * Бот — лише оболонка для Mini App. Уся логіка (вхід дитини, реєстрація, підтвердження) — у застосунку (функція tg-app).
@@ -49,8 +49,8 @@ async function handleUpdate(update: any) {
   if (update?.callback_query) {
     const q = update.callback_query;
     const role = String(q.data ?? '').startsWith('swap:') ? String(q.data).slice(5) : null;
-    // ТИМЧАСОВО: вибір ролі для демо (/swap) — лише адміни зі списку.
-    if (role && ADMIN_TG_IDS.has(q.from?.id)) {
+    // ТИМЧАСОВО: вибір ролі для демо (/swap) — лише адміни.
+    if (role && Number.isSafeInteger(q.from?.id) && (await canSwap(admin(), q.from.id))) {
       await answerSwap(q.id, q.from.id, role);
       return;
     }
@@ -78,8 +78,14 @@ async function handleUpdate(update: any) {
     return;
   }
 
-  // ТИМЧАСОВО: /swap — демо від імені будь-якої ролі, лише для адмінів зі списку. Іншим — звичайне привітання.
-  if (/^\/swap(?:@[A-Za-z0-9_]+)?\s*$/i.test(String(msg.text ?? '').trim()) && ADMIN_TG_IDS.has(user.id)) {
+  // ТИМЧАСОВО: /swap — демо від імені будь-якої ролі, лише для адмінів. Працівнику-не-адміну пояснюємо, решті — привітання.
+  const isSwapCmd = /^\/swap(?:@[A-Za-z0-9_]+)?\s*$/i.test(String(msg.text ?? '').trim());
+  const swapAllowed = isSwapCmd && (await canSwap(admin(), user.id));
+  if (isSwapCmd && !swapAllowed && (await isActiveStaff(user.id))) {
+    await send(user.id, `Команда /swap доступна лише адміністратору. Ваш Telegram ID: ${user.id}`);
+    return;
+  }
+  if (swapAllowed) {
     await tg('sendMessage', {
       chat_id: user.id,
       text: 'Демо-режим: від чийого імені відкрити застосунок?',

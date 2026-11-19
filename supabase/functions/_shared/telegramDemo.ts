@@ -1,9 +1,9 @@
 import { admin, ensureRole, issueSession } from './accounts.ts';
-import { sessionForUser } from './telegramServer.ts';
+import { ADMIN_TG_IDS, sessionForUser, userIsAdmin } from './telegramServer.ts';
 
 /**
- * ТИМЧАСОВИЙ демо-режим /swap: адмін зі списку TELEGRAM_ADMIN_IDS відкриває застосунок від імені іншої ролі,
- * щоб показати, як усе виглядає з кожного боку. Працює лише для адмінів зі списку (перевіряють tg-auth і бот).
+ * ТИМЧАСОВИЙ демо-режим /swap: адмін відкриває застосунок від імені іншої ролі,
+ * щоб показати, як усе виглядає з кожного боку. Працює лише для адмінів (canSwap; перевіряють tg-auth і бот).
  * Ролі працівників — окремі демо-акаунти (логін demo+<тип>), дитина — перша дитина з бази.
  * Щоб прибрати режим: видалити цей файл, гілку swap у tg-auth і команду /swap у боті, DROP TABLE telegram_role_swaps.
  */
@@ -11,6 +11,18 @@ import { sessionForUser } from './telegramServer.ts';
 type Svc = ReturnType<typeof admin>;
 export type SwapRole = 'child' | 'supervisor' | 'duckling' | 'doctor';
 export const SWAP_LABEL: Record<SwapRole, string> = { child: 'Дитина', supervisor: 'Супровід', duckling: 'Каченя', doctor: 'Лікар' };
+
+/**
+ * Хто може користуватися /swap: адмін зі списку TELEGRAM_ADMIN_IDS або активний працівник,
+ * прив'язаний до цього Telegram, з роллю адміна в базі.
+ */
+export async function canSwap(svc: Svc, tgId: number): Promise<boolean> {
+  if (ADMIN_TG_IDS.has(tgId)) return true;
+  const { data: link } = await svc.from('telegram_links').select('user_id').eq('tg_user_id', tgId).eq('kind', 'staff').eq('status', 'active').maybeSingle();
+  if (!link?.user_id) return false;
+  const { data: member } = await svc.from('staff_members').select('is_active').eq('user_id', link.user_id).maybeSingle();
+  return Boolean(member?.is_active) && (await userIsAdmin(svc, link.user_id));
+}
 
 export async function demoChild(svc: Svc) {
   const { data } = await svc.from('children').select('id, team_number, shift_id').is('deleted_at', null).order('created_at').limit(1);
