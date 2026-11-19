@@ -214,6 +214,11 @@ Deno.serve(async (req) => {
     const { data: child } = await cq.maybeSingle();
     if (!child) return json({ error: 'child_not_found' }, 404);
 
+    // Профіль, прив'язаний до Telegram, відкривається лише з того акаунта через бота:
+    // знання ПІБ і команди більше не дає входу на сайті.
+    const { data: tgLinks } = await svc.from('telegram_links').select('tg_user_id').eq('child_id', childId).eq('status', 'active');
+    if (tgLinks?.length) return json({ error: 'telegram_bound' }, 403);
+
     const session = await issueSession(`child-${childId}@ironhelp.local`, 'child', { child_id: childId });
     const { error: updateError } = await svc.from('children').update({ has_logged_in: true }).eq('id', childId);
     if (updateError) return json({ error: 'login_failed' }, 500);

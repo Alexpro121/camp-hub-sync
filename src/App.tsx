@@ -1,5 +1,5 @@
 import { lazyRetry } from '@/lib/lazyRetry';
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -13,6 +13,12 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { FullScreenLoader } from "@/components/ui/loader";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
+import TelegramGate from "@/components/telegram/TelegramGate";
+import { isTelegramMiniApp } from "@/lib/telegramAuth";
+
+/** Сторінки, яких у Telegram-боті немає: там реєстрація — командою /register, а стійка реєстрації працює в браузері. */
+const WebOnly = ({ children, text }: { children: ReactElement; text: string }) =>
+  isTelegramMiniApp() ? <TelegramGate state="unlinked" text={text} /> : children;
 
 const StaffPortal = lazyRetry(() => import("./pages/StaffPortal.tsx"));
 const Registry = lazyRetry(() => import("./pages/Registry.tsx"));
@@ -39,8 +45,8 @@ const App = () => (
           <AppErrorBoundary><Suspense fallback={<FullScreenLoader label="Завантаження..." />}><Routes>
             <Route path="/" element={<Index />} />
             <Route path="/staff" element={<StaffPortal />} />
-            <Route path="/staff/join/:token" element={<StaffRegister />} />
-            <Route path="/registry" element={<Registry />} />
+            <Route path="/staff/join/:token" element={<WebOnly text="У боті реєстрація супроводу — командою /register."><StaffRegister /></WebOnly>} />
+            <Route path="/registry" element={<WebOnly text="Стійка реєстрації працює у звичайному браузері."><Registry /></WebOnly>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes></Suspense></AppErrorBoundary>

@@ -1,7 +1,7 @@
 import { admin, corsHeaders, json, SERVICE_KEY } from '../_shared/accounts.ts';
 
-// Пароль реєстраційної стійки живе лише на сервері.
-const REGISTRY_PASSWORD = 'стефанія2026';
+// Пароль реєстраційної стійки живе лише в секретах функції (REGISTRY_PASSWORD), не в коді.
+const REGISTRY_PASSWORD = (Deno.env.get('REGISTRY_PASSWORD') ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
 const TOKEN_TTL_MS = 14 * 3600_000;
 const LIMIT_PER_MIN = 5;
 
@@ -43,6 +43,8 @@ Deno.serve(async (req) => {
       const { count } = await svc.from('login_attempts').select('id', { count: 'exact', head: true })
         .eq('scope', 'registry').eq('key', ip).gte('created_at', since);
       if ((count ?? 0) >= LIMIT_PER_MIN) return json({ error: 'too_many_attempts' });
+      // Без секрету вхід вимкнено, а не відкритий.
+      if (!REGISTRY_PASSWORD) return json({ error: 'registry_disabled' });
       const p = canon(String(body.password ?? ''));
       if (p !== REGISTRY_PASSWORD && toUa(p) !== REGISTRY_PASSWORD) {
         await svc.from('login_attempts').insert({ scope: 'registry', key: ip });

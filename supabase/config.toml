@@ -1,1 +1,8 @@
 project_id = "gdwmjevqmkcyyvsmfiax"
+
+# Telegram: вебхук викликає сам Telegram (без JWT), а tg-auth перевіряє підпис initData.
+[functions.telegram-bot]
+verify_jwt = false
+
+[functions.tg-auth]
+verify_jwt = false

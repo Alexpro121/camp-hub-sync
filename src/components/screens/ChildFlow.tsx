@@ -44,6 +44,7 @@ import { TRAIN_FEATURE_ENABLED } from '@/lib/trips';
 import ScheduleView from '@/components/schedule/ScheduleView';
 import { useScheduleNotifier } from '@/hooks/useScheduleNotifier';
 import ExitConfirm from '@/components/ExitConfirm';
+import TelegramGate from '@/components/telegram/TelegramGate';
 import ChildPass from '@/components/child/ChildPass';
 import { useTalentEventActive } from '@/hooks/useTalentEventActive';
 import { useAggressiveFairUnlock } from '@/hooks/useAggressiveFairUnlock';
@@ -61,8 +62,10 @@ import {
 } from '@/lib/session';
 import { CertificateModal } from '@/components/certificate/CertificateModal';
 
-interface Props { 
-  onBack: () => void; 
+interface Props {
+  onBack: () => void;
+  /** Відкрито в Telegram: вхід уже зробив бот, форми входу й кнопки «Вийти» немає. */
+  telegramMode?: boolean;
 }
 
 interface Candidate {
@@ -85,8 +88,9 @@ async function invokeLogin(body: Record<string, unknown>) {
   return last;
 }
 
-const ChildFlow = ({ onBack }: Props) => {
+const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
   const [step, setStep] = useState<'login' | 'profile'>('login');
+  const [restoreDone, setRestoreDone] = useState(false);
   const [fullName, setFullName] = useState('');
   const [team, setTeam] = useState('');
   const [loading, setLoading] = useState(false);
@@ -149,7 +153,7 @@ const ChildFlow = ({ onBack }: Props) => {
     };
     (async () => {
       const savedId = getSavedRole() === 'child' ? getSavedChildId() : null;
-      if (!savedId) return;
+      if (!savedId) { setRestoreDone(true); return; }
 
       try {
         const { data: sess } = await supabase.auth.getSession();
@@ -167,6 +171,8 @@ const ChildFlow = ({ onBack }: Props) => {
         setStep('profile');
       } catch {
         fallbackToSnapshot(savedId);
+      } finally {
+        if (!cancelled) setRestoreDone(true);
       }
     })();
 
@@ -241,7 +247,12 @@ const ChildFlow = ({ onBack }: Props) => {
     setLoading(true);
     try {
       const { data, error } = await invokeLogin({ action: 'claim', childId: candidate.id, ticket: candidate.ticket });
-      if (error || !data?.session) throw new Error('Не вдалося увійти');
+      if (error || !data?.session) {
+        let code: string | undefined;
+        const ctx = (error as { context?: { clone?: () => Response } } | null)?.context;
+        try { code = (await ctx?.clone?.().json())?.error; } catch { /* тіло без JSON */ }
+        throw new Error(code === 'telegram_bound' ? 'Твій профіль відкривається через Telegram-бота' : 'Не вдалося увійти');
+      }
 
       await supabase.auth.setSession({
         access_token: data.session.access_token,
@@ -361,12 +372,14 @@ const ChildFlow = ({ onBack }: Props) => {
     return (
       <div className={`relative min-h-[100dvh] w-full max-w-md mx-auto px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] safe-top flex flex-col gap-4 overflow-x-hidden transition-colors duration-300 ${t.page}`}>
         <header className="flex items-center justify-between gap-2">
-          <ExitConfirm onConfirm={() => { haptics.impact('light'); handleExit(); }}>
-            <button className={`inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-xl border text-[13px] font-medium transition-colors active:scale-[0.97] ${t.btn}`}>
-              <ArrowLeft className="w-4 h-4" strokeWidth={2} />
-              Вийти
-            </button>
-          </ExitConfirm>
+          {telegramMode ? <span aria-hidden="true" /> : (
+            <ExitConfirm onConfirm={() => { haptics.impact('light'); handleExit(); }}>
+              <button className={`inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-xl border text-[13px] font-medium transition-colors active:scale-[0.97] ${t.btn}`}>
+                <ArrowLeft className="w-4 h-4" strokeWidth={2} />
+                Вийти
+              </button>
+            </ExitConfirm>
+          )}
           <button
             onClick={toggleTheme}
             aria-label={isDark ? 'Світла тема' : 'Темна тема'}
@@ -487,7 +500,14 @@ const ChildFlow = ({ onBack }: Props) => {
 
   /* =========================================================================
      ЕКРАН 2: ФОРМА ВХОДУ (НЕАВТОРИЗОВАНИЙ СТАН)
+     У Telegram форми немає: вхід робить бот, тут лише очікування або помилка.
   ========================================================================= */
+  if (telegramMode) {
+    return restoreDone
+      ? <TelegramGate state="error" text="Не вдалося завантажити профіль. Перевірте зв’язок і спробуйте ще раз." />
+      : <FullScreenLoader label="Відкриваємо кабінет..." />;
+  }
+
   return (
     <div className={`min-h-[100dvh] w-full max-w-md mx-auto px-4 py-5 safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col justify-between select-none transition-colors duration-500 overflow-x-hidden ${
       isDark ? 'bg-[#07090E] text-slate-100' : 'bg-[#F4F6F9] text-slate-900'

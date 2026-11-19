@@ -16,6 +16,8 @@ import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
 import ExitConfirm from '@/components/ExitConfirm';
 import ForcePasswordChange from '@/components/staff/ForcePasswordChange';
+import TelegramGate from '@/components/telegram/TelegramGate';
+import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
@@ -44,6 +46,9 @@ const StaffPortal = () => {
   const [uploading, setUploading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // У Telegram кабінет відкривається лише для акаунта, який бот підтвердив; форми входу там немає.
+  const [tgMode] = useState<boolean>(() => isTelegramMiniApp());
+  const [tgBlock, setTgBlock] = useState<TelegramBlockState | null>(null);
 
   const inPanel = Boolean(cabinet && activeTeam !== null);
 
@@ -56,23 +61,34 @@ const StaffPortal = () => {
     const controller = new AbortController();
     (async () => {
       try {
+        if (tgMode) {
+          const signedIn = await telegramSignIn();
+          if (controller.signal.aborted) return;
+          if (signedIn.state !== 'ok') { setTgBlock(signedIn.state); return; }
+          // Дитина й адмін мають свої екрани на головній сторінці.
+          if (signedIn.role !== 'staff') { navigate('/', { replace: true }); return; }
+        }
         const { data } = await supabase.auth.getUser();
         if (data.user && !controller.signal.aborted) {
           const result = await call<Cabinet | { cabinet: null }>({ action: 'cabinet', allow_missing: true }, { signal: controller.signal });
           if (controller.signal.aborted) return;
-          if ('cabinet' in result) return;
+          if ('cabinet' in result) { if (tgMode) setTgBlock('revoked'); return; }
           setCabinet(result);
           const savedTeam = localStorage.getItem('helpsuprov:supervisor-team');
           const team = savedTeam ? Number(savedTeam) : null;
           if (team !== null && Number.isInteger(team) && result.assignments.some((assignment) => assignment.team_number === team)) setActiveTeam(team);
         }
       } catch (error: unknown) {
-        if (!controller.signal.aborted && error instanceof Error && !['not_staff', 'unauthorized', 'aborted'].includes(error.message)) toast.error(staffErr(error));
+        if (controller.signal.aborted) return;
+        if (tgMode) setTgBlock(error instanceof Error && ['not_staff', 'forbidden'].includes(error.message) ? 'revoked' : 'error');
+        else if (error instanceof Error && !['not_staff', 'unauthorized', 'aborted'].includes(error.message)) toast.error(staffErr(error));
       } finally {
         if (!controller.signal.aborted) setBooting(false);
       }
     })();
     return () => controller.abort();
+  // Перевірка входу — один раз при відкритті екрана (tgMode і navigate не змінюються).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadCabinet]);
 
   const [showPass, setShowPass] = useState(false);
@@ -158,16 +174,22 @@ const StaffPortal = () => {
 
   if (booting) return <FullScreenLoader label="Завантаження кабінету..." />;
 
-  if (cabinet?.must_change_password) {
+  // Telegram: без підтвердженого ботом акаунта показуємо лише підказку, а не форму входу.
+  if (tgMode && (tgBlock || !cabinet)) return <TelegramGate state={tgBlock ?? 'revoked'} />;
+  // Вихід у Telegram просто закриває застосунок; наступне відкриття знову перевірить акаунт.
+  const exit = tgMode ? closeMiniApp : logout;
+
+  // У Telegram пароль не потрібен (вхід через бота), тож екрану зміни пароля там немає.
+  if (cabinet?.must_change_password && !tgMode) {
     return (
       <main className={cn('min-h-[100dvh] bg-background', theme === 'light' && 'staff-light')}>
-        <ForcePasswordChange onDone={() => setCabinet((c) => (c ? { ...c, must_change_password: false } : c))} onLogout={logout} />
+        <ForcePasswordChange onDone={() => setCabinet((c) => (c ? { ...c, must_change_password: false } : c))} onLogout={exit} />
       </main>
     );
   }
 
   if (cabinet?.kind === 'doctor') {
-    return <Suspense fallback={<FullScreenLoader label="Відкриваємо медичний список..." />}><DoctorDesk name={cabinet.full_name} theme={theme} toggleTheme={toggleTheme} onLogout={logout} /></Suspense>;
+    return <Suspense fallback={<FullScreenLoader label="Відкриваємо медичний список..." />}><DoctorDesk name={cabinet.full_name} theme={theme} toggleTheme={toggleTheme} onLogout={exit} /></Suspense>;
   }
 
   if (inPanel) {
@@ -252,11 +274,13 @@ const StaffPortal = () => {
               <Button variant="secondary" className="flex-1 min-w-0 rounded-xl" onClick={() => setProfileOpen(true)}>
                 <Pencil className="w-4 h-4 mr-1.5" /> Мої контакти
               </Button>
-              <ExitConfirm onConfirm={logout}>
-                <Button variant="secondary" className="flex-1 min-w-0 rounded-xl">
-                  <LogOut className="w-4 h-4 mr-1.5" /> Вийти
-                </Button>
-              </ExitConfirm>
+              {!tgMode && (
+                <ExitConfirm onConfirm={logout}>
+                  <Button variant="secondary" className="flex-1 min-w-0 rounded-xl">
+                    <LogOut className="w-4 h-4 mr-1.5" /> Вийти
+                  </Button>
+                </ExitConfirm>
+              )}
             </div>
 
             {cabinet.assignments.length === 0 && (
