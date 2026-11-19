@@ -35,12 +35,16 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         // Ярмарок і потяг вимкнені: їхній код не вантажимо в кеш телефонів
         globIgnores: ["**/{ChildCoupeCard,ChildFairCard,SupervisorFairView,CoupeManager,CoupeSwapSettings,TrainPublishStatus,TrainTab,AdminTrainView,AdminPrintQRCodes,FairHowTo,ApplePayScannerModal,useTrainSettings,useAggressiveFairUnlock}-*.js"],
-        navigateFallbackDenylist: [/^\/~oauth/],
+        // Сторінку при запуску завжди беремо з мережі (свіжа версія після кожного деплою, зокрема в Telegram);
+        // збережена копія — лише запасний варіант без інтернету. Раніше збережений index.html віддавався першим,
+        // і після оновлення застосунок відкривався у старій версії.
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === "navigate",
             handler: "NetworkFirst",
-            options: { cacheName: "html-nav", networkTimeoutSeconds: 3 },
+            options: { cacheName: "html-nav", networkTimeoutSeconds: 5, matchOptions: { ignoreSearch: true } },
           },
           {
             urlPattern: ({ request, sameOrigin }) =>
