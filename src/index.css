@@ -191,7 +191,9 @@
   .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
 
   /* Safe-area helpers for phones / Telegram */
-  .safe-top { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
+  /* У повноекранному Telegram зверху лежать кнопки клієнта («Закрити», меню): відступаємо на їхню висоту
+     (змінні --tg-*-safe-area-inset-* виставляє telegram-web-app.js; поза Telegram вони 0). */
+  .safe-top { padding-top: calc(max(env(safe-area-inset-top), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px) + 0.5rem); }
   .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + 1.5rem); }
   .fab-bottom { bottom: calc(env(safe-area-inset-bottom) + 1.25rem); }
 

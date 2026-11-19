@@ -12,6 +12,20 @@ export const isInTelegram = (): boolean => {
   return Boolean(tg && tg.platform && tg.platform !== 'unknown');
 };
 
+/** Клієнти Telegram на ноутбуці й ПК: там Mini App за замовчуванням відкривається маленьким вікном. */
+const DESKTOP_PLATFORMS = new Set(['tdesktop', 'macos', 'web', 'weba', 'webk', 'unigram']);
+
+/** На комп'ютері розгортаємо Mini App на весь екран (Bot API 8.0+); на телефонах лишаємо звичайний вигляд. */
+const requestDesktopFullscreen = (tg: TelegramWebApp) => {
+  if (!DESKTOP_PLATFORMS.has(tg.platform) || tg.isFullscreen) return;
+  if (typeof tg.requestFullscreen !== 'function' || !tg.isVersionAtLeast?.('8.0')) return;
+  try {
+    tg.requestFullscreen();
+  } catch {
+    // Старий клієнт або браузер не дозволив — лишається звичайне вікно.
+  }
+};
+
 /**
  * Initialize the Telegram Web App once (idempotent).
  * - Marks ready, expands, locks vertical swipes, applies theme colors.
@@ -24,6 +38,7 @@ export const initTelegramWebApp = () => {
   try {
     tg.ready();
     tg.expand();
+    requestDesktopFullscreen(tg);
     if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
     if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor('#0d1424');
     if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('#0d1424');

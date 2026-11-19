@@ -105,6 +105,11 @@ export interface TelegramWebApp {
   ) => void;
   openLink: (url: string, options?: { try_instant_view?: boolean }) => void;
   openTelegramLink: (url: string) => void;
+  /** Bot API 8.0+: повноекранний режим (на комп'ютері — на весь екран замість маленького вікна). */
+  isFullscreen?: boolean;
+  requestFullscreen?: () => void;
+  exitFullscreen?: () => void;
+  isVersionAtLeast?: (version: string) => boolean;
   /** Bot API 6.9+: просить користувача поділитися номером; контакт надходить боту. */
   requestContact?: (cb?: (sent: boolean) => void) => void;
   onEvent: (event: string, cb: (...args: any[]) => void) => void;
