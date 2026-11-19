@@ -60,7 +60,7 @@ async function demoStaffUser(svc: Svc, kind: Exclude<SwapRole, 'child'>): Promis
 
 export type DemoIdentity =
   | { role: 'child'; childId: string; teamNumber: number; shiftId: string | null; session: unknown }
-  | { role: 'staff'; kind: string; fullName: string; session: unknown };
+  | { role: 'staff'; kind: string; fullName: string; userId: string; session: unknown };
 
 /** Сесія для обраної демо-ролі або null (наприклад, у базі ще немає дітей). */
 export async function demoIdentity(svc: Svc, role: SwapRole): Promise<DemoIdentity | null> {
@@ -71,5 +71,5 @@ export async function demoIdentity(svc: Svc, role: SwapRole): Promise<DemoIdenti
     return { role: 'child', childId: child.id, teamNumber: child.team_number, shiftId: child.shift_id, session };
   }
   const { userId, fullName } = await demoStaffUser(svc, role);
-  return { role: 'staff', kind: role, fullName, session: await sessionForUser(svc, userId) };
+  return { role: 'staff', kind: role, fullName, userId, session: await sessionForUser(svc, userId) };
 }

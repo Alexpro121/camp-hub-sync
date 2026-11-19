@@ -111,11 +111,12 @@ export async function childTeams(svc: Svc): Promise<number[]> {
   return [...teams].sort((a, b) => a - b);
 }
 
-async function recentAttempts(svc: Svc, tgId: number): Promise<number> {
-  const since = new Date(Date.now() - CHILD_ATTEMPT_WINDOW_MS).toISOString();
-  const { count } = await svc.from('login_attempts').select('id', { count: 'exact', head: true })
-    .eq('scope', 'tg-child').eq('key', String(tgId)).gte('created_at', since);
-  return count ?? 0;
+/** Зараховує спробу пошуку, якщо ліміт не вичерпано. Підрахунок і запис — атомарно в базі (паралельні запити не проскочать). */
+async function takeChildAttempt(svc: Svc, tgId: number): Promise<boolean | null> {
+  const { data, error } = await svc.rpc('telegram_child_attempt', {
+    p_key: String(tgId), p_limit: CHILD_ATTEMPT_LIMIT, p_window_seconds: Math.round(CHILD_ATTEMPT_WINDOW_MS / 1000),
+  });
+  return error ? null : data === true;
 }
 export const recordChildAttempt = (svc: Svc, tgId: number) => svc.from('login_attempts').insert({ scope: 'tg-child', key: String(tgId) });
 
@@ -138,15 +139,16 @@ async function readTicket(tgId: number, ticket: string): Promise<string | null> 
 
 export type ChildSearchResult =
   | { state: 'found'; masked: string; team: number; ticket: string }
-  | { state: 'not_found' | 'ambiguous' | 'too_many' | 'no_shift' | 'already_linked' };
+  | { state: 'not_found' | 'ambiguous' | 'too_many' | 'no_shift' | 'already_linked' | 'error' };
 
 /** Пошук себе в списку: лише прізвище й ініціали у відповіді; кожен пошук іде в ліміт спроб. */
 export async function childSearch(svc: Svc, user: TgUser, rawName: string, team: number): Promise<ChildSearchResult> {
   if (await activeLink(svc, user.id)) return { state: 'already_linked' };
   const name = String(rawName ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
   if (name.length < 2 || name.length > 120 || !Number.isInteger(team) || team < 1 || team > 999) return { state: 'not_found' };
-  if ((await recentAttempts(svc, user.id)) >= CHILD_ATTEMPT_LIMIT) return { state: 'too_many' };
-  await recordChildAttempt(svc, user.id);
+  const attempt = await takeChildAttempt(svc, user.id);
+  if (attempt === null) return { state: 'error' };
+  if (!attempt) return { state: 'too_many' };
   const liveIds = await liveShifts(svc);
   if (!liveIds.length) return { state: 'no_shift' };
   const { data: pool } = await svc.from('children').select('id, full_name, team_number').in('shift_id', liveIds).eq('team_number', team).is('deleted_at', null);
@@ -185,6 +187,11 @@ export async function childConfirm(svc: Svc, user: TgUser, ticket: string): Prom
     child_id: child.id, tg_user_id: user.id, tg_username: normTgUsername(user.username), tg_name: tgDisplayName(user),
   });
   if (reqErr) return { state: 'already_requested' };
+  // Попереджаємо власника поточного Telegram: якщо це не він — скаже супроводу, і запит відхилять.
+  const { data: current } = await svc.from('telegram_links').select('tg_user_id').eq('kind', 'child').eq('child_id', child.id).eq('status', 'active');
+  for (const row of current ?? []) {
+    await notify(Number(row.tg_user_id), '⚠️ Хтось намагається відкрити твій профіль з іншого Telegram. Якщо це не ти — одразу скажи своєму супроводу, щоб запит відхилили.');
+  }
   const { tgIds } = await teamStaff(svc, child.shift_id, child.team_number);
   const recipients = tgIds.length ? tgIds : await adminRecipients(svc);
   for (const id of recipients) {
@@ -193,20 +200,20 @@ export async function childConfirm(svc: Svc, user: TgUser, ticket: string): Prom
   return { state: 'rebind_pending' };
 }
 
-export interface RebindItem { id: string; child_name: string; team_number: number; tg_name: string | null; tg_username: string | null; created_at: string }
+export interface RebindItem { id: string; child_name: string; team_number: number; tg_user_id: number; tg_name: string | null; tg_username: string | null; created_at: string }
 
 /** Запити на переприв'язку, які цей Telegram може вирішувати (адмін — усі). */
 export async function rebindList(svc: Svc, tgId: number): Promise<RebindItem[]> {
   const { data } = await svc.from('telegram_rebind_requests')
-    .select('id, child_id, tg_name, tg_username, created_at, children(full_name, team_number, shift_id, deleted_at)')
+    .select('id, child_id, tg_user_id, tg_name, tg_username, created_at, children(full_name, team_number, shift_id, deleted_at)')
     .eq('status', 'pending').order('created_at').limit(50);
   const out: RebindItem[] = [];
-  type Row = { id: string; child_id: string; tg_name: string | null; tg_username: string | null; created_at: string; children: ChildInfo | ChildInfo[] | null };
+  type Row = { id: string; child_id: string; tg_user_id: number | string; tg_name: string | null; tg_username: string | null; created_at: string; children: ChildInfo | ChildInfo[] | null };
   for (const r of (data ?? []) as unknown as Row[]) {
     const c = Array.isArray(r.children) ? r.children[0] : r.children;
     if (!c || c.deleted_at) continue;
     if (!(await canDecideForChild(svc, tgId, { ...c, id: r.child_id }))) continue;
-    out.push({ id: r.id, child_name: c.full_name, team_number: c.team_number, tg_name: r.tg_name, tg_username: r.tg_username, created_at: r.created_at });
+    out.push({ id: r.id, child_name: c.full_name, team_number: c.team_number, tg_user_id: Number(r.tg_user_id), tg_name: r.tg_name, tg_username: r.tg_username, created_at: r.created_at });
   }
   return out;
 }

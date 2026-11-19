@@ -58,35 +58,10 @@ export async function tg<T = unknown>(method: string, payload: Record<string, un
   }
 }
 
-export type MenuRole = 'child' | 'staff' | 'admin';
-
 /** Кнопка відкриття Mini App під повідомленням. */
 export const openAppKeyboard = (text = 'Відкрити застосунок') => ({
   inline_keyboard: [[{ text, web_app: { url: WEBAPP_URL } }]],
 });
-
-const COMMANDS: Record<MenuRole, { command: string; description: string }[]> = {
-  child: [{ command: 'start', description: 'Відкрити мій кабінет' }],
-  staff: [{ command: 'start', description: 'Відкрити кабінет супроводу' }],
-  admin: [
-    { command: 'start', description: 'Відкрити застосунок' },
-    { command: 'pending', description: 'Заявки на підтвердження' },
-  ],
-};
-
-/**
- * Персональне меню: кнопка «Відкрити» і список команд лише для цього чату.
- * Неприв'язаний акаунт бачить загальне меню бота, де є тільки /start.
- */
-export async function applyMenu(chatId: number, role: MenuRole | null): Promise<void> {
-  if (!role) {
-    await tg('setChatMenuButton', { chat_id: chatId, menu_button: { type: 'default' } });
-    await tg('deleteMyCommands', { scope: { type: 'chat', chat_id: chatId } });
-    return;
-  }
-  await tg('setChatMenuButton', { chat_id: chatId, menu_button: { type: 'web_app', text: 'Відкрити', web_app: { url: WEBAPP_URL } } });
-  await tg('setMyCommands', { commands: COMMANDS[role], scope: { type: 'chat', chat_id: chatId } });
-}
 
 /** Чи має акаунт роль адміністратора в базі. */
 export async function userIsAdmin(svc: Svc, userId: string): Promise<boolean> {

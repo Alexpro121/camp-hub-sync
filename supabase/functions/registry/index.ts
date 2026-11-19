@@ -15,15 +15,24 @@ async function issue(): Promise<string> {
   const exp = Date.now() + TOKEN_TTL_MS;
   return `${exp}.${await hmac(`registry:${exp}`)}`;
 }
-async function valid(token: unknown): Promise<boolean> {
+/**
+ * Токен із пароля стійки: "<exp>.<sig>". Токен працівника з Telegram (tg-auth): "<exp>.<sig>.<user_id>" —
+ * діє, лише поки акаунт активний, тож вимкнений працівник втрачає стійку одразу, а не через 14 годин.
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function valid(token: unknown, svc: ReturnType<typeof admin>): Promise<boolean> {
   if (typeof token !== 'string') return false;
-  const [exp, sig] = token.split('.');
-  if (!exp || !sig || Number(exp) < Date.now()) return false;
-  const good = await hmac(`registry:${exp}`);
+  const [exp, sig, userId, extra] = token.split('.');
+  if (!exp || !sig || extra !== undefined || Number(exp) < Date.now()) return false;
+  if (userId !== undefined && !UUID.test(userId)) return false;
+  const good = await hmac(userId ? `registry:${exp}:${userId}` : `registry:${exp}`);
   if (good.length !== sig.length) return false;
   let d = 0;
   for (let i = 0; i < good.length; i++) d |= good.charCodeAt(i) ^ sig.charCodeAt(i);
-  return d === 0;
+  if (d !== 0) return false;
+  if (!userId) return true;
+  const { data } = await svc.from('staff_members').select('is_active').eq('user_id', userId).maybeSingle();
+  return Boolean(data?.is_active);
 }
 const canon = (s: string) => (s ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
 const UA = 'йцукенгшщзхїфівапролджєячсмитьбю.';
@@ -53,7 +62,7 @@ Deno.serve(async (req) => {
       return json({ token: await issue() });
     }
 
-    if (!(await valid(body.token))) return json({ error: 'unauthorized' });
+    if (!(await valid(body.token, svc))) return json({ error: 'unauthorized' });
 
     // Активні зміни; якщо передано shift_id — працюємо лише в її межах.
     const activeShifts = async () => {

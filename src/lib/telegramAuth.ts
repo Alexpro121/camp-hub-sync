@@ -53,6 +53,11 @@ export function telegramSignIn(): Promise<TelegramAuthResult> {
   return pending;
 }
 
+/** Наступний telegramSignIn() знову спитає сервер (наприклад, коли стійка відхилила старий токен). */
+export function resetTelegramSignIn(): void {
+  pending = null;
+}
+
 async function signIn(): Promise<TelegramAuthResult> {
   const initData = getTelegramInitData();
   if (!initData) return { state: 'unlinked' };

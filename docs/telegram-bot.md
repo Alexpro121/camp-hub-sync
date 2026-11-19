@@ -62,7 +62,7 @@
    | `TELEGRAM_INITDATA_MAX_AGE` | необов'язково, секунди; за замовчуванням 86400 |
    | `REGISTRY_PASSWORD` | **новий** пароль стійки реєстрації. Старий був у коді публічного репозиторію; без секрету вхід на стійку вимкнено |
 
-3. **Міграція.** Застосуйте `drizzle/migrations/0009_telegram_bot.sql`. Вона створює таблиці й функції атомарної прив'язки. Функція `telegram_revoke_sessions` видаляє сесії з `auth.sessions`, тому міграцію треба запускати від ролі `postgres`.
+3. **Міграція.** Застосуйте `drizzle/migrations/0009_telegram_bot.sql`. Вона створює таблиці й функції атомарної прив'язки. Функція `telegram_revoke_sessions` видаляє сесії з `auth.sessions`, тому міграцію треба запускати від ролі `postgres`. Далі `0010_telegram_role_swap.sql` і `0011_telegram_link_locks.sql` (блокування в прив'язках і атомарний ліміт спроб дитини; без неї пошук дитини в Mini App повертає помилку).
 4. **Функції.** Задеплойте `tg-auth`, `tg-app`, `telegram-bot`, `child-login` і `registry`. Для `tg-auth`, `tg-app` і `telegram-bot` перевірку JWT вимкнено в `supabase/config.toml`: перші дві перевіряють підпис Telegram самі, третю викликає Telegram.
 5. **Вебхук і меню:**
 

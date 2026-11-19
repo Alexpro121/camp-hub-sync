@@ -11,7 +11,7 @@ import { isTelegramMiniApp, tgApp } from '@/lib/telegramAuth';
  */
 
 interface StaffRequest { id: string; full_name: string; phone: string; kind: string; tg_name: string | null; tg_username: string | null }
-interface Rebind { id: string; child_name: string; team_number: number; tg_name: string | null; tg_username: string | null }
+interface Rebind { id: string; child_name: string; team_number: number; tg_user_id?: number; tg_name: string | null; tg_username: string | null; created_at?: string }
 
 const KIND_LABEL: Record<string, string> = { supervisor: 'Супровід', duckling: 'Каченя', doctor: 'Лікар' };
 const btn = 'min-h-[40px] px-3 rounded-lg text-sm font-semibold active:scale-[0.97] transition-transform disabled:opacity-50';
@@ -105,7 +105,13 @@ const TelegramRequests = ({ mode }: { mode: 'admin' | 'staff' }) => {
         {rebinds.map((r) => (
           <div key={r.id} className="rounded-xl border border-border p-3 space-y-2">
             <p className="text-sm"><b>{r.child_name}</b>, команда {r.team_number}</p>
-            <p className="text-xs text-muted-foreground">Новий Telegram: {who(r.tg_name, r.tg_username)}. Підтверджуйте, лише якщо це справді дитина — попередній акаунт втратить доступ.</p>
+            <p className="text-xs text-muted-foreground">
+              Новий Telegram: {who(r.tg_name, r.tg_username) || 'без імені'}{r.tg_user_id ? ` · ID ${r.tg_user_id}` : ''}
+              {r.created_at ? ` · ${new Date(r.created_at).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Ім'я в Telegram людина вписує сама — воно нічого не доводить. Підтверджуйте, лише коли дитина поруч і показує цей акаунт на своєму телефоні: попередній акаунт втратить доступ.
+            </p>
             <div className="flex gap-2">
               <button type="button" disabled={busyId === r.id} onClick={() => decide('rebind_decide', r.id, true)} className={`${btn} bg-primary text-primary-foreground`}>
                 {busyId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Переприв\'язати'}

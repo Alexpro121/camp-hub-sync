@@ -16,15 +16,15 @@ import { canSwap, demoIdentity, type SwapRole } from '../_shared/telegramDemo.ts
  *  { state: 'revoked' }   — акаунт супроводу вимкнено
  */
 /**
- * Токен стійки реєстрації (той самий формат, що видає функція registry за паролем):
- * у Telegram стійку відкриває будь-який активний працівник без пароля.
+ * Токен стійки реєстрації: у Telegram стійку відкриває будь-який активний працівник без пароля.
+ * Токен прив'язаний до акаунта ("<exp>.<sig>.<user_id>"): функція registry перевіряє, що акаунт досі активний.
  */
 const REGISTRY_TOKEN_TTL_MS = 14 * 3600_000;
-async function registryToken(): Promise<string> {
+async function registryToken(userId: string): Promise<string> {
   const exp = Date.now() + REGISTRY_TOKEN_TTL_MS;
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`registry:${exp}`)));
-  return `${exp}.${Array.from(sig).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`registry:${exp}:${userId}`)));
+  return `${exp}.${Array.from(sig).map((b) => b.toString(16).padStart(2, '0')).join('')}.${userId}`;
 }
 
 Deno.serve(async (req) => {
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     if (swap && (await canSwap(svc, tgId))) {
       const demo = await demoIdentity(svc, swap.role as SwapRole);
       if (demo?.role === 'child') return json({ state: 'ok', role: 'child', childId: demo.childId, teamNumber: demo.teamNumber, shiftId: demo.shiftId, session: demo.session, demo: true });
-      if (demo) return json({ state: 'ok', role: 'staff', kind: demo.kind, fullName: demo.fullName, session: demo.session, registryToken: await registryToken(), demo: true });
+      if (demo) return json({ state: 'ok', role: 'staff', kind: demo.kind, fullName: demo.fullName, session: demo.session, registryToken: await registryToken(demo.userId), demo: true });
     }
 
     const { data: link, error: linkErr } = await svc
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     // Адміністратори задаються списком Telegram ID (лікар не може бути адміном); прибраний зі списку втрачає роль.
     const isAdmin = await syncEnvAdmin(svc, tgId, member.user_id, member.kind, Boolean(link.admin_from_env));
     const session = await sessionForUser(svc, member.user_id);
-    return json({ state: 'ok', role: isAdmin ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session, registryToken: await registryToken() });
+    return json({ state: 'ok', role: isAdmin ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session, registryToken: await registryToken(member.user_id) });
   } catch (e) {
     console.error('tg-auth failed:', e instanceof Error ? e.message : 'unknown');
     return json({ error: 'login_failed' }, 500);

@@ -5,7 +5,7 @@ import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registry
 import { toast } from 'sonner';
 import ExitConfirm from '@/components/ExitConfirm';
 import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegistryScope } from '@/lib/registrySync';
-import { isTelegramMiniApp, telegramSignIn } from '@/lib/telegramAuth';
+import { isTelegramMiniApp, resetTelegramSignIn, telegramSignIn } from '@/lib/telegramAuth';
 import TelegramGate from '@/components/telegram/TelegramGate';
 
 interface Kid {
@@ -27,18 +27,27 @@ async function call(body: Record<string, unknown>, timeoutMs = 12_000) {
   return data;
 }
 
-/** У Telegram стійку відкриває будь-який активний працівник: токен видає сервер за підписаним Telegram ID, без пароля. */
-function TelegramRegistryGate({ onToken }: { onToken: (t: string) => void }) {
+/**
+ * У Telegram стійку відкриває будь-який активний працівник: токен видає сервер за підписаним Telegram ID, без пароля.
+ * Сервер питаємо при кожному відкритті (збереженому токену не віримо: телефоном могла скористатися інша людина
+ * або працівника вимкнули). Без зв'язку — працюємо зі збереженим токеном, щоб стійка не зупинялась.
+ */
+function TelegramRegistryGate({ onToken, onDenied }: { onToken: (t: string) => void; onDenied: () => void }) {
   const [denied, setDenied] = useState<'error' | 'revoked' | null>(null);
   useEffect(() => {
     let cancelled = false;
     telegramSignIn().then((r) => {
       if (cancelled) return;
-      if (r.state === 'ok' && r.role !== 'child' && r.registryToken) onToken(r.registryToken);
-      else setDenied(r.state === 'error' ? 'error' : 'revoked');
+      if (r.state === 'ok' && r.role !== 'child' && r.registryToken) { onToken(r.registryToken); return; }
+      if (r.state === 'error' && r.offline) {
+        const saved = localStorage.getItem(TOKEN_KEY);
+        if (saved && Number(saved.split('.')[0]) > Date.now()) { onToken(saved); return; }
+      }
+      if (r.state !== 'error') onDenied();
+      setDenied(r.state === 'error' ? 'error' : 'revoked');
     });
     return () => { cancelled = true; };
-  }, [onToken]);
+  }, [onToken, onDenied]);
   if (denied === 'revoked') return <TelegramGate state="revoked" text="Стійка реєстрації доступна лише супроводу, каченятам, лікарям і адміністраторам." />;
   if (denied === 'error') return <TelegramGate state="error" />;
   return <div className="min-h-[100dvh] grid place-items-center bg-[#05070D]"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
@@ -537,16 +546,28 @@ function ShiftPick({ token, onPick, onLogout }: { token: string; onPick: (id: st
 }
 
 export default function Registry() {
+  const [tgMode] = useState(() => isTelegramMiniApp());
   const [token, setToken] = useState<string | null>(() => {
+    if (tgMode) return null; // у Telegram токен щоразу підтверджує сервер (TelegramRegistryGate)
     const t = localStorage.getItem(TOKEN_KEY);
     return t && Number(t.split('.')[0]) > Date.now() ? t : null;
   });
   const [shiftId, setShiftId] = useState<string | null | undefined>(() => token ? readRegistryScope(localStorage) : undefined);
   useEffect(() => { document.title = 'Реєстрація дітей'; }, []);
-  const onToken = useCallback((t: string) => { localStorage.setItem(TOKEN_KEY, t); setToken(t); }, []);
-  const logout = useCallback(() => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('ironshift:registry-scope'); setToken(null); setShiftId(undefined); }, []);
+  const onToken = useCallback((t: string) => {
+    localStorage.setItem(TOKEN_KEY, t);
+    setToken(t);
+    setShiftId((cur) => (cur === undefined ? readRegistryScope(localStorage) : cur));
+  }, []);
+  const clearStored = useCallback(() => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('ironshift:registry-scope'); }, []);
+  const logout = useCallback(() => {
+    clearStored();
+    // У Telegram наступна перевірка має піти на сервер, а не взяти той самий результат із пам'яті.
+    if (tgMode) resetTelegramSignIn();
+    setToken(null); setShiftId(undefined);
+  }, [clearStored, tgMode]);
   const pick = useCallback((id: string | null) => { localStorage.setItem('ironshift:registry-scope', id ?? 'all'); setShiftId(id); }, []);
-  if (!token) return isTelegramMiniApp() ? <TelegramRegistryGate onToken={onToken} /> : <Gate onToken={onToken} />;
+  if (!token) return tgMode ? <TelegramRegistryGate onToken={onToken} onDenied={clearStored} /> : <Gate onToken={onToken} />;
   if (shiftId === undefined) return <ShiftPick token={token} onPick={pick} onLogout={logout} />;
   return <Desk key={shiftId ?? 'all'} token={token} shiftId={shiftId} onChangeShift={() => setShiftId(undefined)} onLogout={logout} />;
 }

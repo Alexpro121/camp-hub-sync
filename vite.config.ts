@@ -44,7 +44,16 @@ export default defineConfig(({ mode }) => ({
           {
             urlPattern: ({ request }) => request.mode === "navigate",
             handler: "NetworkFirst",
-            options: { cacheName: "html-nav", networkTimeoutSeconds: 5, matchOptions: { ignoreSearch: true } },
+            options: {
+              cacheName: "html-nav",
+              networkTimeoutSeconds: 5,
+              matchOptions: { ignoreSearch: true },
+              // Немає мережі і ця сторінка ще не потрапила в html-nav (перше відкриття після встановлення):
+              // віддаємо index.html з precache цієї ж версії, щоб відкрився збережений на пристрої профіль.
+              plugins: [{
+                handlerDidError: async () => (await caches.match("/index.html", { ignoreSearch: true })) ?? undefined,
+              }],
+            },
           },
           {
             urlPattern: ({ request, sameOrigin }) =>
