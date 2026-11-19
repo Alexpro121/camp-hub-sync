@@ -105,6 +105,8 @@ export interface TelegramWebApp {
   ) => void;
   openLink: (url: string, options?: { try_instant_view?: boolean }) => void;
   openTelegramLink: (url: string) => void;
+  /** Bot API 6.9+: просить користувача поділитися номером; контакт надходить боту. */
+  requestContact?: (cb?: (sent: boolean) => void) => void;
   onEvent: (event: string, cb: (...args: any[]) => void) => void;
   offEvent: (event: string, cb: (...args: any[]) => void) => void;
 }

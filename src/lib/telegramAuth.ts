@@ -89,3 +89,22 @@ async function signIn(): Promise<TelegramAuthResult> {
   const state = data.state === 'pending' || data.state === 'revoked' ? data.state : 'unlinked';
   return { state };
 }
+
+/** Виклик дії Mini App (функція tg-app). Кожен запит підписаний initData; права перевіряє сервер. */
+export async function tgApp<T = Record<string, unknown>>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+  const { data, error } = await supabase.functions
+    .invoke<T>('tg-app', { body: { ...body, action, initData: getTelegramInitData() } })
+    .catch((e: unknown) => ({ data: null, error: e }));
+  if (error || !data) throw new Error('tg_app_failed');
+  return data;
+}
+
+/** Код реєстрації працівника: з посилання бота (?reg=) або з start_param прямого посилання на Mini App. */
+export function registrationCode(): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('reg');
+    if (fromUrl && /^[A-Za-z0-9_-]{1,64}$/.test(fromUrl)) return fromUrl;
+  } catch { /* поза браузером */ }
+  const start = getTg()?.initDataUnsafe?.start_param;
+  return typeof start === 'string' && start.startsWith('reg_') ? start : null;
+}

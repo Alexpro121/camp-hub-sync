@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import RoleSelect from '@/components/screens/RoleSelect';
 import TelegramBackButton from '@/components/telegram/TelegramBackButton';
 import TelegramGate from '@/components/telegram/TelegramGate';
+import TelegramOnboarding from '@/components/telegram/TelegramOnboarding';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole, hasChildArchiveSnapshot } from '@/lib/session';
 import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
@@ -160,7 +161,9 @@ const Index = () => {
 
   // Telegram без прив'язки (або на розгляді / вимкнено): жодних форм входу, лише підказка повернутись у бот.
   if (tgMode && (tgBlock || screen === 'role')) {
-    return <TelegramGate state={tgBlock ?? 'unlinked'} />;
+    // Неприв'язаний Telegram: перший вхід (дитина або реєстрація працівника) прямо в застосунку.
+    if (!tgBlock || tgBlock === 'unlinked') return <TelegramOnboarding />;
+    return <TelegramGate state={tgBlock} />;
   }
 
   return (

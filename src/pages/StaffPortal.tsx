@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import ExitConfirm from '@/components/ExitConfirm';
 import ForcePasswordChange from '@/components/staff/ForcePasswordChange';
 import TelegramGate from '@/components/telegram/TelegramGate';
+import TelegramRequests from '@/components/telegram/TelegramRequests';
 import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -64,6 +65,8 @@ const StaffPortal = () => {
         if (tgMode) {
           const signedIn = await telegramSignIn();
           if (controller.signal.aborted) return;
+          // Неприв'язаний Telegram проходить перший вхід на головній сторінці застосунку.
+          if (signedIn.state === 'unlinked') { setTgBlock('unlinked'); navigate('/', { replace: true }); return; }
           if (signedIn.state !== 'ok') { setTgBlock(signedIn.state); return; }
           // Дитина й адмін мають свої екрани на головній сторінці.
           if (signedIn.role !== 'staff') { navigate('/', { replace: true }); return; }
@@ -282,6 +285,8 @@ const StaffPortal = () => {
                 </ExitConfirm>
               )}
             </div>
+
+            {tgMode && <TelegramRequests mode="staff" />}
 
             {cabinet.assignments.length === 0 && (
               <div className="p-5 rounded-2xl bg-card border border-border text-sm text-muted-foreground">

@@ -9,6 +9,7 @@ import {
   parseAdminIds,
   parseCallback,
   parseCommand,
+  parseStartPayload,
   teamKeyboard,
   verifyInitData,
 } from './telegramCore.ts';
@@ -115,4 +116,13 @@ Deno.test('masked names show the surname and initials only', () => {
   assertEquals(maskName("  Лук'янова   марія "), "Лук'янова М.");
   assertEquals(maskName('Іван'), 'Іван');
   assertEquals(maskName(''), '');
+});
+
+Deno.test('start payload is read only from /start deep links', () => {
+  assertEquals(parseStartPayload('/start reg_abc123'), 'reg_abc123');
+  assertEquals(parseStartPayload('/start@iron_bot reg_abc'), 'reg_abc');
+  assertEquals(parseStartPayload('/start'), null);
+  assertEquals(parseStartPayload('/register reg_abc'), null);
+  assertEquals(parseStartPayload('/start reg abc'), null);
+  assertEquals(parseStartPayload('/start <b>x</b>'), null);
 });

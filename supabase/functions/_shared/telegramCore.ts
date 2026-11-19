@@ -128,6 +128,12 @@ export function parseCommand(text: string | undefined): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+/** Параметр посилання t.me/<бот>?start=<параметр>: "/start reg_abc" -> "reg_abc". */
+export function parseStartPayload(text: string | undefined): string | null {
+  const m = /^\/start(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9_-]{1,64})\s*$/i.exec(String(text ?? '').trim());
+  return m ? m[1] : null;
+}
+
 export type CallbackAction =
   | { type: 'child_team'; team: number }
   | { type: 'child_yes' }

@@ -13,6 +13,30 @@ export const INIT_DATA_MAX_AGE = Number(Deno.env.get('TELEGRAM_INITDATA_MAX_AGE'
 
 type Svc = ReturnType<typeof admin>;
 
+/**
+ * Код у посиланні реєстрації супроводу (t.me/<бот>?start=reg_<код>).
+ * Береться з TELEGRAM_REGISTER_CODE, а якщо його немає — стабільно виводиться з секрету вебхука,
+ * тож вгадати посилання неможливо. Щоб «відкликати» старе посилання, задайте новий TELEGRAM_REGISTER_CODE.
+ */
+export async function registrationPayload(): Promise<string | null> {
+  const custom = (Deno.env.get('TELEGRAM_REGISTER_CODE') ?? '').trim();
+  if (/^[A-Za-z0-9_-]{8,40}$/.test(custom)) return `reg_${custom}`;
+  if (!WEBHOOK_SECRET) return null;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(WEBHOOK_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('staff-registration-link')));
+  return `reg_${Array.from(sig.slice(0, 10)).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+}
+
+let botUsername: string | null = null;
+
+/** Повне посилання для реєстрації працівників або null, якщо бот не налаштований. */
+export async function registrationLink(): Promise<string | null> {
+  const payload = await registrationPayload();
+  if (!payload) return null;
+  if (!botUsername) botUsername = (await tg<{ username?: string }>('getMe', {}))?.username ?? null;
+  return botUsername ? `https://t.me/${botUsername}?start=${payload}` : null;
+}
+
 /** Виклик Bot API. Вміст повідомлень у журнал не пишемо, лише код помилки. */
 export async function tg<T = unknown>(method: string, payload: Record<string, unknown>): Promise<T | null> {
   if (!BOT_TOKEN) return null;
