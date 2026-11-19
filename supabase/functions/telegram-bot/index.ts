@@ -1,6 +1,7 @@
 import { admin } from '../_shared/accounts.ts';
 import { normPhone, parseStartPayload, safeEqual, type TgUser } from '../_shared/telegramCore.ts';
-import { BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
+import { ADMIN_TG_IDS, BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
+import { demoChild, SWAP_LABEL, type SwapRole } from '../_shared/telegramDemo.ts';
 
 /**
  * Бот — лише оболонка для Mini App. Уся логіка (вхід дитини, реєстрація, підтвердження) — у застосунку (функція tg-app).
@@ -15,6 +16,25 @@ const openButton = (url: string, text = 'Відкрити застосунок')
 const send = (chatId: number, text: string, url = WEBAPP_URL, button?: string) =>
   tg('sendMessage', { chat_id: chatId, text, reply_markup: openButton(url, button) });
 
+/** ТИМЧАСОВО: збереження обраної демо-ролі. «self» повертає власний акаунт адміна. */
+async function answerSwap(callbackId: string, tgId: number, role: string) {
+  const svc = admin();
+  if (role === 'self') {
+    await svc.from('telegram_role_swaps').delete().eq('tg_user_id', tgId);
+    await tg('answerCallbackQuery', { callback_query_id: callbackId, text: 'Повернено ваш акаунт' });
+    await send(tgId, 'Режим: ваш власний акаунт (адмін). Закрийте застосунок і відкрийте знову.');
+    return;
+  }
+  if (!Object.prototype.hasOwnProperty.call(SWAP_LABEL, role)) { await tg('answerCallbackQuery', { callback_query_id: callbackId }); return; }
+  if (role === 'child' && !(await demoChild(svc))) {
+    await tg('answerCallbackQuery', { callback_query_id: callbackId, text: 'У базі ще немає дітей — спершу завантажте список', show_alert: true });
+    return;
+  }
+  await svc.from('telegram_role_swaps').upsert({ tg_user_id: tgId, role, updated_at: new Date().toISOString() }, { onConflict: 'tg_user_id' });
+  await tg('answerCallbackQuery', { callback_query_id: callbackId, text: `Режим: ${SWAP_LABEL[role as SwapRole]}` });
+  await send(tgId, `Демо-режим: ${SWAP_LABEL[role as SwapRole]}. Закрийте застосунок (якщо відкритий) і відкрийте знову. Повернутись: /swap → «Я (адмін)».`);
+}
+
 /** Активний працівник (супровід, каченя, лікар або адмін), прив'язаний до цього Telegram. */
 async function isActiveStaff(tgId: number): Promise<boolean> {
   const svc = admin();
@@ -26,9 +46,16 @@ async function isActiveStaff(tgId: number): Promise<boolean> {
 
 // deno-lint-ignore no-explicit-any
 async function handleUpdate(update: any) {
-  // Старі кнопки під повідомленнями: просто закриваємо «годинник».
   if (update?.callback_query) {
-    await tg('answerCallbackQuery', { callback_query_id: update.callback_query.id, text: 'Відкрийте застосунок' });
+    const q = update.callback_query;
+    const role = String(q.data ?? '').startsWith('swap:') ? String(q.data).slice(5) : null;
+    // ТИМЧАСОВО: вибір ролі для демо (/swap) — лише адміни зі списку.
+    if (role && ADMIN_TG_IDS.has(q.from?.id)) {
+      await answerSwap(q.id, q.from.id, role);
+      return;
+    }
+    // Старі кнопки під повідомленнями: просто закриваємо «годинник».
+    await tg('answerCallbackQuery', { callback_query_id: q.id, text: 'Відкрийте застосунок' });
     return;
   }
   const msg = update?.message;
@@ -48,6 +75,20 @@ async function handleUpdate(update: any) {
       { onConflict: 'tg_user_id' },
     );
     await send(user.id, 'Номер отримано ✅ Поверніться в застосунок, щоб завершити реєстрацію.');
+    return;
+  }
+
+  // ТИМЧАСОВО: /swap — демо від імені будь-якої ролі, лише для адмінів зі списку. Іншим — звичайне привітання.
+  if (/^\/swap(?:@[A-Za-z0-9_]+)?\s*$/i.test(String(msg.text ?? '').trim()) && ADMIN_TG_IDS.has(user.id)) {
+    await tg('sendMessage', {
+      chat_id: user.id,
+      text: 'Демо-режим: від чийого імені відкрити застосунок?',
+      reply_markup: { inline_keyboard: [
+        [{ text: '👦 Дитина', callback_data: 'swap:child' }, { text: '🧑‍🏫 Супровід', callback_data: 'swap:supervisor' }],
+        [{ text: '🐥 Каченя', callback_data: 'swap:duckling' }, { text: '🩺 Лікар', callback_data: 'swap:doctor' }],
+        [{ text: '👑 Я (адмін)', callback_data: 'swap:self' }],
+      ] },
+    });
     return;
   }
 

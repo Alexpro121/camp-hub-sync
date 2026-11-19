@@ -1,6 +1,7 @@
 import { admin, corsHeaders, issueSession, json, SERVICE_KEY } from '../_shared/accounts.ts';
 import { verifyInitData } from '../_shared/telegramCore.ts';
-import { BOT_TOKEN, INIT_DATA_MAX_AGE, sessionForUser, syncEnvAdmin } from '../_shared/telegramServer.ts';
+import { ADMIN_TG_IDS, BOT_TOKEN, INIT_DATA_MAX_AGE, sessionForUser, syncEnvAdmin } from '../_shared/telegramServer.ts';
+import { demoIdentity, type SwapRole } from '../_shared/telegramDemo.ts';
 
 /**
  * Вхід у Mini App. Клієнт надсилає лише Telegram.WebApp.initData; сервер перевіряє підпис
@@ -37,6 +38,14 @@ Deno.serve(async (req) => {
     if (!verified.ok) return json({ error: verified.reason === 'expired' ? 'init_data_expired' : 'invalid_init_data' }, 401);
     const tgId = verified.user.id;
     const svc = admin();
+
+    // ТИМЧАСОВО: демо-режим /swap лише для адмінів зі списку TELEGRAM_ADMIN_IDS.
+    if (ADMIN_TG_IDS.has(tgId)) {
+      const { data: swap } = await svc.from('telegram_role_swaps').select('role').eq('tg_user_id', tgId).maybeSingle();
+      const demo = swap ? await demoIdentity(svc, swap.role as SwapRole) : null;
+      if (demo?.role === 'child') return json({ state: 'ok', role: 'child', childId: demo.childId, teamNumber: demo.teamNumber, shiftId: demo.shiftId, session: demo.session, demo: true });
+      if (demo) return json({ state: 'ok', role: 'staff', kind: demo.kind, fullName: demo.fullName, session: demo.session, registryToken: await registryToken(), demo: true });
+    }
 
     const { data: link, error: linkErr } = await svc
       .from('telegram_links')
