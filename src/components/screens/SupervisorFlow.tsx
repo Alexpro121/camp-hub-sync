@@ -181,8 +181,9 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
         .select('id', { count: 'exact', head: true })
         .gt('created_at', cutoff);
       if (shiftId) q = q.or(`shift_id.is.null,shift_id.eq.${shiftId}`);
-      const { count } = await q;
-      setUnreadCount(count ?? 0);
+      const { count, error } = await q;
+      // Збій мережі не скидає лічильник у нуль.
+      if (!error && count != null) setUnreadCount(count);
     };
 
     recompute();
@@ -195,7 +196,8 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
     const onStorage = () => recompute();
     window.addEventListener('storage', onStorage);
     window.addEventListener('helpsuprov:notif-sync', onStorage);
-    const interval = setInterval(recompute, 15000);
+    // Нові сповіщення приходять сигналом; запасна звірка — рідко й лише з відкритим застосунком.
+    const interval = setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine) void recompute(); }, 120_000);
 
     return () => {
       supabase.removeChannel(ch);

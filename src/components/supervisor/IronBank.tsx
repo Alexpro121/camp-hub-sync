@@ -1,3 +1,5 @@
+import { signalReload, signalWindowMs } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
 import { fetchAllRows } from '@/lib/fetchAll';
 import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useState } from 'react';
@@ -40,22 +42,27 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
     if (!open) return;
     let mounted = true;
     const load = async () => {
-      const { data: shifts } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
-      const active = pickActiveShift((shifts || []) as any);
-      const { data } = await fetchAllRows<{ iron_dollars: number | null }>(() => {
+      if (!navigator.onLine) return;
+      const { data: shifts, error: shiftsError } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
+      if (shiftsError || !shifts) return;
+      const active = pickActiveShift(shifts as any);
+      const { data, error } = await fetchAllRows<{ iron_dollars: number | null }>(() => {
         let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam).is('deleted_at', null).order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
         return q;
       });
-      if (!mounted) return;
+      // Збій мережі не обнуляє вже показану суму.
+      if (!mounted || error) return;
       const total = (data || []).reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0);
       setDistributed(total);
     };
-    load();
+    void load();
+    // Лише своя команда й одне завантаження на серію змін — не кожна галочка реєстрації по всьому табору.
+    const reload = signalReload(load, () => Math.min(4000, signalWindowMs(networkPulse.state.quality)));
     const ch = supabase.channel('bank-children')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children', filter: `team_number=eq.${myTeam}` }, () => reload.trigger())
       .subscribe();
-    return () => { mounted = false; supabase.removeChannel(ch); };
+    return () => { mounted = false; reload.cancel(); supabase.removeChannel(ch); };
   }, [myTeam, open]);
 
   const remaining = useMemo(() => (budget ?? 0) - distributed, [budget, distributed]);

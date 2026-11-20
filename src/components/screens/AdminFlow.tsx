@@ -48,7 +48,10 @@ const useUnreadTransfers = () => {
     window.addEventListener('admin-notifications-seen', onSeen);
     const ch = supabase
       .channel('admin-transfers-badge')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => load())
+      // Лічильник: +1 із самого сигналу, без запиту до бази на кожну подію.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload: any) => {
+        if (['transfer', 'swap', 'approval'].includes(payload.new?.type)) setCount((c) => c + 1);
+      })
       .subscribe();
     return () => {
       alive = false;

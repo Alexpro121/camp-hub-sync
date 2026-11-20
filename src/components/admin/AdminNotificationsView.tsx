@@ -71,7 +71,12 @@ const AdminNotificationsView = () => {
     load();
     const ch = supabase
       .channel('admin-transfers-feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => load())
+      // Нове сповіщення вже в сигналі — додаємо його, без повторного завантаження 200 останніх.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload: any) => {
+        const n = payload.new as AppNotification | undefined;
+        if (!n?.id || !['transfer', 'swap', 'approval'].includes((n as any).type)) return;
+        setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, 200)));
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);

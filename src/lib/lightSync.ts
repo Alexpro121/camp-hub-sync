@@ -36,3 +36,20 @@ export function writeCache<T>(key: string, data: T): void {
     localStorage.setItem(key, JSON.stringify({ at: Date.now(), data } satisfies Cached<T>));
   } catch { /* переповнене сховище не повинно ламати екран */ }
 }
+
+/**
+ * Відкладене перезавантаження за сигналом: серія подій зливається в одне завантаження,
+ * а момент обирається випадково у вікні, щоб усі пристрої не пішли по дані разом.
+ */
+export function signalReload(load: () => unknown, windowMs: () => number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return {
+    trigger() { clearTimeout(timer); timer = setTimeout(() => { void load(); }, spreadDelay(windowMs())); },
+    cancel() { clearTimeout(timer); },
+  };
+}
+
+/** Чи минуло достатньо часу з останнього повного завантаження (щоб не качати все при кожному розблокуванні). */
+export function isStale(lastAt: number, minGapMs = 90_000, now = Date.now()): boolean {
+  return now - lastAt >= minGapMs;
+}

@@ -1,3 +1,6 @@
+import { isStale, readCache, signalReload, signalWindowMs, writeCache } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
+import { getSessionMeta } from '@/lib/session';
 import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,30 +41,71 @@ const TransfersView = ({ myTeam }: Props) => {
   const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
-    const load = async () => {
-      const { data: shifts } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
-      const active = pickActiveShift((shifts || []) as Shift[]);
-      setShiftId(active?.id ?? null);
+    // Слабкий інтернет: збережена копія одразу, збій запиту нічого не стирає,
+    // зміна однієї дитини оновлює лише її, а не весь список зміни.
+    let alive = true;
+    let lastLoadAt = 0;
+    const cacheKey = `ironshift:transfers:${myTeam}`;
+    const cached = readCache<{ shiftId: string | null; children: Child[]; teams: number[] }>(cacheKey);
+    if (cached) {
+      setShiftId(cached.data.shiftId);
+      setChildren(cached.data.children);
+      setAvailableTeams(cached.data.teams);
+      setInitialLoading(false);
+    }
 
-      const { data } = await fetchAllRows<Child>(() => {
+    const load = async () => {
+      if (!navigator.onLine) { if (alive) setInitialLoading(false); return; }
+      const { data: shifts, error: shiftsError } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
+      if (shiftsError || !shifts) { if (alive) setInitialLoading(false); return; }
+      const active = pickActiveShift(shifts as Shift[]);
+      const { data, error } = await fetchAllRows<Child>(() => {
         let q = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('full_name').order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
         return q;
       });
-      setChildren((data || []) as Child[]);
-
-      const { data: teams } = await supabase.rpc('get_available_transfer_teams', {
+      if (error || !alive) { if (alive) setInitialLoading(false); return; }
+      const { data: teams, error: teamsError } = await supabase.rpc('get_available_transfer_teams', {
         p_shift_id: active?.id ?? null,
         p_my_team: myTeam,
       });
-      setAvailableTeams(((teams || []) as { team_number: number }[]).map((t) => t.team_number));
+      if (!alive) return;
+      const teamList = teamsError ? null : ((teams || []) as { team_number: number }[]).map((t) => t.team_number);
+      setShiftId(active?.id ?? null);
+      setChildren((data || []) as Child[]);
+      if (teamList) setAvailableTeams(teamList);
       setInitialLoading(false);
+      lastLoadAt = Date.now();
+      writeCache(cacheKey, { shiftId: active?.id ?? null, children: (data || []) as Child[], teams: teamList ?? [] });
     };
-    load();
+    void load();
+
+    const reload = signalReload(load, () => signalWindowMs(networkPulse.state.quality));
+    const shift = getSessionMeta()?.shiftId;
     const ch = supabase.channel('transfers-children')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children', ...(shift ? { filter: `shift_id=eq.${shift}` } : {}) }, (payload: any) => {
+        const n = payload.new;
+        // Присутність, нотатки, переведення однієї дитини — оновлюємо лише її.
+        if (payload.eventType === 'UPDATE' && n?.id) {
+          setChildren((prev) => {
+            if (!prev.some((c) => c.id === n.id)) { reload.trigger(); return prev; }
+            return n.deleted_at ? prev.filter((c) => c.id !== n.id) : prev.map((c) => (c.id === n.id ? { ...c, ...n } : c));
+          });
+          return;
+        }
+        reload.trigger();
+      })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const resync = () => { if (document.visibilityState === 'visible' && navigator.onLine && isStale(lastLoadAt)) void load(); };
+    window.addEventListener('online', resync);
+    document.addEventListener('visibilitychange', resync);
+    return () => {
+      alive = false;
+      reload.cancel();
+      supabase.removeChannel(ch);
+      window.removeEventListener('online', resync);
+      document.removeEventListener('visibilitychange', resync);
+    };
   }, [myTeam]);
 
   const myKids = useMemo(() => children.filter((c) => c.team_number === myTeam), [children, myTeam]);

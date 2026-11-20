@@ -1,3 +1,7 @@
+import { readCache, writeCache } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
+
+const STATS_CACHE = 'ironshift:admin-stats';
 import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useState } from 'react';
 import { Loader2, BarChart3, AlertTriangle, Coins, Users, ArrowRightLeft, ChevronDown, Pencil } from 'lucide-react';
@@ -34,11 +38,14 @@ const StatsTab = () => {
   const [editing, setEditing] = useState<Child | null>(null);
 
   const load = async () => {
-    const [{ data: shifts }, { data: kids }, { data: trans }] = await Promise.all([
+    if (!navigator.onLine) { setLoading(false); return; }
+    const [{ data: shifts, error: shiftsError }, { data: kids, error: kidsError }, { data: trans, error: transError }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
       fetchAllRows<any>(() => supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number').order('id')),
       fetchAllRows<{ child_id: string }>(() => supabase.from('transfers').select('child_id').order('id')),
     ]);
+    // Слабкий інтернет: збій не перетворює статистику на нулі — лишаємо попередню.
+    if (shiftsError || kidsError || transError || !shifts) { setLoading(false); return; }
 
     const transfersByChild = new Map<string, number>();
     (trans || []).forEach((t: any) => {
@@ -70,15 +77,24 @@ const StatsTab = () => {
     setChildren((kids || []) as unknown as Child[]);
     setRows(stats);
     setLoading(false);
+    writeCache(STATS_CACHE, { rows: stats, children: kids || [], orphans: orphanKids.length ? {
+      total: orphanKids.length,
+      teams: new Set(orphanKids.map((c: any) => c.team_number)).size,
+      iron: orphanKids.reduce((s: number, c: any) => s + (c.iron_dollars || 0), 0),
+    } : null });
   };
 
   useEffect(() => {
+    const cached = readCache<{ rows: ShiftStats[]; children: Child[]; orphans: typeof orphans }>(STATS_CACHE);
+    if (cached) { setRows(cached.data.rows); setChildren(cached.data.children); setOrphans(cached.data.orphans); setLoading(false); }
     void load();
     let reloadTimer: ReturnType<typeof setTimeout> | undefined;
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer);
-      // Повне перечитування всіх змін — рідко: супровід відмічає присутність безперервно.
-      reloadTimer = setTimeout(() => { if (document.visibilityState === 'visible') void load(); }, 5000);
+      // Повне перечитування всіх змін — рідко: супровід відмічає присутність безперервно;
+      // на повільному каналі ще рідше.
+      const wait = networkPulse.state.quality === 'ONLINE_SLOW' ? 30_000 : 8_000;
+      reloadTimer = setTimeout(() => { if (document.visibilityState === 'visible') void load(); }, wait);
     };
     const ch = supabase.channel('stats-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, scheduleReload)

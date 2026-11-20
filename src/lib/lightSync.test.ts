@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { readCache, signalWindowMs, spreadDelay, writeCache } from './lightSync';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { isStale, readCache, signalReload, signalWindowMs, spreadDelay, writeCache } from './lightSync';
 
 describe('light sync', () => {
   beforeEach(() => localStorage.clear());
@@ -27,5 +27,28 @@ describe('light sync', () => {
     expect(readCache('old')).toBeNull();
     localStorage.setItem('bad', '{');
     expect(readCache('bad')).toBeNull();
+  });
+});
+
+describe('signal reload', () => {
+  it('merges a burst of registry check-ins into one download', () => {
+    vi.useFakeTimers();
+    const load = vi.fn();
+    const reload = signalReload(load, () => 4000);
+    for (let i = 0; i < 50; i++) reload.trigger();
+    vi.advanceTimersByTime(4000);
+    expect(load).toHaveBeenCalledTimes(1);
+    reload.trigger();
+    reload.cancel();
+    vi.advanceTimersByTime(4000);
+    expect(load).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('does not refetch the whole roster on every phone unlock', () => {
+    const now = 1_000_000;
+    expect(isStale(now - 30_000, 90_000, now)).toBe(false);
+    expect(isStale(now - 120_000, 90_000, now)).toBe(true);
+    expect(isStale(0, 90_000, now)).toBe(true);
   });
 });

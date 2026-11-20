@@ -158,10 +158,11 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
         .order('created_at', { ascending: false })
         .limit(150);
       if (shiftId) q = q.or(`shift_id.is.null,shift_id.eq.${shiftId}`);
-      const { data } = await q;
+      const { data, error } = await q;
 
       if (!cancelled) {
-        setItems((data || []) as AppNotification[]);
+        // Збій мережі не стирає вже показану стрічку.
+        if (!error && data) setItems(data as AppNotification[]);
         setLoading(false);
       }
     };

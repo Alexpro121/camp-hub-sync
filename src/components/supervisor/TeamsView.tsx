@@ -1,3 +1,6 @@
+import { isStale, signalReload, signalWindowMs } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
+import { getSessionMeta } from '@/lib/session';
 import { fetchAllRows } from '@/lib/fetchAll';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,6 +90,7 @@ const TeamsView = ({
     let activeShiftId: string | null = forcedShiftId;
     let loadingRequest = false;
     let reloadPending = false;
+    let lastLoadAt = 0;
     // Якщо мережа мовчить довше 1.5 с — не тримаємо користувача на спінері.
     const slowTimer = setTimeout(() => {
       if (!mounted) return;
@@ -129,6 +133,7 @@ const TeamsView = ({
 
       if (!mounted) return;
       outbox.saveTeamsSnapshot(unique);
+      lastLoadAt = Date.now();
       if (mounted) { setChildren(unique as Child[]); setLoading(false); }
       } finally {
         loadingRequest = false;
@@ -136,11 +141,13 @@ const TeamsView = ({
       }
     };
     load().catch(() => { if (mounted) setLoading(false); });
-    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const reload = signalReload(() => load().catch(() => {}), () => signalWindowMs(networkPulse.state.quality));
+    // Лише своя зміна: зміни дітей інших змін не мають іти через слабкий канал.
+    const shiftFilter = forcedShiftId ?? getSessionMeta()?.shiftId ?? null;
 
     const channel = supabase
       .channel('children-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, (payload: any) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'children', ...(shiftFilter ? { filter: `shift_id=eq.${shiftFilter}` } : {}) }, (payload: any) => {
         // Присутність/нотатки з реєстрації: оновлюємо одну дитину миттєво, без перезавантаження всього списку.
         const n = payload.new;
         const old = payload.old;
@@ -156,15 +163,14 @@ const TeamsView = ({
           });
           return;
         }
-        clearTimeout(reloadTimer);
-        reloadTimer = setTimeout(() => { load().catch(() => {}); }, 600);
+        reload.trigger();
       })
       .subscribe();
-    // Пропущені за час без зв'язку/у фоні зміни — добираємо при поверненні.
-    const resync = () => { if (document.visibilityState === 'visible' && navigator.onLine) load().catch(() => {}); };
+    // Пропущені за час без зв'язку/у фоні зміни — добираємо при поверненні, але не частіше ніж раз на 1,5 хв.
+    const resync = () => { if (document.visibilityState === 'visible' && navigator.onLine && isStale(lastLoadAt)) load().catch(() => {}); };
     window.addEventListener('online', resync);
     document.addEventListener('visibilitychange', resync);
-    return () => { mounted = false; clearTimeout(slowTimer); clearTimeout(reloadTimer); supabase.removeChannel(channel);
+    return () => { mounted = false; clearTimeout(slowTimer); reload.cancel(); supabase.removeChannel(channel);
       window.removeEventListener('online', resync); document.removeEventListener('visibilitychange', resync); };
   }, [forcedShiftId]);
 
