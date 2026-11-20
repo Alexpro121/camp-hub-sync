@@ -200,5 +200,4 @@ const AdminFlow = ({ onBack }: Props) => {
   );
 };
 
-export { generateMemorablePassword } from '@/components/admin/tabs/shared';
 export default AdminFlow;
