@@ -4,6 +4,8 @@ import { admin, corsHeaders, json, SERVICE_KEY } from '../_shared/accounts.ts';
 const REGISTRY_PASSWORD = (Deno.env.get('REGISTRY_PASSWORD') ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
 const TOKEN_TTL_MS = 14 * 3600_000;
 const LIMIT_PER_MIN = 5;
+/** Видалений учасник висить у «Видалених» добу; потім профіль недоступний (див. private.my_child_id). */
+const DELETE_GRACE_MS = 24 * 3600_000;
 
 const enc = new TextEncoder();
 async function hmac(msg: string): Promise<string> {
@@ -148,6 +150,64 @@ Deno.serve(async (req) => {
         return { id: it.id, status: 'error' };
       }));
       return json({ results });
+    }
+
+    const ROW = 'id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at, deleted_at';
+    const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+    // Новий учасник прямо зі стійки: лише в активну зміну.
+    if (body.action === 'create') {
+      const { ids } = await scopeIds(null);
+      const shiftId = typeof body.shift_id === 'string' && ids.includes(body.shift_id) ? body.shift_id : null;
+      if (!shiftId) return json({ error: 'bad_shift' });
+      const fullName = str(body.full_name, 120);
+      if (fullName.length < 3 || fullName.split(' ').length < 2) return json({ error: 'bad_name' });
+      const team = Number(body.team_number);
+      if (!Number.isInteger(team) || team < 1 || team > 999) return json({ error: 'bad_team' });
+      const phone = str(body.phone, 40).replace(/[^\d+()\- ]/g, '') || null;
+      const telegram = str(body.telegram_username, 64).replace(/^@+/, '').replace(/[^\w]/g, '') || null;
+      const gender = body.gender === 'male' || body.gender === 'female' ? body.gender : null;
+      const note = str(body.note, 2000) || null;
+      if (!body.force) {
+        const { data: same, error } = await svc.from('children').select('id, full_name, team_number')
+          .eq('shift_id', shiftId).is('deleted_at', null).ilike('full_name', fullName.replace(/[%_\\]/g, '\\$&')).limit(1);
+        if (error) throw error;
+        if (same?.length) return json({ error: 'duplicate', existing: same[0] });
+      }
+      const { data, error } = await svc.from('children').insert({
+        shift_id: shiftId, full_name: fullName, team_number: team, phone, telegram_username: telegram, gender,
+        supervisor_notes: note, notes_origin: note ? 'registry' : null, is_present: body.is_present === true,
+      }).select(ROW).single();
+      if (error) throw error;
+      return json({ child: data });
+    }
+
+    // М'яке видалення: зникає з команди одразу, 24 години можна відновити.
+    if (body.action === 'delete' || body.action === 'restore') {
+      if (typeof body.id !== 'string') return json({ error: 'bad_request' });
+      const { ids } = await scopeIds(null);
+      if (!ids.length) return json({ error: 'not_found' });
+      const now = new Date().toISOString();
+      let q = svc.from('children')
+        .update({ deleted_at: body.action === 'delete' ? now : null, updated_at: now })
+        .eq('id', body.id).in('shift_id', ids);
+      q = body.action === 'delete'
+        ? q.is('deleted_at', null)
+        : q.gt('deleted_at', new Date(Date.now() - DELETE_GRACE_MS).toISOString());
+      const { data, error } = await q.select(ROW).maybeSingle();
+      if (error) throw error;
+      if (!data) return json({ error: body.action === 'restore' ? 'expired' : 'not_found' });
+      return json({ child: data });
+    }
+
+    if (body.action === 'deleted') {
+      const { ids } = await scopeIds(body.shift_id);
+      if (!ids.length) return json({ children: [] });
+      const { data, error } = await svc.from('children').select(ROW)
+        .in('shift_id', ids).gt('deleted_at', new Date(Date.now() - DELETE_GRACE_MS).toISOString())
+        .order('deleted_at', { ascending: false }).limit(500);
+      if (error) throw error;
+      return json({ children: data ?? [] });
     }
 
     if (body.action === 'update') {
