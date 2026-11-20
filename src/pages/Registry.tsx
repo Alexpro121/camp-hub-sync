@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
 import ExitConfirm from '@/components/ExitConfirm';
+import FormSheet from '@/components/ui/form-sheet';
 import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegistryScope } from '@/lib/registrySync';
 import { isTelegramMiniApp, resetTelegramSignIn, telegramSignIn } from '@/lib/telegramAuth';
 import TelegramGate from '@/components/telegram/TelegramGate';
@@ -154,68 +155,60 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
     try { if (!(await onDelete(kid))) setConfirmDelete(false); } finally { setDeleting(false); }
   };
   const dirty = note !== (kid.supervisor_notes ?? '');
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  useEffect(() => { const o = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = o; }; }, []);
   const save = async () => { setSaving(true); try { await onSaveNote(kid, note); } finally { setSaving(false); } };
+  // Закриття з незбереженою нотаткою зберігає її — як і раніше на стійці.
   const close = () => (dirty ? save() : onClose());
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 sm:backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={close}>
-      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300 ease-out pb-[env(safe-area-inset-bottom)] sm:rounded-3xl">
-        <div className="flex items-start gap-3 border-b border-border p-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="break-words text-lg font-bold text-foreground">{kid.full_name}</h2>
-            <p className="text-sm text-muted-foreground">Команда {kid.team_number}{shiftName ? ` · ${shiftName}` : ''}</p>
-          </div>
-          <button onClick={close} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
+    <FormSheet
+      open
+      onOpenChange={(open) => { if (!open) void close(); }}
+      className="sm:max-w-md"
+      title={<span className="break-words">{kid.full_name}</span>}
+      description={`Команда ${kid.team_number}${shiftName ? ` · ${shiftName}` : ''}`}
+      footer={(
+        <button onClick={dirty ? save : onClose} disabled={saving}
+          className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
+          {saving ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : dirty ? 'Зберегти нотатку' : 'Готово'}
+        </button>
+      )}
+    >
+      <div className="space-y-4">
+        <button onClick={() => onToggle(kid)}
+          className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.is_present ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
+          <Check className="h-5 w-5" />{kid.is_present ? 'Присутній(я) — зареєстровано' : 'Позначити присутнім'}
+        </button>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
+          {kid.phone && <><dt className="text-muted-foreground">Телефон</dt><dd><a href={`tel:${kid.phone}`} className="inline-flex min-h-8 items-center gap-1 text-primary"><Phone className="h-3.5 w-3.5" />{kid.phone}</a></dd></>}
+          {kid.telegram_username && <><dt className="text-muted-foreground">Telegram</dt><dd className="break-all text-foreground">@{kid.telegram_username.replace(/^@/, '')}</dd></>}
+          {kid.gender && <><dt className="text-muted-foreground">Стать</dt><dd className="text-foreground">{kid.gender === 'female' ? 'дівчинка' : kid.gender === 'male' ? 'хлопчик' : '—'}</dd></>}
+          {kid.note_from_table && <><dt className="text-muted-foreground">Зі списку</dt><dd className="break-words text-foreground">{kid.note_from_table}</dd></>}
+        </dl>
+        <div>
+          <label htmlFor="reg-note" className="mb-1 block text-sm font-medium text-foreground">Нотатки</label>
+          <textarea id="reg-note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000}
+            placeholder="Напр.: здали ліки, алергія, приїхав пізніше…" autoCapitalize="sentences"
+            className="w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
         </div>
-        <div className="space-y-4 overflow-y-auto overscroll-contain p-4">
-          <button onClick={() => onToggle(kid)}
-            className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.is_present ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
-            <Check className="h-5 w-5" />{kid.is_present ? 'Присутній(я) — зареєстровано' : 'Позначити присутнім'}
-          </button>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-            {kid.phone && <><dt className="text-muted-foreground">Телефон</dt><dd><a href={`tel:${kid.phone}`} className="inline-flex items-center gap-1 text-primary"><Phone className="h-3.5 w-3.5" />{kid.phone}</a></dd></>}
-            {kid.telegram_username && <><dt className="text-muted-foreground">Telegram</dt><dd className="break-all text-foreground">@{kid.telegram_username.replace(/^@/, '')}</dd></>}
-            {kid.gender && <><dt className="text-muted-foreground">Стать</dt><dd className="text-foreground">{kid.gender === 'female' ? 'дівчинка' : kid.gender === 'male' ? 'хлопчик' : '—'}</dd></>}
-            {kid.note_from_table && <><dt className="text-muted-foreground">Зі списку</dt><dd className="break-words text-foreground">{kid.note_from_table}</dd></>}
-          </dl>
-          <div>
-            <label htmlFor="reg-note" className="mb-1 block text-sm font-medium text-foreground">Нотатки</label>
-            <textarea id="reg-note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} maxLength={2000}
-              placeholder="Напр.: здали ліки, алергія, приїхав пізніше…"
-              className="w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <div className="border-t border-border pt-4">
+        <div className="border-t border-border pt-4">
+          {confirmDelete && (
+            <p className="mb-2 text-sm text-muted-foreground animate-in fade-in">
+              Учасник зникне з команди й 24 години буде у вкладці «Видалені». Потім профіль стане недоступним.
+            </p>
+          )}
+          <div className="flex gap-2">
             {confirmDelete && (
-              <p className="mb-2 text-sm text-muted-foreground animate-in fade-in">
-                Учасник зникне з команди й 24 години буде у вкладці «Видалені». Потім профіль стане недоступним.
-              </p>
+              <button onClick={() => setConfirmDelete(false)} disabled={deleting}
+                className="h-11 flex-1 rounded-xl border border-border text-sm font-medium text-foreground">Скасувати</button>
             )}
-            <div className="flex gap-2">
-              {confirmDelete && (
-                <button onClick={() => setConfirmDelete(false)} disabled={deleting}
-                  className="h-11 flex-1 rounded-xl border border-border text-sm font-medium text-foreground">Скасувати</button>
-              )}
-              <button onClick={remove} disabled={deleting}
-                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-60 ${confirmDelete ? 'bg-destructive text-destructive-foreground' : 'border border-destructive/40 text-destructive'}`}>
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                {confirmDelete ? 'Так, видалити' : 'Видалити учасника'}
-              </button>
-            </div>
+            <button onClick={remove} disabled={deleting}
+              className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-60 ${confirmDelete ? 'bg-destructive text-destructive-foreground' : 'border border-destructive/40 text-destructive'}`}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {confirmDelete ? 'Так, видалити' : 'Видалити учасника'}
+            </button>
           </div>
-        </div>
-        <div className="border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <button onClick={dirty ? save : onClose} disabled={saving}
-            className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
-            {saving ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : dirty ? 'Зберегти нотатку' : 'Готово'}
-          </button>
         </div>
       </div>
-    </div>
+    </FormSheet>
   );
 }
 
@@ -237,12 +230,9 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
   const [dup, setDup] = useState<string | null>(null);
   const touch = () => { setErr(''); setDup(null); };
   const set = <K extends keyof NewKid>(k: K, x: NewKid[K]) => { setV((o) => ({ ...o, [k]: x })); touch(); };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  useEffect(() => { const o = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = o; }; }, []);
+  // Ноутбук на стійці — курсор одразу в імені; телефон — без клавіатури, доки не торкнулись поля.
+  const [coarse] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches);
+  const dirty = !!(v.full_name.trim() || v.phone.trim() || v.telegram_username.trim() || v.note.trim() || v.gender || (teamText && teamText !== String(defaultTeam ?? '')));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
@@ -260,68 +250,71 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
   const field = 'h-11 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground outline-none focus:ring-2 focus:ring-ring';
   const pill = (on: boolean) => `h-10 rounded-xl border px-3 text-sm font-semibold ${on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground'}`;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 sm:backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={onClose}>
-      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300 ease-out pb-[env(safe-area-inset-bottom)] sm:rounded-3xl">
-        <div className="flex items-center gap-3 border-b border-border p-4">
-          <h2 className="flex-1 text-lg font-bold text-foreground">Новий учасник</h2>
-          <button type="button" onClick={onClose} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="space-y-3 overflow-y-auto overscroll-contain p-4">
-          <label className="block text-sm font-medium text-foreground">Прізвище та ім'я
-            <input autoFocus value={v.full_name} onChange={(e) => set('full_name', e.target.value)} maxLength={120} autoComplete="off" placeholder="Шевченко Тарас" className={`mt-1 ${field}`} />
-          </label>
-          <div>
-            <span className="mb-1 block text-sm font-medium text-foreground">Команда</span>
-            <div className="flex flex-wrap gap-1.5">
-              {teams.map((t) => (
-                <button type="button" key={t} onClick={() => { setTeamText(String(t)); touch(); }} className={`${pill(teamText === String(t))} min-w-10 tabular-nums`}>{t}</button>
-              ))}
-              <input inputMode="numeric" value={teamText} onChange={(e) => { setTeamText(e.target.value.replace(/\D/g, '').slice(0, 3)); touch(); }}
-                aria-label="Номер команди" placeholder="№" className="h-10 w-16 rounded-xl border border-input bg-background px-2 text-center text-base tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring" />
-            </div>
+    <FormSheet
+      open
+      onOpenChange={(open) => { if (!open) onClose(); }}
+      dirty={dirty}
+      className="sm:max-w-md"
+      title="Новий учасник"
+      footer={(
+        <button type="submit" form="create-kid-form" disabled={busy}
+          className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
+          {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : dup ? 'Все одно створити' : 'Створити учасника'}
+        </button>
+      )}
+    >
+      <form id="create-kid-form" onSubmit={submit} className="space-y-3.5">
+        <label className="block text-sm font-medium text-foreground">Прізвище та ім'я
+          <input autoFocus={!coarse} value={v.full_name} onChange={(e) => set('full_name', e.target.value)} maxLength={120} autoComplete="off"
+            autoCapitalize="words" enterKeyHint="next" placeholder="Шевченко Тарас" className={`mt-1 ${field}`} />
+        </label>
+        <div>
+          <span className="mb-1 block text-sm font-medium text-foreground">Команда</span>
+          <div className="flex flex-wrap gap-1.5">
+            {teams.map((t) => (
+              <button type="button" key={t} onClick={() => { setTeamText(String(t)); touch(); }} className={`${pill(teamText === String(t))} min-w-11 tabular-nums`}>{t}</button>
+            ))}
+            <input inputMode="numeric" enterKeyHint="next" value={teamText} onChange={(e) => { setTeamText(e.target.value.replace(/\D/g, '').slice(0, 3)); touch(); }}
+              aria-label="Номер команди" placeholder="№" className="h-11 w-16 rounded-xl border border-input bg-background px-2 text-center text-base tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring" />
           </div>
-          {shiftIds.length > 1 && (
-            <label className="block text-sm font-medium text-foreground">Зміна
-              <select value={v.shift_id} onChange={(e) => set('shift_id', e.target.value)} className={`mt-1 ${field}`}>
-                <option value="" disabled>Оберіть зміну</option>
-                {shiftIds.map((id) => <option key={id} value={id}>{shifts[id]}</option>)}
-              </select>
-            </label>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block text-sm font-medium text-foreground">Телефон
-              <input type="tel" inputMode="tel" value={v.phone} onChange={(e) => set('phone', e.target.value)} maxLength={40} placeholder="+380…" className={`mt-1 ${field}`} />
-            </label>
-            <label className="block text-sm font-medium text-foreground">Telegram
-              <input value={v.telegram_username} onChange={(e) => set('telegram_username', e.target.value)} maxLength={64} placeholder="@нік" autoCapitalize="off" className={`mt-1 ${field}`} />
-            </label>
-          </div>
-          <div>
-            <span className="mb-1 block text-sm font-medium text-foreground">Стать</span>
-            <div className="grid grid-cols-3 gap-1.5">
-              {([['', 'Не вказано'], ['female', 'Дівчинка'], ['male', 'Хлопчик']] as const).map(([g, l]) => (
-                <button type="button" key={g} onClick={() => set('gender', g)} className={pill(v.gender === g)}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <label className="block text-sm font-medium text-foreground">Нотатка
-            <textarea value={v.note} onChange={(e) => set('note', e.target.value)} rows={2} maxLength={2000} placeholder="Необов'язково"
-              className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
-          </label>
-          <label className="flex items-center gap-2 text-sm text-foreground">
-            <input type="checkbox" checked={v.is_present} onChange={(e) => set('is_present', e.target.checked)} className="h-5 w-5" />
-            Одразу позначити присутнім
-          </label>
-          {err && <p className="text-sm text-destructive animate-in fade-in">{err}</p>}
-          {dup && <p className="rounded-xl bg-warning/10 p-3 text-sm text-warning animate-in fade-in">У цій зміні вже є «{dup}». Натисніть ще раз, щоб усе одно створити.</p>}
         </div>
-        <div className="border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <button disabled={busy} className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
-            {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : dup ? 'Все одно створити' : 'Створити учасника'}
-          </button>
+        {shiftIds.length > 1 && (
+          <label className="block text-sm font-medium text-foreground">Зміна
+            <select value={v.shift_id} onChange={(e) => set('shift_id', e.target.value)} className={`mt-1 ${field}`}>
+              <option value="" disabled>Оберіть зміну</option>
+              {shiftIds.map((id) => <option key={id} value={id}>{shifts[id]}</option>)}
+            </select>
+          </label>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block min-w-0 text-sm font-medium text-foreground">Телефон
+            <input type="tel" inputMode="tel" autoComplete="off" enterKeyHint="next" value={v.phone} onChange={(e) => set('phone', e.target.value)} maxLength={40} placeholder="+380…" className={`mt-1 ${field}`} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-foreground">Telegram
+            <input value={v.telegram_username} onChange={(e) => set('telegram_username', e.target.value)} maxLength={64} placeholder="@нік"
+              autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="next" className={`mt-1 ${field}`} />
+          </label>
         </div>
+        <div>
+          <span className="mb-1 block text-sm font-medium text-foreground">Стать</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {([['', 'Не вказано'], ['female', 'Дівчинка'], ['male', 'Хлопчик']] as const).map(([g, l]) => (
+              <button type="button" key={g} onClick={() => set('gender', g)} className={`${pill(v.gender === g)} h-11 px-1`}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <label className="block text-sm font-medium text-foreground">Нотатка
+          <textarea value={v.note} onChange={(e) => set('note', e.target.value)} rows={2} maxLength={2000} placeholder="Необов'язково" autoCapitalize="sentences"
+            className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
+        </label>
+        <label className="flex min-h-11 items-center gap-2.5 text-sm text-foreground">
+          <input type="checkbox" checked={v.is_present} onChange={(e) => set('is_present', e.target.checked)} className="h-5 w-5" />
+          Одразу позначити присутнім
+        </label>
+        {err && <p role="alert" className="text-sm text-destructive animate-in fade-in">{err}</p>}
+        {dup && <p role="alert" className="rounded-xl bg-warning/10 p-3 text-sm text-warning animate-in fade-in">У цій зміні вже є «{dup}». Натисніть ще раз, щоб усе одно створити.</p>}
       </form>
-    </div>
+    </FormSheet>
   );
 }
 
@@ -757,7 +750,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
           </>
         )}
       </main>
-      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} onDelete={deleteKid} />}
+      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); if (!coarse) inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} onDelete={deleteKid} />}
       {creating && (
         <CreateKid shifts={shifts} defaultShift={shiftId} defaultTeam={team} teams={teams.map(([t]) => t)}
           onClose={() => setCreating(false)} onCreate={createKid} />
