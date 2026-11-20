@@ -43,7 +43,7 @@ describe('supervisor team events', () => {
     const onSaved = vi.fn();
     render(<TeamEventDialog open onOpenChange={vi.fn()} team={7} shiftId="S" date="2026-11-21" onSaved={onSaved} />);
     fireEvent.change(screen.getByPlaceholderText('Збір команди'), { target: { value: 'Збір команди' } });
-    fireEvent.change(screen.getByPlaceholderText('18:00'), { target: { value: '18.30' } });
+    fireEvent.change(screen.getByLabelText('Початок'), { target: { value: '1830' } });
     fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith('2026-11-21'));
@@ -59,7 +59,7 @@ describe('supervisor team events', () => {
     const onSaved = vi.fn();
     render(<TeamEventDialog open onOpenChange={vi.fn()} team={7} shiftId="S" date="2026-11-21" onSaved={onSaved} />);
     fireEvent.change(screen.getByPlaceholderText('Збір команди'), { target: { value: 'Збір' } });
-    fireEvent.change(screen.getByPlaceholderText('18:00'), { target: { value: '13:30' } });
+    fireEvent.change(screen.getByLabelText('Початок'), { target: { value: '13:30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
 
     const alert = await screen.findByRole('alert');

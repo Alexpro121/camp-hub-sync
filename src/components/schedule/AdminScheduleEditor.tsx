@@ -9,7 +9,8 @@ import { Pencil, Trash2, Plus, Minus, Loader2, CalendarDays, Eraser, ChevronLeft
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAllTeams } from '@/hooks/useAllTeams';
-import { CATEGORY_LIST, shiftTime, sentenceCase, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
+import { CATEGORY_LIST, shiftTime, sentenceCase, normalizeTime, normalizeTimeRange, maskTimeInput } from '@/lib/scheduleCategories';
+import FormSheet from '@/components/ui/form-sheet';
 import { broadcastScheduleUpdated, dedupeItems, shiftISODate } from '@/lib/schedule';
 import { useAutoTodayDate, localISO } from '@/hooks/useAutoTodayDate';
 import type { Schedule, ScheduleItem, ScheduleSubSlot, Shift } from '@/types/app';
@@ -68,6 +69,10 @@ const AdminScheduleEditor = () => {
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [quick, setQuick] = useState<{ id: string; start: string; end: string } | null>(null);
   const loadVersion = useRef(0);
+  /** Ключ дня й змін, для яких уже показано список: оновлення після збереження — без спінера. */
+  const [shownKey, setShownKey] = useState('');
+  /** Знімок форми при відкритті — щоб випадковий дотик не губив незбережене. */
+  const formInitial = useRef('');
 
   useAutoTodayDate(date, setDate);
 
@@ -116,6 +121,7 @@ const AdminScheduleEditor = () => {
       } else {
         setItems([]);
       }
+      setShownKey(`${date}|${scopeKey}`);
     } catch (error: unknown) {
       if (version === loadVersion.current) {
         setSchedules([]);
@@ -418,7 +424,9 @@ const AdminScheduleEditor = () => {
   });
   };
 
-  const chip = (on: boolean) => `h-8 rounded-lg border px-2.5 text-xs font-semibold transition-all active:scale-95 ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'}`;
+  const openForm = (f: Form) => { formInitial.current = JSON.stringify(f); setForm(f); };
+  const formDirty = !!form && JSON.stringify(form) !== formInitial.current;
+  const chip = (on: boolean) => `h-9 rounded-lg border px-2.5 text-xs font-semibold transition-all active:scale-95 ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'}`;
   const formTeams = form ? teamsOf(form.shifts) : [];
 
   return (
@@ -486,7 +494,7 @@ const AdminScheduleEditor = () => {
         </div>
       )}
 
-      <Button onClick={() => setForm(newForm())} disabled={!activeScope.length} className="w-full h-10 text-xs font-bold uppercase">
+      <Button onClick={() => openForm(newForm())} disabled={!activeScope.length} className="w-full h-10 text-xs font-bold uppercase">
         <Plus className="w-4 h-4 mr-1.5" /> Додати подію
       </Button>
       <Button variant="secondary" onClick={() => setAiOpen(true)} className="w-full h-10 text-xs font-bold uppercase">
@@ -504,7 +512,7 @@ const AdminScheduleEditor = () => {
         <Trash2 className="w-4 h-4 mr-1.5" /> Видалити розклад на весь день
       </Button>
 
-      {loading ? (
+      {loading && shownKey !== `${date}|${scopeKey}` ? (
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : sorted.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 bg-surface-1 p-5 text-center space-y-3">
@@ -514,22 +522,22 @@ const AdminScheduleEditor = () => {
             <Button className="w-full h-11 text-xs font-bold uppercase" onClick={() => setAiOpen(true)}>
               <FileDown className="w-4 h-4 mr-1.5" /> Імпорт розкладу з Gemini
             </Button>
-            <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => setForm(newForm())} disabled={!activeScope.length}>
+            <Button variant="outline" className="w-full h-11 text-xs font-bold uppercase" onClick={() => openForm(newForm())} disabled={!activeScope.length}>
               <Plus className="w-4 h-4 mr-1.5" /> Додати першу подію вручну
             </Button>
           </div>
         </div>
       ) : (
-        <div className="space-y-2 max-h-[60vh] overflow-y-auto scrollbar-thin">
+        <div className="space-y-2 sm:max-h-[60vh] sm:overflow-y-auto scrollbar-thin">
           {sorted.map((i) => (
             <div key={i.id} className="rounded-xl border border-border/50 bg-surface-1 p-3 space-y-2">
               <div className="flex items-center gap-1.5">
                 {quick?.id === i.id ? (
                   <form className="flex min-w-0 flex-1 items-center gap-1" onSubmit={(e) => { e.preventDefault(); void saveQuick(); }}>
-                    <Input autoFocus value={quick.start} onChange={(e) => setQuick({ ...quick, start: e.target.value })} aria-label="Початок" className="h-8 w-[4.5rem] px-2 text-xs tabular-nums"
+                    <Input autoFocus value={quick.start} inputMode="numeric" enterKeyHint="next" onChange={(e) => setQuick({ ...quick, start: maskTimeInput(e.target.value) })} aria-label="Початок" className="h-10 w-[4.75rem] px-2 text-xs tabular-nums sm:h-8"
                       onKeyDown={(e) => e.key === 'Escape' && setQuick(null)} />
                     <span className="text-muted-foreground">–</span>
-                    <Input value={quick.end} onChange={(e) => setQuick({ ...quick, end: e.target.value })} aria-label="Кінець" className="h-8 w-[4.5rem] px-2 text-xs tabular-nums"
+                    <Input value={quick.end} inputMode="numeric" enterKeyHint="done" onChange={(e) => setQuick({ ...quick, end: maskTimeInput(e.target.value) })} aria-label="Кінець" className="h-10 w-[4.75rem] px-2 text-xs tabular-nums sm:h-8"
                       onKeyDown={(e) => e.key === 'Escape' && setQuick(null)} />
                     <Button type="submit" size="icon" variant="ghost" disabled={busy} className="h-8 w-8 shrink-0" aria-label="Зберегти час"><Check className="h-4 w-4 text-success" /></Button>
                     <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Скасувати" onClick={() => setQuick(null)}><X className="h-4 w-4" /></Button>
@@ -541,10 +549,10 @@ const AdminScheduleEditor = () => {
                       {i.time_start || '--:--'} – {i.time_end || '--:--'}
                     </button>
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold">{sentenceCase(i.title)}</p>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Дублювати" title="Дублювати" onClick={() => setForm(editFrom(i, true))}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Дублювати" title="Дублювати" onClick={() => openForm(editFrom(i, true))}>
                       <Copy className="w-4 h-4" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Редагувати" onClick={() => setForm(editFrom(i))}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Редагувати" onClick={() => openForm(editFrom(i))}>
                       <Pencil className="w-4 h-4" />
                     </Button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Видалити" onClick={() => remove(i.id)}>
@@ -591,129 +599,142 @@ const AdminScheduleEditor = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!form} onOpenChange={(o) => !o && setForm(null)}>
-        <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-sm overflow-y-auto">
-          <DialogHeader><DialogTitle>{form?.id ? 'Редагувати подію' : 'Нова подія'}</DialogTitle></DialogHeader>
-          {form && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва</Label>
-                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Сніданок" className="h-10 text-sm" />
+      <FormSheet
+        open={!!form}
+        onOpenChange={(o) => !o && setForm(null)}
+        dirty={formDirty}
+        title={form?.id ? 'Редагувати подію' : 'Нова подія'}
+        description={humanDate(date)}
+        footer={(
+          <Button onClick={save} disabled={busy} className="w-full h-12 font-bold uppercase text-xs">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : form && !form.id && form.repeat.length ? `Зберегти на ${form.repeat.length + 1} дн.` : 'Зберегти'}
+          </Button>
+        )}
+      >
+        {form && (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="ev-title" className="text-[10px] uppercase tracking-wider text-muted-foreground">Назва</Label>
+              <Input id="ev-title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Сніданок"
+                enterKeyHint="next" autoCapitalize="sentences" className="h-11 text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="ev-start" className="text-[10px] uppercase tracking-wider text-muted-foreground">Початок</Label>
+                <Input
+                  id="ev-start"
+                  value={form.time_start}
+                  inputMode="numeric"
+                  enterKeyHint="next"
+                  autoComplete="off"
+                  onChange={(e) => setForm({ ...form, time_start: maskTimeInput(e.target.value) })}
+                  onBlur={(e) => {
+                    const { start, end } = normalizeTimeRange(e.target.value);
+                    setForm((p) => p && { ...p, time_start: start ?? p.time_start, time_end: end ?? p.time_end });
+                  }}
+                  placeholder="1800"
+                  className="h-11 w-full min-w-0 text-sm tabular-nums"
+                />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Локація (необов’язково)
-                </Label>
-                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Велика зала" className="h-10 text-sm" />
+              <div className="min-w-0 space-y-1.5">
+                <Label htmlFor="ev-end" className="text-[10px] uppercase tracking-wider text-muted-foreground">Кінець</Label>
+                <Input
+                  id="ev-end"
+                  value={form.time_end}
+                  inputMode="numeric"
+                  enterKeyHint="next"
+                  autoComplete="off"
+                  onChange={(e) => setForm({ ...form, time_end: maskTimeInput(e.target.value) })}
+                  onBlur={(e) => setForm((p) => p && { ...p, time_end: normalizeTime(e.target.value) ?? p.time_end })}
+                  placeholder="1900"
+                  className="h-11 w-full min-w-0 text-sm tabular-nums"
+                />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="min-w-0 space-y-1.5">
-                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Початок</Label>
-                  <Input
-                    value={form.time_start}
-                    onChange={(e) => setForm({ ...form, time_start: e.target.value })}
-                    onBlur={(e) => {
-                      const { start, end } = normalizeTimeRange(e.target.value);
-                      setForm((p) => p && { ...p, time_start: start ?? p.time_start, time_end: end ?? p.time_end });
-                    }}
-                    placeholder="18:00 або 18.00"
-                    className="h-10 w-full min-w-0 text-sm tabular-nums"
-                  />
-                </div>
-                <div className="min-w-0 space-y-1.5">
-                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Кінець</Label>
-                  <Input
-                    value={form.time_end}
-                    onChange={(e) => setForm({ ...form, time_end: e.target.value })}
-                    onBlur={(e) => setForm((p) => p && { ...p, time_end: normalizeTime(e.target.value) ?? p.time_end })}
-                    placeholder="19:00 або 19.00"
-                    className="h-10 w-full min-w-0 text-sm tabular-nums"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Категорія</Label>
-                <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                  <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_LIST.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ev-location" className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Локація (необов’язково)
+              </Label>
+              <Input id="ev-location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Велика зала"
+                enterKeyHint="done" className="h-11 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Категорія</Label>
+              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+                <SelectTrigger className="h-11 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORY_LIST.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-              {shiftOptions.length > 1 && (
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Для змін</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {shiftOptions.map((s) => (
-                      <button key={s.id} type="button" onClick={() => toggleFormShift(s.id)} className={chip(form.shifts.includes(s.id))}>{s.name}</button>
-                    ))}
-                  </div>
+            {shiftOptions.length > 1 && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Для змін</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {shiftOptions.map((s) => (
+                    <button key={s.id} type="button" onClick={() => toggleFormShift(s.id)} className={chip(form.shifts.includes(s.id))}>{s.name}</button>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              <div className="space-y-2">
-                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Команди {form.target_teams.length === 0 && '(порожньо = всі команди обраних змін)'}
-                </Label>
-                {form.shifts.map((id) => {
-                  const teams = byShift[id] ?? [];
-                  const all = teams.length > 0 && teams.every((t) => form.target_teams.includes(t));
-                  return (
-                    <div key={id} className="space-y-1">
-                      {form.shifts.length > 1 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-foreground">{shiftName(id)}</span>
-                          {teams.length > 0 && (
-                            <button type="button" onClick={() => toggleShiftTeams(id)} className="text-[11px] text-primary">{all ? 'зняти' : 'уся зміна'}</button>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex flex-wrap gap-1.5">
-                        {teams.length ? teams.map((t) => (
-                          <button key={t} type="button" onClick={() => toggleTeam(t)}
-                            className={`h-8 w-8 rounded-lg text-xs font-bold border transition-all active:scale-95 ${form.target_teams.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'}`}>
-                            {t}
-                          </button>
-                        )) : <span className="text-[11px] text-muted-foreground">У зміни ще немає команд</span>}
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Команди {form.target_teams.length === 0 && '(порожньо = всі команди обраних змін)'}
+              </Label>
+              {form.shifts.map((id) => {
+                const teams = byShift[id] ?? [];
+                const all = teams.length > 0 && teams.every((t) => form.target_teams.includes(t));
+                return (
+                  <div key={id} className="space-y-1.5">
+                    {form.shifts.length > 1 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-foreground">{shiftName(id)}</span>
+                        {teams.length > 0 && (
+                          <button type="button" onClick={() => toggleShiftTeams(id)} className="px-1 py-1 text-[11px] text-primary">{all ? 'зняти' : 'уся зміна'}</button>
+                        )}
                       </div>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {teams.length ? teams.map((t) => (
+                        <button key={t} type="button" onClick={() => toggleTeam(t)} aria-pressed={form.target_teams.includes(t)}
+                          className={`h-10 min-w-10 rounded-lg px-2 text-sm font-bold border transition-all active:scale-95 sm:h-8 sm:min-w-8 sm:text-xs ${form.target_teams.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-surface-2 text-muted-foreground border-border'}`}>
+                          {t}
+                        </button>
+                      )) : <span className="text-[11px] text-muted-foreground">У зміни ще немає команд</span>}
                     </div>
-                  );
-                })}
-                {form.target_teams.length > 0 && formTeams.length > 0 && (
-                  <button type="button" onClick={() => setForm({ ...form, target_teams: [] })} className="text-[11px] text-primary">Скинути — для всіх</button>
-                )}
-              </div>
-
-              {!form.id && repeatDays.length > 0 && (
-                <div className="space-y-1.5">
-                  <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    <Repeat className="h-3 w-3" /> Повторити ще на дні {form.repeat.length > 0 && `(${form.repeat.length})`}
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {repeatDays.map((d) => (
-                      <button key={d} type="button"
-                        onClick={() => setForm({ ...form, repeat: form.repeat.includes(d) ? form.repeat.filter((x) => x !== d) : [...form.repeat, d] })}
-                        className={chip(form.repeat.includes(d))}>
-                        {shortDate(d)}
-                      </button>
-                    ))}
                   </div>
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => setForm({ ...form, repeat: repeatDays.filter((d) => d > date) })} className="text-[11px] text-primary">Щодня до кінця зміни</button>
-                    {form.repeat.length > 0 && <button type="button" onClick={() => setForm({ ...form, repeat: [] })} className="text-[11px] text-muted-foreground">Очистити</button>}
-                  </div>
-                </div>
+                );
+              })}
+              {form.target_teams.length > 0 && formTeams.length > 0 && (
+                <button type="button" onClick={() => setForm({ ...form, target_teams: [] })} className="py-1 text-[11px] text-primary">Скинути — для всіх</button>
               )}
             </div>
-          )}
-          <DialogFooter>
-            <Button onClick={save} disabled={busy} className="w-full h-11 font-bold uppercase text-xs">
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : form && !form.id && form.repeat.length ? `Зберегти на ${form.repeat.length + 1} дн.` : 'Зберегти'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+            {!form.id && repeatDays.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <Repeat className="h-3 w-3" /> Повторити ще на дні {form.repeat.length > 0 && `(${form.repeat.length})`}
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {repeatDays.map((d) => (
+                    <button key={d} type="button"
+                      onClick={() => setForm({ ...form, repeat: form.repeat.includes(d) ? form.repeat.filter((x) => x !== d) : [...form.repeat, d] })}
+                      className={chip(form.repeat.includes(d))}>
+                      {shortDate(d)}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-4">
+                  <button type="button" onClick={() => setForm({ ...form, repeat: repeatDays.filter((d) => d > date) })} className="py-1 text-[11px] text-primary">Щодня до кінця зміни</button>
+                  {form.repeat.length > 0 && <button type="button" onClick={() => setForm({ ...form, repeat: [] })} className="py-1 text-[11px] text-muted-foreground">Очистити</button>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </FormSheet>
 
       <AdminAiStudioImportModal
         open={aiOpen}

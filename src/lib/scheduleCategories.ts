@@ -39,7 +39,8 @@ export const catMeta = (c?: string | null): CategoryMeta => CATEGORY_META[normal
 export const normalizeTime = (raw?: string | null): string | null => {
   const t = (raw ?? '').trim().replace(/^(\d{1,2}:\d{2}):\d{2}(?:\.\d+)?$/, '$1');
   if (!t) return null;
-  const m = t.match(/^(\d{1,2})\s*[:.,\-–—\s]?\s*(\d{1,2})?$/) ?? t.match(/^(\d{2})(\d{2})$/);
+  // «930» з цифрової клавіатури телефону = 09:30.
+  const m = t.match(/^(\d)(\d{2})$/) ?? t.match(/^(\d{1,2})\s*[:.,\-–—\s]?\s*(\d{1,2})?$/) ?? t.match(/^(\d{2})(\d{2})$/);
   if (!m) return null;
   const h = Number(m[1]);
   const min = m[2] == null || m[2] === '' ? 0 : Number(m[2]);
@@ -81,4 +82,14 @@ export const shiftTime = (t: string | null, delta: number): string | null => {
 export const sentenceCase = (s?: string | null): string => {
   const t = (s || '').trim();
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+};
+
+/**
+ * Підставляє двокрапку, коли на цифровій клавіатурі набрано 4 цифри: «1830» → «18:30».
+ * Три цифри («930») розпізнає normalizeTime при виході з поля; діапазони не чіпаємо.
+ */
+export const maskTimeInput = (raw: string): string => {
+  if (!/^[\d:\s]+$/.test(raw)) return raw;
+  const digits = raw.replace(/[:\s]/g, '');
+  return digits.length === 4 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : raw;
 };

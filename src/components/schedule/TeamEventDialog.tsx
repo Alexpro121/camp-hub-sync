@@ -4,10 +4,10 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import FormSheet from '@/components/ui/form-sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { CATEGORY_LIST, normalizeTime, normalizeTimeRange, sentenceCase } from '@/lib/scheduleCategories';
+import { CATEGORY_LIST, maskTimeInput, normalizeTime, normalizeTimeRange, sentenceCase } from '@/lib/scheduleCategories';
 import { broadcastScheduleUpdated } from '@/lib/schedule';
 import { audiencePayload, sameAudience, visibleToShift } from '@/lib/scheduleAudience';
 import { findOverlaps } from '@/lib/scheduleOverlap';
@@ -145,86 +145,102 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
     }
   };
 
-  const field = 'h-10 text-sm';
+  const field = 'h-11 text-sm';
   const label = 'text-[10px] uppercase tracking-wider text-muted-foreground';
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-1rem)] max-w-sm overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{item ? 'Моя подія' : `Подія для команди №${team}`}</DialogTitle>
-          <DialogDescription className="text-xs">Бачать лише учасники та супровід вашої команди.</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className={label}>Назва</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Збір команди" maxLength={120} className={field} />
-          </div>
-          {!item && (
-            <div className="space-y-1.5">
-              <Label className={label}>День</Label>
-              <Input type="date" value={day} onChange={(e) => setDay(e.target.value || date)} className={field} />
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="min-w-0 space-y-1.5">
-              <Label className={label}>Початок</Label>
-              <Input value={start} onChange={(e) => setStart(e.target.value)} placeholder="18:00"
-                onBlur={(e) => { const r = normalizeTimeRange(e.target.value); if (r.start) setStart(r.start); if (r.end) setEnd(r.end); }}
-                className={`${field} tabular-nums`} />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label className={label}>Кінець</Label>
-              <Input value={end} onChange={(e) => setEnd(e.target.value)} placeholder="19:00"
-                onBlur={(e) => setEnd(normalizeTime(e.target.value) ?? e.target.value)} className={`${field} tabular-nums`} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label className={`${label} flex items-center gap-1`}><MapPin className="h-3 w-3" /> Місце</Label>
-            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Біля корпусу 2" maxLength={120} className={field} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className={label}>Деталі</Label>
-            <textarea value={details} onChange={(e) => setDetails(e.target.value)} rows={2} maxLength={500} placeholder="Взяти воду, форма спортивна…"
-              className="w-full resize-none rounded-md border border-input bg-background p-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className={label}>Категорія</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-10 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {CATEGORY_LIST.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          {overlaps && overlaps.length > 0 && (
-            <div role="alert" className="space-y-1.5 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
-              <p className="flex items-center gap-1.5 font-semibold text-warning">
-                <AlertTriangle className="h-4 w-4 shrink-0" /> Накладка з {overlaps.length === 1 ? 'подією' : `${overlaps.length} подіями`} команди
-              </p>
-              <ul className="space-y-0.5">
-                {overlaps.slice(0, 5).map((o) => (
-                  <li key={o.id} className="truncate">
-                    <span className="font-mono tabular-nums">{o.time_start}{o.time_end ? `–${o.time_end}` : ''}</span> · {sentenceCase(o.title)}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-muted-foreground">Можна зберегти — команда побачить обидві події одночасно.</p>
-            </div>
-          )}
+  const dirty = open && (
+    title !== (item?.title ?? '') || start !== (item?.time_start ?? '') || end !== (item?.time_end ?? '')
+    || location !== (item?.location ?? '') || details !== (item?.description ?? '')
+  );
+
+  const footer = (
+    <div className="space-y-2.5">
+      {/* Попередження в нижній панелі — видно разом із кнопкою, навіть з відкритою клавіатурою. */}
+      {overlaps && overlaps.length > 0 && (
+        <div role="alert" className="max-h-32 space-y-1 overflow-y-auto rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-foreground">
+          <p className="flex items-center gap-1.5 font-semibold text-warning">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> Накладка з {overlaps.length === 1 ? 'подією' : `${overlaps.length} подіями`} команди
+          </p>
+          <ul className="space-y-0.5">
+            {overlaps.slice(0, 5).map((o) => (
+              <li key={o.id} className="truncate">
+                <span className="font-mono tabular-nums">{o.time_start}{o.time_end ? `–${o.time_end}` : ''}</span> · {sentenceCase(o.title)}
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground">Можна зберегти — команда побачить обидві події одночасно.</p>
         </div>
-        <DialogFooter className="gap-2">
-          {item && (
-            <Button type="button" variant="outline" onClick={remove} disabled={busy}
-              className={confirmDelete ? 'border-destructive bg-destructive text-destructive-foreground' : 'border-destructive/40 text-destructive'}>
-              <Trash2 className="mr-1.5 h-4 w-4" />{confirmDelete ? 'Так, видалити' : 'Видалити'}
-            </Button>
-          )}
-          <Button type="button" onClick={save} disabled={busy} className="flex-1 font-bold">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : overlaps?.length ? 'Все одно зберегти' : 'Зберегти'}
+      )}
+      <div className="flex gap-2">
+        {item && (
+          <Button type="button" variant="outline" onClick={remove} disabled={busy}
+            className={`h-12 ${confirmDelete ? 'border-destructive bg-destructive text-destructive-foreground' : 'border-destructive/40 text-destructive'}`}>
+            <Trash2 className="mr-1.5 h-4 w-4" />{confirmDelete ? 'Так, видалити' : 'Видалити'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+        <Button type="button" onClick={save} disabled={busy} className="h-12 flex-1 font-bold">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : overlaps?.length ? 'Все одно зберегти' : 'Зберегти'}
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <FormSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      dirty={dirty}
+      title={item ? 'Моя подія' : `Подія для команди №${team}`}
+      description="Бачать лише учасники та супровід вашої команди."
+      footer={footer}
+    >
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="team-ev-title" className={label}>Назва</Label>
+          <Input id="team-ev-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Збір команди" maxLength={120}
+            enterKeyHint="next" autoCapitalize="sentences" className={field} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="team-ev-start" className={label}>Початок</Label>
+            <Input id="team-ev-start" value={start} inputMode="numeric" enterKeyHint="next" autoComplete="off" placeholder="1800"
+              onChange={(e) => setStart(maskTimeInput(e.target.value))}
+              onBlur={(e) => { const r = normalizeTimeRange(e.target.value); if (r.start) setStart(r.start); if (r.end) setEnd(r.end); }}
+              className={`${field} tabular-nums`} />
+          </div>
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="team-ev-end" className={label}>Кінець</Label>
+            <Input id="team-ev-end" value={end} inputMode="numeric" enterKeyHint="next" autoComplete="off" placeholder="1900"
+              onChange={(e) => setEnd(maskTimeInput(e.target.value))}
+              onBlur={(e) => setEnd(normalizeTime(e.target.value) ?? e.target.value)} className={`${field} tabular-nums`} />
+          </div>
+        </div>
+        {!item && (
+          <div className="space-y-1.5">
+            <Label htmlFor="team-ev-day" className={label}>День</Label>
+            <Input id="team-ev-day" type="date" value={day} onChange={(e) => setDay(e.target.value || date)} className={field} />
+          </div>
+        )}
+        <div className="space-y-1.5">
+          <Label htmlFor="team-ev-place" className={`${label} flex items-center gap-1`}><MapPin className="h-3 w-3" /> Місце</Label>
+          <Input id="team-ev-place" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Біля корпусу 2" maxLength={120}
+            enterKeyHint="next" className={field} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="team-ev-details" className={label}>Деталі</Label>
+          <textarea id="team-ev-details" value={details} onChange={(e) => setDetails(e.target.value)} rows={2} maxLength={500} placeholder="Взяти воду, форма спортивна…"
+            enterKeyHint="done" className="w-full resize-none rounded-md border border-input bg-background p-2.5 text-sm outline-none focus:ring-2 focus:ring-ring" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={label}>Категорія</Label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="h-11 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {CATEGORY_LIST.map((c) => <SelectItem key={c.value} value={c.value} className="text-xs">{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    </FormSheet>
   );
 };
 

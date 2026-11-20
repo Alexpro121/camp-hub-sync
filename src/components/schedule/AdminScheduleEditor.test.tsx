@@ -62,7 +62,7 @@ describe('multi-shift schedule editor', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Додати подію/ })[0]);
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByPlaceholderText('Сніданок'), { target: { value: 'Сніданок' } });
-    fireEvent.change(within(dialog).getByPlaceholderText('18:00 або 18.00'), { target: { value: '08:30' } });
+    fireEvent.change(within(dialog).getByLabelText('Початок'), { target: { value: '08:30' } });
     // Команди згруповані за змінами.
     expect(within(dialog).getByText('Листопад', { selector: 'span' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: '1' })).toBeTruthy();
@@ -82,7 +82,7 @@ describe('multi-shift schedule editor', () => {
     fireEvent.click((await screen.findAllByRole('button', { name: /Додати подію/ }))[0]);
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByPlaceholderText('Сніданок'), { target: { value: 'Квест' } });
-    fireEvent.change(within(dialog).getByPlaceholderText('18:00 або 18.00'), { target: { value: '10:00' } });
+    fireEvent.change(within(dialog).getByLabelText('Початок'), { target: { value: '10:00' } });
     fireEvent.click(within(dialog).getByRole('button', { name: '1' }));
     fireEvent.click(within(dialog).getByRole('button', { name: '6' }));
     fireEvent.click(within(within(dialog).getByText('Для змін').parentElement!).getByRole('button', { name: 'Зимова' }));
