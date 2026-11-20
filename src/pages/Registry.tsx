@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Loader2, LogOut, Phone, Search, StickyNote, X } from 'lucide-react';
+import { Check, ChevronRight, ChevronsUpDown, Eye, EyeOff, Loader2, LogOut, Phone, RotateCcw, Search, StickyNote, Trash2, UserPlus, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { buildIndex, normalize, searchItems, type Indexed } from '@/lib/registrySearch';
 import { toast } from 'sonner';
@@ -9,8 +9,15 @@ import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegis
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
   note_from_table: string | null; supervisor_notes: string | null; is_present: boolean;
-  gender: string | null; telegram_username: string | null; updated_at?: string;
+  gender: string | null; telegram_username: string | null; updated_at?: string; deleted_at?: string | null;
 }
+const DELETE_GRACE_MS = 24 * 3600_000;
+const timeLeft = (deletedAt: string) => {
+  const ms = new Date(deletedAt).getTime() + DELETE_GRACE_MS - Date.now();
+  if (ms <= 0) return 'зараз';
+  const h = Math.floor(ms / 3600_000), m = Math.round((ms % 3600_000) / 60000);
+  return h ? `${h} год ${m} хв` : `${m} хв`;
+};
 const TOKEN_KEY = 'ironshift:registry-token';
 
 async function call(body: Record<string, unknown>, timeoutMs = 12_000) {
@@ -105,11 +112,19 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
   );
 });
 
-function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
+function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
   kid: Kid; shiftName?: string; onClose: () => void; onToggle: (k: Kid) => void; onSaveNote: (k: Kid, note: string) => Promise<void>;
+  onDelete: (k: Kid) => Promise<boolean>;
 }) {
   const [note, setNote] = useState(kid.supervisor_notes ?? '');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const remove = async () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    setDeleting(true);
+    try { if (!(await onDelete(kid))) setConfirmDelete(false); } finally { setDeleting(false); }
+  };
   const dirty = note !== (kid.supervisor_notes ?? '');
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -146,6 +161,24 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
               placeholder="Напр.: здали ліки, алергія, приїхав пізніше…"
               className="w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
           </div>
+          <div className="border-t border-border pt-4">
+            {confirmDelete && (
+              <p className="mb-2 text-sm text-muted-foreground animate-in fade-in">
+                Учасник зникне з команди й 24 години буде у вкладці «Видалені». Потім профіль стане недоступним.
+              </p>
+            )}
+            <div className="flex gap-2">
+              {confirmDelete && (
+                <button onClick={() => setConfirmDelete(false)} disabled={deleting}
+                  className="h-11 flex-1 rounded-xl border border-border text-sm font-medium text-foreground">Скасувати</button>
+              )}
+              <button onClick={remove} disabled={deleting}
+                className={`flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-colors active:scale-[0.98] disabled:opacity-60 ${confirmDelete ? 'bg-destructive text-destructive-foreground' : 'border border-destructive/40 text-destructive'}`}>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {confirmDelete ? 'Так, видалити' : 'Видалити учасника'}
+              </button>
+            </div>
+          </div>
         </div>
         <div className="border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button onClick={dirty ? save : onClose} disabled={saving}
@@ -158,7 +191,173 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote }: {
   );
 }
 
-type Filter = 'all' | 'absent' | 'present';
+type NewKid = { full_name: string; team_number: number; shift_id: string; phone: string; telegram_username: string; gender: '' | 'male' | 'female'; note: string; is_present: boolean };
+type CreateResult = 'ok' | 'error' | { duplicate: string };
+
+function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate }: {
+  shifts: Record<string, string>; defaultShift: string | null; defaultTeam: number | null; teams: number[];
+  onClose: () => void; onCreate: (v: NewKid, force: boolean) => Promise<CreateResult>;
+}) {
+  const shiftIds = Object.keys(shifts);
+  const [v, setV] = useState<NewKid>({
+    full_name: '', team_number: 0, shift_id: defaultShift ?? (shiftIds.length === 1 ? shiftIds[0] : ''),
+    phone: '', telegram_username: '', gender: '', note: '', is_present: true,
+  });
+  const [teamText, setTeamText] = useState(defaultTeam != null ? String(defaultTeam) : '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [dup, setDup] = useState<string | null>(null);
+  const touch = () => { setErr(''); setDup(null); };
+  const set = <K extends keyof NewKid>(k: K, x: NewKid[K]) => { setV((o) => ({ ...o, [k]: x })); touch(); };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  useEffect(() => { const o = document.body.style.overflow; document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = o; }; }, []);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const name = v.full_name.replace(/\s+/g, ' ').trim();
+    const team = Number(teamText);
+    if (name.split(' ').length < 2) { setErr('Вкажіть прізвище та ім\'я'); return; }
+    if (!teamText || !Number.isInteger(team) || team < 1 || team > 999) { setErr('Вкажіть номер команди'); return; }
+    if (!v.shift_id) { setErr('Оберіть зміну'); return; }
+    setBusy(true);
+    try {
+      const r = await onCreate({ ...v, full_name: name, team_number: team }, dup !== null);
+      if (typeof r === 'object') setDup(r.duplicate);
+    } finally { setBusy(false); }
+  };
+  const field = 'h-11 w-full rounded-xl border border-input bg-background px-3 text-base text-foreground outline-none focus:ring-2 focus:ring-ring';
+  const pill = (on: boolean) => `h-10 rounded-xl border px-3 text-sm font-semibold ${on ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground'}`;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 sm:backdrop-blur-sm animate-in fade-in duration-200 sm:items-center" onClick={onClose}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-8 sm:zoom-in-95 duration-300 ease-out pb-[env(safe-area-inset-bottom)] sm:rounded-3xl">
+        <div className="flex items-center gap-3 border-b border-border p-4">
+          <h2 className="flex-1 text-lg font-bold text-foreground">Новий учасник</h2>
+          <button type="button" onClick={onClose} aria-label="Закрити" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-3 overflow-y-auto overscroll-contain p-4">
+          <label className="block text-sm font-medium text-foreground">Прізвище та ім'я
+            <input autoFocus value={v.full_name} onChange={(e) => set('full_name', e.target.value)} maxLength={120} autoComplete="off" placeholder="Шевченко Тарас" className={`mt-1 ${field}`} />
+          </label>
+          <div>
+            <span className="mb-1 block text-sm font-medium text-foreground">Команда</span>
+            <div className="flex flex-wrap gap-1.5">
+              {teams.map((t) => (
+                <button type="button" key={t} onClick={() => { setTeamText(String(t)); touch(); }} className={`${pill(teamText === String(t))} min-w-10 tabular-nums`}>{t}</button>
+              ))}
+              <input inputMode="numeric" value={teamText} onChange={(e) => { setTeamText(e.target.value.replace(/\D/g, '').slice(0, 3)); touch(); }}
+                aria-label="Номер команди" placeholder="№" className="h-10 w-16 rounded-xl border border-input bg-background px-2 text-center text-base tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring" />
+            </div>
+          </div>
+          {shiftIds.length > 1 && (
+            <label className="block text-sm font-medium text-foreground">Зміна
+              <select value={v.shift_id} onChange={(e) => set('shift_id', e.target.value)} className={`mt-1 ${field}`}>
+                <option value="" disabled>Оберіть зміну</option>
+                {shiftIds.map((id) => <option key={id} value={id}>{shifts[id]}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm font-medium text-foreground">Телефон
+              <input type="tel" inputMode="tel" value={v.phone} onChange={(e) => set('phone', e.target.value)} maxLength={40} placeholder="+380…" className={`mt-1 ${field}`} />
+            </label>
+            <label className="block text-sm font-medium text-foreground">Telegram
+              <input value={v.telegram_username} onChange={(e) => set('telegram_username', e.target.value)} maxLength={64} placeholder="@нік" autoCapitalize="off" className={`mt-1 ${field}`} />
+            </label>
+          </div>
+          <div>
+            <span className="mb-1 block text-sm font-medium text-foreground">Стать</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([['', 'Не вказано'], ['female', 'Дівчинка'], ['male', 'Хлопчик']] as const).map(([g, l]) => (
+                <button type="button" key={g} onClick={() => set('gender', g)} className={pill(v.gender === g)}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <label className="block text-sm font-medium text-foreground">Нотатка
+            <textarea value={v.note} onChange={(e) => set('note', e.target.value)} rows={2} maxLength={2000} placeholder="Необов'язково"
+              className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input type="checkbox" checked={v.is_present} onChange={(e) => set('is_present', e.target.checked)} className="h-5 w-5" />
+            Одразу позначити присутнім
+          </label>
+          {err && <p className="text-sm text-destructive animate-in fade-in">{err}</p>}
+          {dup && <p className="rounded-xl bg-warning/10 p-3 text-sm text-warning animate-in fade-in">У цій зміні вже є «{dup}». Натисніть ще раз, щоб усе одно створити.</p>}
+        </div>
+        <div className="border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <button disabled={busy} className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
+            {busy ? <Loader2 className="mx-auto h-5 w-5 animate-spin" /> : dup ? 'Все одно створити' : 'Створити учасника'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DeletedList({ token, shiftId, team, shifts, refreshKey, onRestored, onLogout }: {
+  token: string; shiftId: string | null; team: number | null; shifts: Record<string, string>; refreshKey: number;
+  onRestored: (k: Kid) => void; onLogout: () => void;
+}) {
+  const [list, setList] = useState<Kid[] | null>(null);
+  const [err, setErr] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    setErr(false);
+    call({ action: 'deleted', token, ...(shiftId ? { shift_id: shiftId } : {}) })
+      .then((d) => { if (!dead) setList(d.children ?? []); })
+      .catch((e) => { if (dead) return; if (e.message === 'unauthorized') onLogout(); else setErr(true); });
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => { dead = true; clearInterval(t); };
+  }, [token, shiftId, refreshKey, onLogout]);
+  const restore = async (k: Kid) => {
+    setBusyId(k.id);
+    try {
+      const d = await call({ action: 'restore', token, id: k.id });
+      setList((l) => l?.filter((x) => x.id !== k.id) ?? l);
+      onRestored(d.child);
+      toast.success(`${k.full_name} повернуто в команду ${k.team_number}`);
+    } catch (e: any) {
+      if (e.message === 'unauthorized') onLogout();
+      else if (e.message === 'expired') { setList((l) => l?.filter((x) => x.id !== k.id) ?? l); toast.error('Минуло 24 години — відновити вже не можна'); }
+      else toast.error('Немає зв\'язку. Спробуйте ще раз.');
+    } finally { setBusyId(null); }
+  };
+  const visible = (list ?? []).filter((k) => (team === null || k.team_number === team) && k.deleted_at && new Date(k.deleted_at).getTime() + DELETE_GRACE_MS > Date.now());
+  if (!list) return err
+    ? <p className="pt-12 text-center text-sm text-muted-foreground">Немає зв'язку — список видалених недоступний офлайн.</p>
+    : <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-[70px] animate-pulse rounded-2xl bg-muted" />)}</div>;
+  if (!visible.length) return <p className="pt-12 text-center text-muted-foreground animate-in fade-in">Видалених за останню добу немає</p>;
+  return (
+    <>
+      <p className="mb-2 text-xs text-muted-foreground">Через 24 години після видалення профіль учасника стає недоступним.</p>
+      <ul className="space-y-2">
+        {visible.map((k) => (
+          <li key={k.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 animate-in fade-in">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-semibold text-foreground">{k.full_name}</div>
+              <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                <span>Команда {k.team_number}</span>
+                {!shiftId && shifts[k.shift_id] && <span className="truncate">· {shifts[k.shift_id]}</span>}
+                <span className="text-destructive">· зникне через {timeLeft(k.deleted_at!)}</span>
+              </div>
+            </div>
+            <button onClick={() => restore(k)} disabled={busyId === k.id}
+              className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-border px-3 text-sm font-medium text-foreground active:scale-95 disabled:opacity-60">
+              {busyId === k.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}Відновити
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+type Filter = 'all' | 'absent' | 'present' | 'deleted';
 const QUEUE_KEY = 'ironshift:registry-queue';
 type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string; base_note?: string }>;
 const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
@@ -186,6 +385,8 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const [team, setTeam] = useState<number | null>(null);
   const [limit, setLimit] = useState(60);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [deletedKey, setDeletedKey] = useState(0);
   const [queued, setQueued] = useState(() => Object.keys(readQueue()).length);
   const dq = useDeferredValue(q);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -336,7 +537,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     return [...m.entries()].sort((a, b) => a[0] - b[0]);
   }, [scoped]);
   const filtered = useMemo(() => scoped.filter((k) =>
-    (team === null || k.team_number === team) && (filter === 'all' || (filter === 'present') === k.is_present)), [scoped, team, filter]);
+    (team === null || k.team_number === team) && (filter === 'all' || filter === 'deleted' || (filter === 'present') === k.is_present)), [scoped, team, filter]);
 
   // Пошук іде по всіх дітях (фільтр «хто не прийшов» не ховає знайдених), браузинг — по фільтру.
   const searching = dq.trim().length > 0;
@@ -383,6 +584,68 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     setOpenId(null);
   }, [send]);
 
+  const upsertKid = useCallback((c: Kid) => {
+    persistChanges([c]);
+    setKids((ks) => {
+      if (!ks) return ks;
+      if (c.deleted_at) return ks.filter((k) => k.id !== c.id);
+      return ks.some((k) => k.id === c.id) ? ks.map((k) => (k.id === c.id ? { ...k, ...c } : k)) : [...ks, c];
+    });
+  }, [persistChanges]);
+
+  const restoreKid = useCallback(async (k: Kid) => {
+    try {
+      const d = await call({ action: 'restore', token, id: k.id });
+      upsertKid(d.child); setDeletedKey((n) => n + 1);
+      toast.success(`${k.full_name} повернуто в команду ${k.team_number}`);
+    } catch (e: any) {
+      if (e.message === 'unauthorized') onLogout();
+      else toast.error(e.message === 'expired' ? 'Відновити вже не можна' : 'Немає зв\'язку. Відновіть у вкладці «Видалені».');
+    }
+  }, [token, upsertKid, onLogout]);
+
+  // Видалення лише онлайн: офлайн-черга не повинна «воскрешати» чи губити учасника.
+  const deleteKid = useCallback(async (k: Kid) => {
+    try {
+      const d = await call({ action: 'delete', token, id: k.id });
+      const pq = readQueue();
+      if (pq[k.id]) { delete pq[k.id]; writeQueue(pq); setQueued(Object.keys(pq).length); }
+      upsertKid({ ...k, ...d.child });
+      setOpenId(null); setDeletedKey((n) => n + 1);
+      navigator.vibrate?.([10, 40, 10]);
+      toast(`${k.full_name} видалено з команди ${k.team_number}`, {
+        description: '24 години можна відновити у вкладці «Видалені»',
+        duration: 6000,
+        action: { label: 'Відновити', onClick: () => { void restoreKid(k); } },
+      });
+      return true;
+    } catch (e: any) {
+      if (e.message === 'unauthorized') onLogout();
+      else if (e.message === 'not_found') { upsertKid({ ...k, deleted_at: new Date().toISOString() }); setOpenId(null); toast('Цього учасника вже видалено'); return true; }
+      else toast.error('Видалення потребує інтернету. Спробуйте ще раз.');
+      return false;
+    }
+  }, [token, upsertKid, restoreKid, onLogout]);
+
+  const createKid = useCallback(async (v: NewKid, force: boolean): Promise<CreateResult> => {
+    try {
+      const d = await call({
+        action: 'create', token, force, shift_id: v.shift_id, full_name: v.full_name, team_number: v.team_number,
+        phone: v.phone, telegram_username: v.telegram_username, gender: v.gender || null, note: v.note, is_present: v.is_present,
+      });
+      upsertKid(d.child);
+      setCreating(false);
+      navigator.vibrate?.(20);
+      toast.success(`${d.child.full_name} · команда ${d.child.team_number} — створено`);
+      return 'ok';
+    } catch (e: any) {
+      if (e.message === 'unauthorized') { onLogout(); return 'error'; }
+      if (e.message === 'duplicate') return { duplicate: v.full_name };
+      toast.error(e.message === 'bad_shift' ? 'Ця зміна вже неактивна' : e.message === 'bad_name' ? 'Вкажіть прізвище та ім\'я' : 'Немає зв\'язку. Створення потребує інтернету.');
+      return 'error';
+    }
+  }, [token, upsertKid, onLogout]);
+
   const searchingRef = useRef(searching); searchingRef.current = searching;
   const onRowToggle = useCallback((x: Kid) => toggle(x, searchingRef.current), [toggle]);
   const onRowOpen = useCallback((x: Kid) => setOpenId(x.id), []);
@@ -401,6 +664,10 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             {!online && <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground animate-in fade-in" title={syncedAt ? `Список оновлено ${ago(syncedAt)}` : undefined}>Офлайн{syncedAt ? ` · ${ago(syncedAt)}` : ''}</span>}
             {queued > 0 && <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-semibold text-warning" title="Чекають на інтернет">⏳ {queued}</span>}
             <span className="rounded-full bg-success/15 px-3 py-1 text-sm font-semibold tabular-nums text-success">{present} / {total}</span>
+            <button onClick={() => setCreating(true)} aria-label="Створити учасника" title="Створити учасника"
+              className="flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-semibold text-primary-foreground transition-transform active:scale-95" style={{ background: 'var(--gradient-primary)' }}>
+              <UserPlus className="h-4 w-4" /><span className="hidden sm:inline">Створити учасника</span>
+            </button>
             <ExitConfirm onConfirm={onLogout}><button aria-label="Вийти" className="rounded-xl p-2 text-muted-foreground hover:bg-muted"><LogOut className="h-5 w-5" /></button></ExitConfirm>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -418,7 +685,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             {q && <button onClick={() => { setQ(''); inputRef.current?.focus(); }} aria-label="Очистити" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-muted-foreground"><X className="h-5 w-5" /></button>}
           </div>
           <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto overscroll-x-contain px-4 pb-1 snap-x [scrollbar-width:none]">
-            {([['absent', `Не прийшли · ${total - present}`], ['present', `Прийшли · ${present}`], ['all', 'Усі']] as [Filter, string][]).map(([f, l]) => (
+            {([['absent', `Не прийшли · ${total - present}`], ['present', `Прийшли · ${present}`], ['all', 'Усі'], ['deleted', 'Видалені']] as [Filter, string][]).map(([f, l]) => (
               <button key={f} onClick={() => setFilter(f)} className={chip(filter === f)}>{l}</button>
             ))}
             <span className="mx-1 w-px shrink-0 bg-border" />
@@ -439,7 +706,9 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {!kids ? (
+        {filter === 'deleted' && !searching ? (
+          <DeletedList token={token} shiftId={shiftId} team={team} shifts={shifts} refreshKey={deletedKey} onRestored={upsertKid} onLogout={onLogout} />
+        ) : !kids ? (
           <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[70px] animate-pulse rounded-2xl bg-muted" />)}</div>
         ) : results.length === 0 ? (
           <div className="pt-12 text-center text-muted-foreground animate-in fade-in">
@@ -460,7 +729,11 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
           </>
         )}
       </main>
-      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} />}
+      {openKid && <Profile key={openKid.id} kid={openKid} shiftName={shiftId ? undefined : shifts[openKid.shift_id]} onClose={() => { setOpenId(null); inputRef.current?.select(); }} onToggle={(k) => toggle(k)} onSaveNote={saveNote} onDelete={deleteKid} />}
+      {creating && (
+        <CreateKid shifts={shifts} defaultShift={shiftId} defaultTeam={team} teams={teams.map(([t]) => t)}
+          onClose={() => setCreating(false)} onCreate={createKid} />
+      )}
     </div>
   );
 }

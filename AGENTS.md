@@ -19,3 +19,5 @@
 - Import previews deterministically bound labelled estimates by chronological same-team starts across dates, including streaming previews and saved drafts; explicit ranges and parallel teams remain untouched, and impossible subslot truncations block saving rather than lose meal arrivals.
 - Live schedule previews scan only fully closed event objects incrementally; AI and manual documents remain separate, equal start/end times become unknown ends with warnings, and a fixed-height dialog confines auto-scroll to its event list using stable event identities.
 - Schedule generation errors preserve provider status and finish/block codes; an inline streaming monitor logs only structured codes and request IDs, never input/output content, so failures after HTTP 200 remain traceable.
+- Registry creates participants only online in active shifts and soft-deletes via deleted_at: they leave teams at once, stay restorable in the Deleted tab for 24 hours, then private.my_child_id stops resolving so the profile closes while history stays intact.
+- Staff copy a schedule day as emoji plain text plus HTML (bold titles) so Telegram paste stays readable on every client.

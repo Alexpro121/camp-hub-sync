@@ -2,7 +2,9 @@ import { getSessionMeta } from '@/lib/session';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Users, Building2, ArrowRight } from 'lucide-react';
+import { CalendarDays, Users, Building2, ArrowRight, Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
+import { copyRich, scheduleToHtml, scheduleToText } from '@/lib/scheduleShare';
 import { supabase } from '@/integrations/supabase/client';
 import type { Schedule, ScheduleItem } from '@/types/app';
 import { InlineLoader } from '@/components/ui/loader';
@@ -293,6 +295,21 @@ const ScheduleView = ({
     return rows.sort((a, b) => a.startMin - b.startMin || (a.kind === 'booking' ? -1 : 1));
   }, [visibleEvents, teamBookings]);
 
+  const [copied, setCopied] = useState(false);
+  const copySchedule = async () => {
+    if (!activeDay) return;
+    haptics.impact('light');
+    const input = { dateISO: activeDay, team, events: visibleEvents, slotsOf: (e: NormalizedScheduleItem) => slotsOf(e.item) };
+    const ok = await copyRich(scheduleToText(input), scheduleToHtml(input));
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+      toast.success('Розклад скопійовано — вставте в Telegram', { duration: 2000 });
+    } else {
+      toast.error('Не вдалося скопіювати');
+    }
+  };
+
   const myBookingsCount = myTeam != null ? teamBookings.filter((b) => b.team_number === myTeam).length : 0;
 
   if (loading) return <InlineLoader label="Завантаження розкладу..." />;
@@ -321,6 +338,19 @@ const ScheduleView = ({
             Розклад
           </span>
         </div>
+
+        {isStaff && activeDay && (
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={copySchedule}
+            aria-label="Скопіювати розклад"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border/60 bg-card/80 px-3 text-xs font-semibold text-foreground active:scale-95 transition-transform"
+          >
+            {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
+            {copied ? 'Скопійовано' : 'Копіювати'}
+          </Button>
+        )}
 
         {HALL_FEATURE_ENABLED && isStaff && myTeam != null && (
           <Button
