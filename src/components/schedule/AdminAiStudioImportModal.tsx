@@ -21,10 +21,13 @@ interface Props {
   date: string;
   onOpenChange: (open: boolean) => void;
   onImported: (firstDate?: string) => void;
+  /** Зміни, для яких імпортуємо (спільний розклад). Без них — активна зміна. */
+  shiftIds?: string[];
 }
 
-const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Props) => {
+const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported, shiftIds }: Props) => {
   const { shiftId } = useActiveShift();
+  const targetShifts = shiftIds ?? (shiftId ? [shiftId] : []);
   const [rawText, setRawText] = useState("");
   const [aiJson, setAiJson] = useState('');
   const [manualJson, setManualJson] = useState('');
@@ -150,7 +153,7 @@ const AdminAiStudioImportModal = ({ open, date, onOpenChange, onImported }: Prop
     saving.current = true;
     setBusy(true);
     try {
-      const result = await saveScheduleImport(preview.days, shiftId, rawText);
+      const result = await saveScheduleImport(preview.days, targetShifts, rawText);
       const firstDate = preview.days[0]?.date;
       if (result.total) {
         // Drafts are not announced as published events to participants.

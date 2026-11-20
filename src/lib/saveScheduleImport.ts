@@ -1,19 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { scheduleImportKey, type ImportDay } from './scheduleImport';
+import { audiencePayload, sameAudience } from './scheduleAudience';
 
 /** New batches never reuse published rows; failed batches are removed before retry. */
-export async function saveScheduleImport(days: ImportDay[], shiftId: string | null, rawText: string) {
+/** `shiftIds` — зміни, яким належить імпорт (кілька = спільний розклад; порожньо = загальнотаборовий). */
+export async function saveScheduleImport(days: ImportDay[], shiftIds: string[], rawText: string) {
+  const audience = audiencePayload(shiftIds);
   let total = 0;
   let skipped = 0;
   const created: string[] = [];
   try {
     for (const day of days) {
-      let query = supabase.from('schedules').select('id').eq('date', day.date).is('deleted_at', null);
-      query = shiftId ? query.eq('shift_id', shiftId) : query.is('shift_id', null);
-      const schedules = await query;
+      const schedules = await supabase.from('schedules').select('id, shift_id, shift_ids').eq('date', day.date).is('deleted_at', null);
       if (schedules.error) throw schedules.error;
-      const ids = (schedules.data ?? []).map((row) => row.id);
+      const ids = (schedules.data ?? []).filter((row) => sameAudience(row, shiftIds)).map((row) => row.id);
       const seen = new Set<string>();
       // Stable pagination: a long existing day must not silently truncate deduplication.
       if (ids.length) {
@@ -31,7 +32,7 @@ export async function saveScheduleImport(days: ImportDay[], shiftId: string | nu
         seen.add(key); return true;
       });
       if (!items.length) continue;
-      const batch = await supabase.from('schedules').insert({ date: day.date, shift_id: shiftId, raw_text: rawText.trim() || null, is_published: false }).select('id').single();
+      const batch = await supabase.from('schedules').insert({ date: day.date, ...audience, raw_text: rawText.trim() || null, is_published: false }).select('id').single();
       if (batch.error) throw batch.error;
       if (!batch.data) throw new Error('Не вдалося створити чернетку');
       const id = batch.data.id;

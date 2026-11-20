@@ -1,3 +1,4 @@
+import { visibleToShift } from '@/lib/scheduleAudience';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { getSessionMeta } from '@/lib/session';
 import { dedupeItems } from '@/lib/schedule';
@@ -56,7 +57,7 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
         .eq('date', todayISO())
         .is('deleted_at', null);
       const myShift = getSessionMeta()?.shiftId ?? null;
-      const days = ((sch as Schedule[] | null) ?? []).filter((s) => !myShift || !s.shift_id || s.shift_id === myShift);
+      const days = ((sch as Schedule[] | null) ?? []).filter((s) => visibleToShift(s, myShift));
       if (!days.length) { if (!cancelled) setAlerts([]); return; }
 
       const { data: rawIts } = await supabase

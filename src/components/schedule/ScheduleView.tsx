@@ -1,4 +1,5 @@
 import { getSessionMeta } from '@/lib/session';
+import { visibleToShift } from '@/lib/scheduleAudience';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Button } from '@/components/ui/button';
@@ -67,7 +68,8 @@ const ScheduleView = ({
   isStaff = false, 
   onFairAction 
 }: Props) => {
-  const { data: TEAMS } = useAllTeams(!lockTeam);
+  // Супровід бачить лише команди своєї зміни: у паралельних змін номери різні.
+  const { data: TEAMS } = useAllTeams(!lockTeam, [getSessionMeta()?.shiftId]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +107,7 @@ const ScheduleView = ({
       // Лише розклади своєї зміни + загальнотаборові (без зміни).
       const myShift = getSessionMeta()?.shiftId ?? null;
       
-      const list = ((sch || []) as Schedule[]).filter((s) => !myShift || !s.shift_id || s.shift_id === myShift);
+      const list = ((sch || []) as Schedule[]).filter((s) => visibleToShift(s, myShift));
       setSchedules(list);
       
       const ids = list.map((s) => s.id);

@@ -85,6 +85,8 @@ export interface IronTransaction {
 export interface Schedule {
   id: string;
   shift_id: string | null;
+  /** Зміни, яким належить розклад (спільний для кількох); null — див. shift_id. */
+  shift_ids?: string[] | null;
   date: string;
   raw_text: string | null;
   is_published: boolean;
