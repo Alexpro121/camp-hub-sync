@@ -3,21 +3,6 @@ import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared
 
 const ADMIN_TEAM = 99;
 /**
- * Стартовий пароль команди без збереженого пароля: HMAC від серверного секрету,
- * тож його неможливо вгадати. Адміністратор бачить його в панелі паролів.
- */
-async function defaultSupervisorPassword(team: number): Promise<string | null> {
-  const secret = Deno.env.get('STAFF_SUPERVISOR_SECRET');
-  if (!secret) return null;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`team:${team}`)));
-  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-  let out = '';
-  for (let i = 0; i < 10; i++) out += alphabet[sig[i] % alphabet.length];
-  return `k${team}-${out}`;
-}
-
-/**
  * Єдина канонічна форма пароля: Unicode NFC, без пробілів по краях,
  * нижній регістр, подвійні пробіли згорнуті. Використовується І при збереженні,
  * І при перевірці — інакше адмін-панель і вхід розходяться.
@@ -61,14 +46,6 @@ function passwordMatches(input: string, expected: string): boolean {
     || constantTimeEqual(canonical(toCyrillicLayout(inp)), exp);
 }
 
-/** Отримання збереженої карти паролів з таблиці team_passwords */
-async function getTeamPasswords(svc: any): Promise<Record<string, string>> {
-  const { data } = await svc.from('team_passwords').select('team, password');
-  const map: Record<string, string> = {};
-  for (const row of data ?? []) map[String(row.team)] = row.password;
-  return map;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
@@ -76,90 +53,13 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
 
-    // =========================================================================
-    // 1. ОТРИМАННЯ СПИСКУ ПАРОЛІВ ДЛЯ АДМІНІСТРАТОРА
-    // =========================================================================
-    if (body?.action === 'list_team_passwords') {
-      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-      if (!token) return json({ error: 'unauthorized' }, 401);
-      const svc = adminClient();
-      const { data: userData } = await svc.auth.getUser(token);
-      const uid = userData?.user?.id;
-      if (!uid) return json({ error: 'unauthorized' }, 401);
-      const { data: roles } = await svc.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin');
-      if (!roles?.length) return json({ error: 'forbidden' }, 403);
-
-      const [{ data: teams }, { data: shifts }, passwordMap] = await Promise.all([
-        svc.from('children').select('team_number'),
-        svc.from('shifts').select('id, assigned_teams').order('start_date', { ascending: false }).limit(1),
-        getTeamPasswords(svc),
-      ]);
-
-      const detectedTeams = (teams ?? []).map((t: { team_number: number }) => t.team_number).filter(Boolean);
-      const assigned = (shifts?.[0]?.assigned_teams || []) as number[];
-      // Команди зі збереженим паролем мають бути в списку завжди,
-      // навіть якщо в них ще немає учасників — інакше адмін не бачить робочий пароль.
-      const stored = Object.keys(passwordMap).map((k) => Number(k)).filter((n) => Number.isFinite(n));
-      const unique = [...new Set([...detectedTeams, ...assigned, ...stored])].sort((a: number, b: number) => a - b);
-      const teamList = unique.length ? unique : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-
-      const list = await Promise.all(teamList.map(async (t: number) => ({
-        team: t,
-        password: passwordMap[String(t)] ?? (await defaultSupervisorPassword(t)) ?? '',
-        is_custom: Boolean(passwordMap[String(t)]),
-      })));
-
-      return json({ passwords: list });
+    // Командні паролі супроводу вимкнено: супровід входить через особисті акаунти (staff-accounts).
+    if (body?.action === 'list_team_passwords' || body?.action === 'update_team_password' || body?.action === 'set_team_password') {
+      return json({ error: 'team_passwords_disabled' }, 410);
     }
 
     // =========================================================================
-    // 2. ЗБЕРЕЖЕННЯ / ОНОВЛЕННЯ ПАРОЛЯ КОМАНДИ АДМІНІСТРАТОРОМ
-    // =========================================================================
-    if (body?.action === 'update_team_password' || body?.action === 'set_team_password') {
-      const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-      if (!token) return json({ error: 'unauthorized' }, 401);
-      const svc = adminClient();
-      const { data: userData } = await svc.auth.getUser(token);
-      const uid = userData?.user?.id;
-      if (!uid) return json({ error: 'unauthorized' }, 401);
-      const { data: roles } = await svc.from('user_roles').select('role').eq('user_id', uid).eq('role', 'admin');
-      if (!roles?.length) return json({ error: 'forbidden' }, 403);
-
-      const targetTeam = Number(body?.team ?? body?.team_number);
-      const targetPass = canonical(String(body?.password ?? body?.new_password ?? ''));
-
-      if (!targetTeam || targetTeam < 1 || targetTeam > 999 || !targetPass) {
-        return json({ error: 'invalid_team_or_password' }, 400);
-      }
-
-      const { data: saved, error: updateErr } = await svc
-        .from('team_passwords')
-        .upsert({ team: targetTeam, password: targetPass, updated_at: new Date().toISOString() }, { onConflict: 'team' })
-        .select('team, password')
-        .maybeSingle();
-
-      if (updateErr) {
-        console.error('Update error:', updateErr);
-        return json({ error: 'database_update_failed' }, 500);
-      }
-
-      // Повертаємо саме те, що реально лежить у базі — джерело правди для UI.
-      const { data: readback } = await svc
-        .from('team_passwords')
-        .select('password')
-        .eq('team', targetTeam)
-        .maybeSingle();
-
-      const effective = readback?.password ?? saved?.password ?? targetPass;
-      if (canonical(effective) !== targetPass) {
-        return json({ error: 'save_not_persisted' }, 500);
-      }
-
-      return json({ ok: true, team: targetTeam, password: effective });
-    }
-
-    // =========================================================================
-    // 3. АВТОРИЗАЦІЯ СУПРОВОДУ / АДМІНІСТРАТОРА
+    // ВХІД АДМІНІСТРАТОРА (команда 99)
     // =========================================================================
     const rawTeam = String(body?.team ?? '').replace(/[^\d]/g, '');
     const password = typeof body?.password === 'string' ? body.password : '';
@@ -203,36 +103,10 @@ Deno.serve(async (req) => {
       return json({ role: 'admin', team, session });
     }
 
-    // =========================================================================
-    // ВХІД СУПРОВОДУ (СТРОГА ПЕРЕВІРКА БЕЗ ДЕФОЛТНОГО ОБХОДУ)
-    // =========================================================================
-    const svc = adminClient();
-    const { data: passRow, error: passError } = await svc
-      .from('team_passwords')
-      .select('password')
-      .eq('team', team)
-      .maybeSingle();
-
-    if (passError) {
-      console.error('Password lookup error:', passError);
-      return json({ error: 'login_failed' }, 500);
-    }
-
-    // Якщо пароль команди збережено, жоден дефолтний або резервний пароль не приймається.
-    const fallback = passRow?.password ? null : await defaultSupervisorPassword(team);
-    const ok = passRow?.password
-      ? passwordMatches(password, passRow.password)
-      : Boolean(fallback) && passwordMatches(password, fallback!);
-
-    if (!ok) {
-      const v = recordFailure(rlKey, { slowAfter: 3 });
-      if (v.blocked) return json({ error: 'too_many_attempts' }, 200);
-      return json({ error: 'invalid_credentials' }, 200);
-    }
-
-    resetFailures(rlKey);
-    const session = await issueSession(`staff-team-${team}@ironhelp.local`, 'supervisor', { team_number: team });
-    return json({ role: 'supervisor', team, session });
+    // Вхід за паролем команди вимкнено: лише адміністратор (99) через цю функцію.
+    const v = recordFailure(rlKey, { slowAfter: 3 });
+    if (v.blocked) return json({ error: 'too_many_attempts' }, 200);
+    return json({ error: 'invalid_credentials' }, 200);
   } catch (e) {
     console.error('staff-login failed:', e instanceof Error ? e.message : e);
     return json({ error: 'login_failed' }, 500);
