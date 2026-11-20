@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { Radio, ShoppingBag, Users, MapPin, Utensils, Dumbbell, Music2, Bus, CalendarDays } from 'lucide-react';
+import { Radio, ShoppingBag, Users, MapPin, Utensils, Dumbbell, Music2, Bus, CalendarDays, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import type { ScheduleItem, ScheduleSubSlot } from '@/types/app';
@@ -58,9 +58,11 @@ interface Props {
   isStaff?: boolean;
   /** Opens the fair cash register / scanner from inside the live fair card. */
   onFairAction?: () => void;
+  /** Власна подія супроводу — показує кнопку редагування. */
+  onEdit?: () => void;
 }
 
-const ScheduleCard = ({ event, team = null, isNow = false, past = false, progress = 0, isStaff = false, onFairAction }: Props) => {
+const ScheduleCard = ({ event, team = null, isNow = false, past = false, progress = 0, isStaff = false, onFairAction, onEdit }: Props) => {
   const item = event.item;
   const slots = slotsOf(item);
   const mySlot = team != null ? slots.find((s) => s.teams?.map(Number).includes(Number(team))) : undefined;
@@ -140,7 +142,14 @@ const ScheduleCard = ({ event, team = null, isNow = false, past = false, progres
       )}
 
       {item.description && (
-        <p className="mt-2 break-words text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+        <p className="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+      )}
+
+      {onEdit && (
+        <button type="button" onClick={onEdit}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold text-primary active:scale-95">
+          <Pencil className="h-3 w-3" /> Моя подія · змінити
+        </button>
       )}
 
       {mySlot && (

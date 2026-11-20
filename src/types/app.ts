@@ -112,6 +112,8 @@ export interface ScheduleItem {
   category?: string | null;
   has_sub_slots?: boolean | null;
   sub_slots?: ScheduleSubSlot[] | null;
+  /** Автор події: супровід змінює лише свої події. */
+  created_by?: string | null;
 }
 
 export type TalentStatus = 'draft' | 'collecting' | 'generated' | 'finished';

@@ -3,7 +3,8 @@ import { visibleToShift } from '@/lib/scheduleAudience';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Users, Building2, ArrowRight, Copy, Check } from 'lucide-react';
+import { CalendarDays, Users, Building2, ArrowRight, Copy, Check, Plus } from 'lucide-react';
+import TeamEventDialog from '@/components/schedule/TeamEventDialog';
 import { toast } from 'sonner';
 import { copyRich, scheduleToHtml, scheduleToText } from '@/lib/scheduleShare';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,6 +88,18 @@ const ScheduleView = ({
 
   const haptics = useHaptics();
 
+  // Власні події супроводу: хто я та діалог додавання/редагування.
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [teamEvent, setTeamEvent] = useState<{ item: ScheduleItem | null } | null>(null);
+  const reloadRef = useRef<() => void>(() => {});
+  const canAddTeamEvents = isStaff && myTeam != null;
+  useEffect(() => {
+    if (!canAddTeamEvents) return;
+    let alive = true;
+    supabase.auth.getSession().then(({ data }) => { if (alive) setMyUserId(data.session?.user.id ?? null); });
+    return () => { alive = false; };
+  }, [canAddTeamEvents]);
+
   // Оновлення часу кожні 30 секунд
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
@@ -125,6 +138,7 @@ const ScheduleView = ({
       setLoading(false);
     };
 
+    reloadRef.current = () => { void load(); };
     load();
 
     const debounced = () => { 
@@ -341,6 +355,18 @@ const ScheduleView = ({
           </span>
         </div>
 
+        <div className="flex shrink-0 items-center gap-1.5">
+        {canAddTeamEvents && activeDay && (
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => { haptics.impact('light'); setTeamEvent({ item: null }); }}
+            aria-label="Додати подію для команди"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 text-xs font-semibold text-primary active:scale-95 transition-transform"
+          >
+            <Plus className="h-4 w-4" /> Подія
+          </Button>
+        )}
         {isStaff && activeDay && (
           <Button
             variant="ghost"
@@ -353,6 +379,7 @@ const ScheduleView = ({
             {copied ? 'Скопійовано' : 'Копіювати'}
           </Button>
         )}
+        </div>
 
         {HALL_FEATURE_ENABLED && isStaff && myTeam != null && (
           <Button
@@ -518,10 +545,23 @@ const ScheduleView = ({
               progress={isNow ? ((nowRel - e.startMin) / Math.max(1, e.endMin - e.startMin)) * 100 : 0}
               isStaff={isStaff}
               onFairAction={onFairAction}
+              onEdit={canAddTeamEvents && myUserId && e.item.created_by === myUserId ? () => setTeamEvent({ item: e.item }) : undefined}
             />
           );
         })}
       </div>
+
+      {canAddTeamEvents && activeDay && (
+        <TeamEventDialog
+          open={!!teamEvent}
+          onOpenChange={(o) => !o && setTeamEvent(null)}
+          team={myTeam!}
+          shiftId={getSessionMeta()?.shiftId ?? null}
+          date={activeDay}
+          item={teamEvent?.item ?? null}
+          onSaved={(d) => { setActiveDay(d); reloadRef.current(); }}
+        />
+      )}
 
       {/* Модальне вікно бронювання залів */}
       {HALL_FEATURE_ENABLED && isStaff && myTeam != null && activeDay && (

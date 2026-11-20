@@ -1,5 +1,15 @@
 export const SCHEDULE_MODEL = 'gemini-3.5-flash-lite';
 
+/**
+ * Ключ із секрету часто зберігають із пробілом, переносом рядка чи лапками.
+ * Такий заголовок fetch відхиляє ще до запиту в Google — тоді приховано падало з 502.
+ * Повертає чистий ключ або null, якщо в ньому лишились недопустимі символи.
+ */
+export function cleanApiKey(raw: string | undefined | null): string | null {
+  const key = (raw ?? '').trim().replace(/^['"`]+|['"`]+$/g, '').replace(/\s+/g, '');
+  return /^[!-~]{10,}$/.test(key) ? key : null;
+}
+
 const nullableText = { type: ['string', 'null'] };
 const teamList = { type: 'array', items: { type: 'integer' } };
 export const scheduleSchema = {

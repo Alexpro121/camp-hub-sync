@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
-import { providerMessage, requestSchedule } from './gemini.ts';
+import { cleanApiKey, providerMessage, requestSchedule } from './gemini.ts';
 import { logScheduleDiagnostic, monitorScheduleStream } from './monitor.ts';
 
 const bodySchema = z.object({
@@ -21,17 +21,27 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL');
   const anon = Deno.env.get('SUPABASE_ANON_KEY');
   if (!url || !anon) return json('Сервіс генерації не налаштований', 500);
+  const requestId = crypto.randomUUID();
+  // Крок, на якому впала функція, — у лог і в повідомлення (без тексту розкладу й ключів).
+  let stage: 'auth' | 'roles' | 'body' | 'provider' = 'auth';
   try {
     const client = createClient(url, anon, { auth: { persistSession: false }, global: { headers: { Authorization: auth } } });
     const { data, error } = await client.auth.getUser(auth.slice(7));
     if (error || !data.user) return json('Увійдіть як адміністратор', 401);
+    stage = 'roles';
     const roles = await client.from('user_roles').select('role').eq('user_id', data.user.id).eq('role', 'admin').limit(1);
     if (roles.error || !roles.data?.length) return json('Генерація доступна лише адміністратору', 403);
+    stage = 'body';
     const parsed = bodySchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return json('Вкажіть текст до 25 000 символів і коректну дату', 400);
-    const key = Deno.env.get('GEMINI_API_KEY');
-    if (!key) return json('Додайте ключ Google AI Studio для генерації', 503);
-    const requestId = crypto.randomUUID();
+    const rawKey = Deno.env.get('GEMINI_API_KEY');
+    if (!rawKey?.trim()) return json('Додайте ключ Google AI Studio для генерації', 503);
+    const key = cleanApiKey(rawKey);
+    if (!key) {
+      logScheduleDiagnostic({ requestId, stage: 'config', reason: 'INVALID_API_KEY_FORMAT' });
+      return json('Ключ Gemini (GEMINI_API_KEY) збережено з недопустимими символами. Скопіюйте його з Google AI Studio заново, без лапок і пробілів.', 503);
+    }
+    stage = 'provider';
     const response = await requestSchedule(key, parsed.data.rawText, parsed.data.date, req.signal);
     if (!response.ok) {
       logScheduleDiagnostic({ requestId, stage: 'http', code: response.status });
@@ -48,6 +58,14 @@ Deno.serve(async (req) => {
     } });
   } catch (error) {
     if (req.signal.aborted || (error instanceof Error && error.name === 'AbortError')) return json('Генерацію зупинено', 499);
-    return json('Не вдалося зв’язатися з Gemini. Нічого не збережено.', 502);
+    // Лише назва помилки й крок: повідомлення може містити дані запиту.
+    logScheduleDiagnostic({ requestId, stage: `exception:${stage}`, reason: error instanceof Error ? error.name.slice(0, 40) : 'unknown' });
+    const message = stage === 'provider'
+      ? 'Не вдалося з’єднатися з Google Gemini (мережа або ключ). Нічого не збережено.'
+      : `Внутрішня помилка генерації (крок: ${stage}). Нічого не збережено.`;
+    const failure = json(message, 502);
+    failure.headers.set('x-schedule-request-id', requestId);
+    failure.headers.set('Access-Control-Expose-Headers', 'x-schedule-request-id');
+    return failure;
   }
 });

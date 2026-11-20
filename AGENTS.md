@@ -24,3 +24,5 @@
 - Registry creates participants only online in active shifts and soft-deletes via deleted_at: they leave teams at once, stay restorable in the Deleted tab for 24 hours, then private.my_child_id stops resolving so the profile closes while history stays intact.
 - Staff copy a schedule day as emoji plain text plus HTML (bold titles) so Telegram paste stays readable on every client.
 - Schedules may serve several parallel shifts: schedules.shift_ids is the audience (shift_id kept only for single-shift rows), visibility goes through scheduleAudience helpers, and team numbers stay unique across shifts so event teams are chosen per shift and bulk edits touch only schedules owned by the selected shifts.
+- Supervisors add schedule events only for their own team into a published schedule of their shift; schedule_items.created_by records the author and RLS lets staff edit or delete only their own events, so admin events and drafts stay protected.
+- Schedule generation cleans GEMINI_API_KEY before building headers and logs failing stages by code only; a malformed secret otherwise made fetch throw instantly and surfaced as an opaque HTTP 502.
