@@ -33,7 +33,7 @@ const fromResult: any = { data: [], error: null };
 let childResult: any = null;
 const builder = () => {
   const b: any = {};
-  ['select', 'eq', 'order', 'limit', 'insert', 'update', 'single'].forEach((m) => {
+  ['select', 'eq', 'is', 'order', 'limit', 'insert', 'update', 'single'].forEach((m) => {
     b[m] = vi.fn(() => b);
   });
   b.maybeSingle = vi.fn(() => Promise.resolve({ data: childResult, error: null }));

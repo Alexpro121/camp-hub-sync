@@ -43,7 +43,7 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
       const { data: shifts } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       const active = pickActiveShift((shifts || []) as any);
       const { data } = await fetchAllRows<{ iron_dollars: number | null }>(() => {
-        let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam).order('id');
+        let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam).is('deleted_at', null).order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
         return q;
       });

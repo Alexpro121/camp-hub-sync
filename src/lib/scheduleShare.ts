@@ -49,7 +49,8 @@ function buildLines({ dateISO, team, events, slotsOf }: ScheduleShareInput): Lin
     if (!slots.length && team == null && item.target_teams?.length) {
       lines.push({ text: `     👥 Команди ${item.target_teams.join(', ')}` });
     }
-    if (item.description) lines.push({ text: `     ${item.description.trim()}` });
+    // Кожен рядок опису окремо: HTML-вставка інакше злипає їх в один.
+    for (const d of (item.description ?? '').split(/\r?\n/)) if (d.trim()) lines.push({ text: `     ${d.trim()}` });
   }
   return lines;
 }
@@ -62,7 +63,11 @@ export function scheduleToText(input: ScheduleShareInput): string {
 /** Same content as HTML so Telegram keeps bold event titles on paste. */
 export function scheduleToHtml(input: ScheduleShareInput): string {
   return buildLines(input)
-    .map((l) => (l.bold ? `<b>${escapeHtml(l.text)}</b>` : escapeHtml(l.text)))
+    // Відступи як нерозривні пробіли — у HTML звичайні пробіли на початку рядка зникають.
+    .map((l) => {
+      const t = escapeHtml(l.text).replace(/^ +/, (s) => '&nbsp;'.repeat(s.length));
+      return l.bold ? `<b>${t}</b>` : t;
+    })
     .join('<br>');
 }
 

@@ -124,6 +124,7 @@ const SupervisorFairView = ({ myTeam, isLive = true }: Props) => {
       .from('children')
       .select('id, full_name, iron_dollars')
       .eq('team_number', myTeam)
+      .is('deleted_at', null)
       .order('full_name')
       .then(({ data }) => {
         setTeamChildren((data || []) as TeamChild[]);

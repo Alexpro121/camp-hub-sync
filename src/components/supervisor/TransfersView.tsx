@@ -44,7 +44,7 @@ const TransfersView = ({ myTeam }: Props) => {
       setShiftId(active?.id ?? null);
 
       const { data } = await fetchAllRows<Child>(() => {
-        let q = supabase.from('children').select('*').order('team_number').order('full_name').order('id');
+        let q = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('full_name').order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
         return q;
       });

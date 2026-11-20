@@ -23,7 +23,7 @@ export function useAllTeams(enabled = true): AllTeamsState {
     (async () => {
       const [shiftsRes, kidsRes] = await Promise.all([
         supabase.from('shifts').select('assigned_teams, deleted_at'),
-        fetchAllRows<{ team_number: number }>(() => supabase.from('children').select('team_number').order('id')),
+        fetchAllRows<{ team_number: number }>(() => supabase.from('children').select('team_number').is('deleted_at', null).order('id')),
       ]);
       if (!active) return;
       const set = new Set<number>();

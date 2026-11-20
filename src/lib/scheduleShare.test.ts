@@ -30,4 +30,10 @@ describe('scheduleToText', () => {
     expect(scheduleToText(input)).not.toContain('команди 1, 2');
     expect(scheduleToHtml(input)).toContain('<b>🔹 10:00–12:00  Квест &lt;2&gt;</b>');
   });
+
+  it('keeps multiline descriptions and indents in the HTML copy', () => {
+    const ev = normalizeScheduleItems([item({ id: 'c', title: 'Похід', description: 'Взяти воду\nКепка обовʼязково' })], '2026-11-20');
+    const html = scheduleToHtml({ dateISO: '2026-11-20', team: null, events: ev, slotsOf: () => [] });
+    expect(html).toContain('<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Взяти воду<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Кепка обовʼязково');
+  });
 });

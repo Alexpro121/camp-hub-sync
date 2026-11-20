@@ -271,6 +271,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
     const { data, error } = await supabase
       .from('children')
       .select('*')
+      .is('deleted_at', null)
       .order('team_number')
       .order('row_number');
 
