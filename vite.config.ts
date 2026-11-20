@@ -17,7 +17,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
+      // Не "autoUpdate": той сам перезавантажує сторінку посеред роботи після кожного деплою
+      // (знову «Відновлення сесії»). Нова версія чекає: тост «Оновити» або наступне відкриття.
+      registerType: "prompt",
       injectRegister: null,
       filename: "sw.js",
       devOptions: { enabled: false },
