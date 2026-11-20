@@ -1,7 +1,9 @@
+import { readCache, signalWindowMs, spreadDelay, writeCache } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
 import { visibleToShift } from '@/lib/scheduleAudience';
 import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 import { getSessionMeta } from '@/lib/session';
-import { dedupeItems } from '@/lib/schedule';
+import { dedupeItems, SCHEDULE_CHANNEL, SCHEDULE_UPDATED } from '@/lib/schedule';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
@@ -49,22 +51,31 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
     let cancelled = false;
     let debounce: ReturnType<typeof setTimeout>;
 
+    // Нагадування на сьогодні зберігаються на телефоні — працюють і без мережі (потяг).
+    const cacheKey = `ironshift:schedule-alerts:${todayISO()}:${team ?? 'all'}`;
+    const cached = readCache<Alert[]>(cacheKey, 36 * 3_600_000);
+    if (cached) setAlerts(cached.data);
+
     const load = async () => {
-      const { data: sch } = await supabase
+      if (!navigator.onLine) return;
+      const { data: sch, error } = await supabase
         .from('schedules')
         .select('*')
         .eq('is_published', true)
         .eq('date', todayISO())
         .is('deleted_at', null);
+      // Збій мережі не стирає вже відомі нагадування.
+      if (error || !sch) return;
       const myShift = getSessionMeta()?.shiftId ?? null;
       const days = ((sch as Schedule[] | null) ?? []).filter((s) => visibleToShift(s, myShift));
       if (!days.length) { if (!cancelled) setAlerts([]); return; }
 
-      const { data: rawIts } = await supabase
+      const { data: rawIts, error: itemsError } = await supabase
         .from('schedule_items')
         .select('*')
         .in('schedule_id', days.map((d) => d.id))
         .order('order_index');
+      if (itemsError || !rawIts) return;
       const its = dedupeItems((rawIts || []) as any[]);
       if (cancelled) return;
 
@@ -98,16 +109,18 @@ export const useScheduleNotifier = (team: number | null, enabled = true) => {
         });
       });
       setAlerts(built);
+      writeCache(cacheKey, built);
     };
 
-    load();
-    const debounced = () => { clearTimeout(debounce); debounce = setTimeout(load, 800); };
+    void load();
+    // Легкий сигнал замість потоку змінених рядків: дані — у випадковий момент вікна.
+    const debounced = () => { clearTimeout(debounce); debounce = setTimeout(load, spreadDelay(signalWindowMs(networkPulse.state.quality))); };
     const ch = supabase
-      .channel('schedule-notifier')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, debounced)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_items' }, debounced)
+      .channel(SCHEDULE_CHANNEL)
+      .on('broadcast', { event: SCHEDULE_UPDATED }, debounced)
       .subscribe();
-    return () => { cancelled = true; clearTimeout(debounce); supabase.removeChannel(ch); };
+    window.addEventListener('online', debounced);
+    return () => { cancelled = true; clearTimeout(debounce); supabase.removeChannel(ch); window.removeEventListener('online', debounced); };
   }, [team, enabled]);
 
   // Tick: fire each reminder once per day.

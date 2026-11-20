@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import {
   ArrowLeft,
   Award,
@@ -11,7 +11,10 @@ import {
 import { toast } from 'sonner';
 import { useHaptics } from '@/hooks/useHaptics';
 import IronPixelAvatar from '@/components/ui/IronPixelAvatar';
-import { CertificateModal } from '@/components/certificate/CertificateModal';
+import { lazyRetry } from '@/lib/lazyRetry';
+// Сертифікат (PDF-бібліотека й шрифти, ~1 МБ) вантажимо лише коли його відкривають.
+const loadCertificate = () => import('@/components/certificate/CertificateModal');
+const CertificateModal = lazyRetry(() => loadCertificate().then((m) => ({ default: m.CertificateModal })));
 import DeviceSyncModal from '@/components/alumni/DeviceSyncModal';
 import AlumniRaffleModal from '@/components/alumni/AlumniRaffleModal';
 import { pushIsland } from '@/lib/islandBus';
@@ -251,7 +254,11 @@ const AlumniFlow = ({ onBack }: Props) => {
         </p>
       </div>
 
-      <CertificateModal key={passport.passport_id} open={certOpen} onClose={() => setCertOpen(false)} initialName={profile.full_name} year={profile.year} />
+      {certOpen && (
+        <Suspense fallback={null}>
+          <CertificateModal key={passport.passport_id} open={certOpen} onClose={() => setCertOpen(false)} initialName={profile.full_name} year={profile.year} />
+        </Suspense>
+      )}
 
       <DeviceSyncModal
         open={syncOpen}

@@ -1,4 +1,6 @@
 import { getSessionMeta } from '@/lib/session';
+import { readCache, signalWindowMs, spreadDelay, writeCache } from '@/lib/lightSync';
+import { networkPulse } from '@/lib/networkEngine';
 import { visibleToShift } from '@/lib/scheduleAudience';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAllTeams } from '@/hooks/useAllTeams';
@@ -106,63 +108,78 @@ const ScheduleView = ({
     return () => clearInterval(t);
   }, []);
 
-  // Завантаження опублікованого розкладу
+  // Завантаження опублікованого розкладу — «легкими сигналами»:
+  // збережена копія одразу (і без мережі), оновлення лише потрібних днів, у випадковий момент вікна.
   useEffect(() => {
     let debounce: ReturnType<typeof setTimeout>;
-    
+    let alive = true;
+    const myShift = getSessionMeta()?.shiftId ?? null;
+    // Учасник бачить лише сьогодні (+ вчорашні нічні події) — не тягнемо весь розклад зміни.
+    const fromDate = lockTeam ? shiftISODate(todayISO(), -1) : null;
+    const cacheKey = `ironshift:schedule:${myShift ?? 'all'}:${lockTeam ? 'team' : 'staff'}`;
+
+    const cached = readCache<{ schedules: Schedule[]; items: ScheduleItem[] }>(cacheKey);
+    if (cached) {
+      setSchedules(cached.data.schedules);
+      setItems(cached.data.items);
+      setLoading(false);
+    }
+
     const load = async () => {
-      const { data: sch } = await supabase
+      if (!navigator.onLine) { setLoading(false); return; }
+      let query = supabase
         .from('schedules')
         .select('*')
         .eq('is_published', true)
-        .is('deleted_at', null)
-        .order('date', { ascending: true });
-      // Лише розклади своєї зміни + загальнотаборові (без зміни).
-      const myShift = getSessionMeta()?.shiftId ?? null;
-      
-      const list = ((sch || []) as Schedule[]).filter((s) => visibleToShift(s, myShift));
-      setSchedules(list);
-      
+        .is('deleted_at', null);
+      if (fromDate) query = query.gte('date', fromDate);
+      const { data: sch, error } = await query.order('date', { ascending: true });
+      // Збій мережі не стирає те, що вже на екрані.
+      if (error || !sch) { if (alive) setLoading(false); return; }
+      const list = (sch as Schedule[]).filter((s) => visibleToShift(s, myShift));
       const ids = list.map((s) => s.id);
+      let nextItems: ScheduleItem[] = [];
       if (ids.length) {
-        const { data: its } = await supabase
+        const { data: its, error: itemsError } = await supabase
           .from('schedule_items')
           .select('*')
           .in('schedule_id', ids)
           .order('order_index');
-        setItems((its || []) as unknown as ScheduleItem[]);
-      } else {
-        setItems([]);
+        if (itemsError || !its) { if (alive) setLoading(false); return; }
+        nextItems = its as unknown as ScheduleItem[];
       }
-
+      if (!alive) return;
+      setSchedules(list);
+      setItems(nextItems);
       setLoading(false);
+      writeCache(cacheKey, { schedules: list, items: nextItems });
     };
 
     reloadRef.current = () => { void load(); };
-    load();
+    void load();
 
-    const debounced = () => { 
-      clearTimeout(debounce); 
-      debounce = setTimeout(load, 500); 
+    // Сигнал «розклад змінився» (~100 байт) → кожен телефон підтягує дані у свій випадковий момент.
+    const onSignal = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(load, spreadDelay(signalWindowMs(networkPulse.state.quality)));
     };
-
-    const ch = supabase
-      .channel('schedule-view')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedules' }, debounced)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_items' }, debounced)
-      .subscribe();
-
     const live = supabase
       .channel(SCHEDULE_CHANNEL)
-      .on('broadcast', { event: SCHEDULE_UPDATED }, debounced)
+      .on('broadcast', { event: SCHEDULE_UPDATED }, onSignal)
       .subscribe();
+    // Повернулись у застосунок або з'явився інтернет — тихо звіряємось.
+    const onVisible = () => { if (document.visibilityState === 'visible') onSignal(); };
+    window.addEventListener('online', onSignal);
+    document.addEventListener('visibilitychange', onVisible);
 
-    return () => { 
-      clearTimeout(debounce); 
-      supabase.removeChannel(ch); 
-      supabase.removeChannel(live); 
+    return () => {
+      alive = false;
+      clearTimeout(debounce);
+      supabase.removeChannel(live);
+      window.removeEventListener('online', onSignal);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [lockTeam]);
 
   // Завантаження броней залів (якщо ввімкнено)
   useEffect(() => {

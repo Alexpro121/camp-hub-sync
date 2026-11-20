@@ -34,7 +34,9 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         // Ярмарок і потяг вимкнені: їхній код не вантажимо в кеш телефонів
-        globIgnores: ["**/{ChildCoupeCard,ChildFairCard,SupervisorFairView,CoupeManager,CoupeSwapSettings,TrainPublishStatus,TrainTab,AdminTrainView,AdminPrintQRCodes,FairHowTo,ApplePayScannerModal,useTrainSettings,useAggressiveFairUnlock}-*.js"],
+        globIgnores: ["**/{ChildCoupeCard,ChildFairCard,SupervisorFairView,CoupeManager,CoupeSwapSettings,TrainPublishStatus,TrainTab,AdminTrainView,AdminPrintQRCodes,FairHowTo,ApplePayScannerModal,useTrainSettings,useAggressiveFairUnlock,CertificateModal,importer,jszip.min}-*.js"],
+        // Сертифікат (~1 МБ) та імпорт таблиць адміна не качаються всім 300 телефонам одразу:
+        // вони кешуються при першому відкритті, а сертифікат — ще й заздалегідь на швидкій мережі.
         // Сторінку при запуску завжди беремо з мережі (свіжа версія після кожного деплою, зокрема в Telegram);
         // збережена копія — лише запасний варіант без інтернету. Раніше збережений index.html віддавався першим,
         // і після оновлення застосунок відкривався у старій версії.
@@ -46,7 +48,8 @@ export default defineConfig(({ mode }) => ({
             handler: "NetworkFirst",
             options: {
               cacheName: "html-nav",
-              networkTimeoutSeconds: 5,
+              // На слабкому Wi-Fi не чекаємо довго: за 3 с відкриваємо збережену копію.
+              networkTimeoutSeconds: 3,
               matchOptions: { ignoreSearch: true },
               // Немає мережі і ця сторінка ще не потрапила в html-nav (перше відкриття після встановлення):
               // віддаємо index.html з precache цієї ж версії, щоб відкрився збережений на пристрої профіль.

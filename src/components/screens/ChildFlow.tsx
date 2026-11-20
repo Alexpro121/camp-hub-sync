@@ -1,7 +1,7 @@
 import { lazyRetry } from '@/lib/lazyRetry';
 import { GENDER_LABEL } from '@/lib/gender';
 import { UserRound } from 'lucide-react';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { 
   ArrowLeft, 
   Coins, 
@@ -60,7 +60,10 @@ import {
   getChildArchiveSnapshot,
   saveChildArchiveSnapshot,
 } from '@/lib/session';
-import { CertificateModal } from '@/components/certificate/CertificateModal';
+// Сертифікат (PDF-бібліотека й шрифти, ~1 МБ) вантажимо лише коли його відкривають.
+const loadCertificate = () => import('@/components/certificate/CertificateModal');
+const CertificateModal = lazyRetry(() => loadCertificate().then((m) => ({ default: m.CertificateModal })));
+import { warmWhenFast } from '@/lib/warmCache';
 
 interface Props {
   onBack: () => void;
@@ -112,6 +115,8 @@ const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
   const island = useDynamicIsland();
   const talent = useTalentEventActive();
   const fair = useAggressiveFairUnlock(FAIR_FEATURE_ENABLED && !!child);
+  // Сертифікат знадобиться в кінці зміни — підтягуємо заздалегідь, але лише на швидкому з'єднанні.
+  useEffect(() => warmWhenFast([loadCertificate]), []);
 
   // Сповіщення про події розкладу у Dynamic Island
   useScheduleNotifier(child?.team_number ?? null, !!child);
@@ -483,7 +488,11 @@ const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
           Залізна Зміна
         </footer>
 
-        <CertificateModal open={certModalOpen} onClose={() => setCertModalOpen(false)} initialName={child.full_name} />
+        {certModalOpen && (
+          <Suspense fallback={null}>
+            <CertificateModal open={certModalOpen} onClose={() => setCertModalOpen(false)} initialName={child.full_name} />
+          </Suspense>
+        )}
 
         {isRevealingAvatar && (
           <IronAvatarReveal

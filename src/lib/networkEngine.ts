@@ -16,15 +16,18 @@ export interface NetPulseState {
 
 type Listener = (state: NetPulseState) => void;
 
-const PULSE_TIMEOUT_MS = 2500;
-const SLOW_THRESHOLD_MS = 900;
-const INTERVAL_FAST_MS = 30000;
-const INTERVAL_SLOW_MS = 12000;
-const BASE_OFFLINE_INTERVAL_MS = 5000;
-const MAX_OFFLINE_INTERVAL_MS = 25000;
+// У потязі відповідь іде 3–5 с: коротший поріг помилково переводив телефон в «офлайн».
+const PULSE_TIMEOUT_MS = 6000;
+const SLOW_THRESHOLD_MS = 1500;
+// Спільний Wi-Fi на 300 телефонів (потяг): перевірки рідкі й розкидані в часі,
+// а на повільному каналі — ще рідші, щоб не забивати його самими перевірками.
+const INTERVAL_FAST_MS = 45000;
+const INTERVAL_SLOW_MS = 60000;
+const BASE_OFFLINE_INTERVAL_MS = 8000;
+const MAX_OFFLINE_INTERVAL_MS = 60000;
 
-const INTERVAL_BG_ONLINE_MS = 45000;
-const INTERVAL_BG_OFFLINE_MS = 20000;
+const INTERVAL_BG_ONLINE_MS = 180000;
+const INTERVAL_BG_OFFLINE_MS = 90000;
 
 export class NetworkPulse {
   private listeners = new Set<Listener>();
@@ -259,7 +262,7 @@ export class NetworkPulse {
       delay = Math.round(delay * 1.5);
     }
 
-    const jitter = delay * 0.15 * (Math.random() * 2 - 1);
+    const jitter = delay * 0.35 * (Math.random() * 2 - 1);
     this.schedule(Math.round(delay + jitter));
   }
 
