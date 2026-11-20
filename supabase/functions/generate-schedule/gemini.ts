@@ -10,6 +10,61 @@ export function cleanApiKey(raw: string | undefined | null): string | null {
   return /^[!-~]{10,}$/.test(key) ? key : null;
 }
 
+/**
+ * GEMINI_API_KEY може містити кілька ключів через кому, крапку з комою або з нового рядка.
+ * Повертає чисті унікальні ключі та кількість відкинутих (зіпсованих) записів.
+ */
+export function parseApiKeys(raw: string | undefined | null): { keys: string[]; rejected: number } {
+  const parts = (raw ?? '').split(/[,;\r\n]+/).map((p) => p.trim()).filter(Boolean);
+  const keys: string[] = [];
+  let rejected = 0;
+  for (const part of parts) {
+    const key = cleanApiKey(part);
+    if (!key) rejected++;
+    else if (!keys.includes(key)) keys.push(key);
+  }
+  return { keys, rejected };
+}
+
+/** Відповіді, після яких пробуємо наступний ключ: недійсний ключ, немає доступу, квота, модель недоступна для ключа. */
+const ROTATE_ON = new Set([400, 401, 403, 404, 429]);
+/** Останній робочий ключ у цьому екземплярі функції — з нього й починаємо наступного разу. */
+let preferredKey = 0;
+export function resetKeyPreference() { preferredKey = 0; }
+
+type KeyEvent = { keyIndex: number; code?: number; reason?: string };
+
+/**
+ * Пробує ключі по черзі, поки один не відповість успішно.
+ * Збій мережі чи недійсний ключ не зупиняє генерацію, доки є інші ключі;
+ * помилки, що не залежать від ключа (5xx), не повторюються.
+ */
+export async function requestScheduleWithKeys(
+  keys: string[], rawText: string, date: string, signal: AbortSignal,
+  fetcher: typeof fetch = fetch, onSkip: (event: KeyEvent) => void = () => {},
+): Promise<{ response: Response; keyIndex: number }> {
+  if (!keys.length) throw new Error('NO_API_KEYS');
+  let lastError: unknown = null;
+  for (let i = 0; i < keys.length; i++) {
+    const keyIndex = (preferredKey + i) % keys.length;
+    const isLast = i === keys.length - 1;
+    let response: Response;
+    try {
+      response = await requestSchedule(keys[keyIndex], rawText, date, signal, fetcher);
+    } catch (error) {
+      if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) throw error;
+      lastError = error;
+      onSkip({ keyIndex, reason: error instanceof Error ? error.name.slice(0, 40) : 'unknown' });
+      continue;
+    }
+    if (response.ok) { preferredKey = keyIndex; return { response, keyIndex }; }
+    if (!ROTATE_ON.has(response.status) || isLast) return { response, keyIndex };
+    onSkip({ keyIndex, code: response.status });
+    await response.body?.cancel();
+  }
+  throw lastError ?? new Error('ALL_KEYS_FAILED');
+}
+
 const nullableText = { type: ['string', 'null'] };
 const teamList = { type: 'array', items: { type: 'integer' } };
 export const scheduleSchema = {

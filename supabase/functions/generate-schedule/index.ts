@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { z } from 'npm:zod@3';
-import { cleanApiKey, providerMessage, requestSchedule } from './gemini.ts';
+import { parseApiKeys, providerMessage, requestScheduleWithKeys } from './gemini.ts';
 import { logScheduleDiagnostic, monitorScheduleStream } from './monitor.ts';
 
 const bodySchema = z.object({
@@ -34,17 +34,20 @@ Deno.serve(async (req) => {
     stage = 'body';
     const parsed = bodySchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return json('Вкажіть текст до 25 000 символів і коректну дату', 400);
-    const rawKey = Deno.env.get('GEMINI_API_KEY');
+    // Один або кілька ключів через кому; приймаємо обидві назви секрету.
+    const rawKey = [Deno.env.get('GEMINI_API_KEYS'), Deno.env.get('GEMINI_API_KEY')].filter(Boolean).join(',');
     if (!rawKey?.trim()) return json('Додайте ключ Google AI Studio для генерації', 503);
-    const key = cleanApiKey(rawKey);
-    if (!key) {
-      logScheduleDiagnostic({ requestId, stage: 'config', reason: 'INVALID_API_KEY_FORMAT' });
-      return json('Ключ Gemini (GEMINI_API_KEY) збережено з недопустимими символами. Скопіюйте його з Google AI Studio заново, без лапок і пробілів.', 503);
+    const { keys, rejected } = parseApiKeys(rawKey);
+    if (rejected) logScheduleDiagnostic({ requestId, stage: 'config', reason: `INVALID_API_KEY_FORMAT:${rejected}` });
+    if (!keys.length) {
+      return json('Ключ Gemini (GEMINI_API_KEY) збережено з недопустимими символами. Скопіюйте ключі з Google AI Studio заново; кілька ключів — через кому, без лапок і пробілів.', 503);
     }
     stage = 'provider';
-    const response = await requestSchedule(key, parsed.data.rawText, parsed.data.date, req.signal);
+    // Ключі по черзі: недійсний, без доступу чи з вичерпаною квотою — пробуємо наступний.
+    const { response, keyIndex } = await requestScheduleWithKeys(keys, parsed.data.rawText, parsed.data.date, req.signal, fetch,
+      (skip) => logScheduleDiagnostic({ requestId, stage: 'key_rotate', code: skip.code, reason: `key#${skip.keyIndex}${skip.reason ? `:${skip.reason}` : ''}` }));
     if (!response.ok) {
-      logScheduleDiagnostic({ requestId, stage: 'http', code: response.status });
+      logScheduleDiagnostic({ requestId, stage: 'http', code: response.status, reason: `key#${keyIndex}/${keys.length}` });
       await response.body?.cancel();
       const failure = json(providerMessage(response.status), response.status);
       failure.headers.set('x-schedule-request-id', requestId);
