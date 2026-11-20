@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, MapPin, Trash2 } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { CATEGORY_LIST, normalizeTime, normalizeTimeRange } from '@/lib/scheduleCategories';
+import { CATEGORY_LIST, normalizeTime, normalizeTimeRange, sentenceCase } from '@/lib/scheduleCategories';
 import { broadcastScheduleUpdated } from '@/lib/schedule';
-import { audiencePayload, sameAudience } from '@/lib/scheduleAudience';
+import { audiencePayload, sameAudience, visibleToShift } from '@/lib/scheduleAudience';
+import { findOverlaps } from '@/lib/scheduleOverlap';
 import type { Schedule, ScheduleItem } from '@/types/app';
 
 interface Props {
@@ -38,6 +39,8 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
   const [category, setCategory] = useState('general');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Накладки, про які вже попередили; повторне «Зберегти» їх приймає. */
+  const [overlaps, setOverlaps] = useState<ScheduleItem[] | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -49,7 +52,22 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
     setDetails(item?.description ?? '');
     setCategory(item?.category || 'general');
     setConfirmDelete(false);
+    setOverlaps(null);
   }, [open, item, date]);
+  // Змінили день чи час — перевіряємо накладки заново.
+  useEffect(() => { setOverlaps(null); }, [day, start, end]);
+
+  /** Події дня, які бачить команда, що перетинаються з новим часом. */
+  const dayOverlaps = async (forDate: string, timeStart: string, timeEnd: string | null): Promise<ScheduleItem[]> => {
+    const { data: sch, error } = await supabase.from('schedules').select('*').eq('date', forDate).eq('is_published', true).is('deleted_at', null);
+    if (error) throw error;
+    const ids = ((sch || []) as Schedule[]).filter((s) => visibleToShift(s, shiftId)).map((s) => s.id);
+    if (!ids.length) return [];
+    const { data: rows, error: itemsError } = await supabase.from('schedule_items').select('*').in('schedule_id', ids);
+    if (itemsError) throw itemsError;
+    return findOverlaps({ time_start: timeStart, time_end: timeEnd }, (rows || []) as unknown as ScheduleItem[], team, item?.id);
+  };
+
 
   /** Опублікований розклад зміни на дату (створюється, якщо його ще немає). */
   const publishedSchedule = async (forDate: string): Promise<string> => {
@@ -72,6 +90,11 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
     if (finish === range.start) { toast.error('Початок і кінець не можуть збігатися'); return; }
     setBusy(true);
     try {
+      // Накладки дозволені, але спершу попереджаємо супровід.
+      if (overlaps === null) {
+        const found = await dayOverlaps(item ? date : day, range.start, finish);
+        if (found.length) { setOverlaps(found); return; }
+      }
       const payload = {
         title: title.trim(),
         time_start: range.start,
@@ -173,6 +196,21 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
               </SelectContent>
             </Select>
           </div>
+          {overlaps && overlaps.length > 0 && (
+            <div role="alert" className="space-y-1.5 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground">
+              <p className="flex items-center gap-1.5 font-semibold text-warning">
+                <AlertTriangle className="h-4 w-4 shrink-0" /> Накладка з {overlaps.length === 1 ? 'подією' : `${overlaps.length} подіями`} команди
+              </p>
+              <ul className="space-y-0.5">
+                {overlaps.slice(0, 5).map((o) => (
+                  <li key={o.id} className="truncate">
+                    <span className="font-mono tabular-nums">{o.time_start}{o.time_end ? `–${o.time_end}` : ''}</span> · {sentenceCase(o.title)}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-muted-foreground">Можна зберегти — команда побачить обидві події одночасно.</p>
+            </div>
+          )}
         </div>
         <DialogFooter className="gap-2">
           {item && (
@@ -182,7 +220,7 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
             </Button>
           )}
           <Button type="button" onClick={save} disabled={busy} className="flex-1 font-bold">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Зберегти'}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : overlaps?.length ? 'Все одно зберегти' : 'Зберегти'}
           </Button>
         </DialogFooter>
       </DialogContent>

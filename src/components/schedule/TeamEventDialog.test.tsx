@@ -15,12 +15,13 @@ vi.mock('@/integrations/supabase/client', () => {
         return { data: single ? row : [row], error: null };
       }
       if (op === 'update') { db.updates.push({ table, payload, filters }); return { data: null, error: null }; }
-      return { data: db[table].filter((r) => filters.every(([k, v]) => (r[k] ?? null) === v)), error: null };
+      return { data: db[table].filter((r) => filters.every(([k, v]) => (Array.isArray(v) && k === 'schedule_id' ? v.includes(r[k]) : (r[k] ?? null) === v))), error: null };
     };
     const chain: any = {
       select: () => chain,
       eq: (k: string, v: unknown) => { filters.push([k, v]); return chain; },
       is: (k: string, v: unknown) => { filters.push([k, v]); return chain; },
+      in: (k: string, v: unknown) => { filters.push([k, v]); return chain; },
       insert: (p: any) => { op = 'insert'; payload = p; return chain; },
       update: (p: any) => { op = 'update'; payload = p; return chain; },
       delete: () => { op = 'delete'; return chain; },
@@ -50,6 +51,23 @@ describe('supervisor team events', () => {
     const created = db.schedules.find((s) => s.id !== 'draft');
     expect(created).toMatchObject({ shift_id: 'S', shift_ids: ['S'], is_published: true, date: '2026-11-21' });
     expect(db.schedule_items[0]).toMatchObject({ schedule_id: created.id, title: 'Збір команди', time_start: '18:30', target_teams: [7] });
+  });
+
+  it('warns about an overlap and saves only after confirmation', async () => {
+    db.schedules.push({ id: 'pub', date: '2026-11-21', shift_id: 'S', shift_ids: ['S'], is_published: true, deleted_at: null });
+    db.schedule_items.push({ id: 'lunch', schedule_id: 'pub', title: 'Обід', time_start: '13:00', time_end: '14:00', target_teams: [], has_sub_slots: false, sub_slots: [] });
+    const onSaved = vi.fn();
+    render(<TeamEventDialog open onOpenChange={vi.fn()} team={7} shiftId="S" date="2026-11-21" onSaved={onSaved} />);
+    fireEvent.change(screen.getByPlaceholderText('Збір команди'), { target: { value: 'Збір' } });
+    fireEvent.change(screen.getByPlaceholderText('18:00'), { target: { value: '13:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Обід');
+    expect(db.schedule_items).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Все одно зберегти' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(db.schedule_items[1]).toMatchObject({ schedule_id: 'pub', title: 'Збір', target_teams: [7] });
   });
 
   it('edits an own event without changing its team', async () => {
