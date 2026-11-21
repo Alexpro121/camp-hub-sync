@@ -18,6 +18,8 @@ import ExitConfirm from '@/components/ExitConfirm';
 import ForcePasswordChange from '@/components/staff/ForcePasswordChange';
 import TelegramGate from '@/components/telegram/TelegramGate';
 import TelegramRequests from '@/components/telegram/TelegramRequests';
+import TestShiftBanner from '@/components/staff/TestShiftBanner';
+import { takeEnterParam, testClosesLabel, testShiftOpen } from '@/lib/testShift';
 import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -26,7 +28,7 @@ const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
 interface Assignment {
   id: string;
   team_number: number;
-  shift: { id: string; name: string; shift_type: string; start_date: string; end_date: string };
+  shift: { id: string; name: string; shift_type: string; start_date: string; end_date: string; is_test?: boolean; expires_at?: string | null };
   stats: { children: number; iron_total: number; transfers: number; talents: number };
 }
 interface Cabinet { full_name: string; login: string; kind: StaffKind; phone: string | null; telegram: string | null; avatar_url: string | null; must_change_password?: boolean; assignments: Assignment[] }
@@ -52,6 +54,7 @@ const StaffPortal = () => {
   const [tgBlock, setTgBlock] = useState<TelegramBlockState | null>(null);
 
   const inPanel = Boolean(cabinet && activeTeam !== null);
+  const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
 
   const loadCabinet = useCallback(async () => {
     const data = await call({ action: 'cabinet' });
@@ -69,7 +72,9 @@ const StaffPortal = () => {
           if (signedIn.state === 'unlinked') { setTgBlock('unlinked'); navigate('/', { replace: true }); return; }
           if (signedIn.state !== 'ok') { setTgBlock(signedIn.state); return; }
           // Дитина й адмін мають свої екрани на головній сторінці.
-          if (signedIn.role !== 'staff') { navigate('/', { replace: true }); return; }
+          // Адмін, який натиснув запрошення в тестову зміну, теж іде у свою команду, а не в адмінку.
+          const invited = signedIn.role === 'admin' && new URLSearchParams(window.location.search).has('enter');
+          if (signedIn.role !== 'staff' && !invited) { navigate('/', { replace: true }); return; }
         }
         const { data } = await supabase.auth.getUser();
         if (data.user && !controller.signal.aborted) {
@@ -77,9 +82,15 @@ const StaffPortal = () => {
           if (controller.signal.aborted) return;
           if ('cabinet' in result) { if (tgMode) setTgBlock('revoked'); return; }
           setCabinet(result);
+          // Кнопка запрошення в тестову зміну (?enter=<призначення>): команда відкривається одразу.
+          const enterId = takeEnterParam();
+          const target = enterId ? result.assignments.find((a) => a.id === enterId) : undefined;
+          if (enterId && target) { await enterShift(target); return; }
+          if (enterId) toast.error('Тестова зміна вже закрита');
           const savedTeam = localStorage.getItem('helpsuprov:supervisor-team');
           const team = savedTeam ? Number(savedTeam) : null;
-          if (team !== null && Number.isInteger(team) && result.assignments.some((assignment) => assignment.team_number === team)) setActiveTeam(team);
+          const saved = team !== null && Number.isInteger(team) ? result.assignments.find((assignment) => assignment.team_number === team) : undefined;
+          if (saved) { setActiveTeam(team); setActiveShiftId(saved.shift.id); }
         }
       } catch (error: unknown) {
         if (controller.signal.aborted) return;
@@ -144,9 +155,10 @@ const StaffPortal = () => {
       const res = await call({ action: 'enter_shift', assignment_id: a.id });
       localStorage.setItem('helpsuprov:supervisor-team', String(res.team));
       saveSession('supervisor', { teamNumber: res.team, shiftId: res.shift_id });
+      setActiveShiftId(res.shift_id);
       setActiveTeam(res.team);
-    } catch {
-      toast.error('Не вдалося відкрити зміну');
+    } catch (e) {
+      toast.error(e instanceof Error && e.message === 'test_shift_closed' ? 'Тестова зміна вже закрита' : 'Не вдалося відкрити зміну');
     } finally {
       setBusy(false);
     }
@@ -197,13 +209,16 @@ const StaffPortal = () => {
 
   if (inPanel) {
     return (
-      <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}>
-        <SupervisorFlow
-          cabinetMode
-          onBack={() => { setActiveTeam(null); loadCabinet().catch(() => {}); }}
-          onAdminUnlock={() => navigate('/')}
-        />
-      </Suspense>
+      <>
+        {activeShiftId && <TestShiftBanner shiftId={activeShiftId} />}
+        <Suspense fallback={<FullScreenLoader label="Відкриваємо зміну..." />}>
+          <SupervisorFlow
+            cabinetMode
+            onBack={() => { setActiveTeam(null); setActiveShiftId(null); loadCabinet().catch(() => {}); }}
+            onAdminUnlock={() => navigate('/')}
+          />
+        </Suspense>
+      </>
     );
   }
 
@@ -350,6 +365,11 @@ const Section = ({ title, items, onEnter, busy, tone }: {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="font-bold truncate">{a.shift.name}</p>
+              {a.shift.is_test && a.shift.expires_at && (
+                <p className="mt-1 inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-950">
+                  🧪 Тестова · {testShiftOpen(a.shift.expires_at) ? `закривається ${testClosesLabel(a.shift.expires_at)}` : 'закрита'}
+                </p>
+              )}
               <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-0.5">
                 <CalendarDays className="w-3.5 h-3.5" /> {fmt(a.shift.start_date)} - {fmt(a.shift.end_date)}
               </p>

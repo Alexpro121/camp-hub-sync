@@ -2,6 +2,7 @@ import { admin, ensureRole, SERVICE_KEY } from './accounts.ts';
 import { kyivDate } from './ratelimit.ts';
 import { liveShiftIds, matchChild } from './childSearch.ts';
 import { escapeHtml, KIND_LABEL, maskName, normTgUsername, safeEqual, type StaffKind, tgDisplayName, type TgUser } from './telegramCore.ts';
+import { inviteNewcomer } from './testShift.ts';
 import { ADMIN_TG_IDS, childAuthUserIds, openAppKeyboard, revokeSessions, syncEnvAdmin, tg, userIsAdmin } from './telegramServer.ts';
 
 /**
@@ -342,6 +343,7 @@ export async function registerStaff(svc: Svc, user: TgUser, fullName: string, ki
 
   if (isEnvAdmin) {
     const res = await approveRequest(svc, req.id, 'supervisor', user.id, true);
+    if (res.ok) await inviteAfterApprove(svc, res.req);
     return { state: res.ok ? 'approved' : 'error' };
   }
   for (const id of await adminRecipients(svc)) {
@@ -375,5 +377,17 @@ export async function decideRequest(svc: Svc, presser: TgUser, id: string, appro
     return { ok: false, message: map[res.error] ?? 'Не вдалося підтвердити, спробуйте ще раз' };
   }
   await notify(Number(res.req.tg_user_id), `✅ Вас підтверджено: <b>${KIND_LABEL[res.req.kind]}</b>. Відкрийте застосунок.`);
+  await inviteAfterApprove(svc, res.req);
   return { ok: true, message: 'Підтверджено' };
+}
+
+/** Підтверджений під час тестування супровід/каченя одразу отримує команду й запрошення в тестову зміну. */
+async function inviteAfterApprove(svc: Svc, req: StaffRequest): Promise<void> {
+  if (req.kind === 'doctor') return;
+  try {
+    const link = await activeLink(svc, req.tg_user_id);
+    if (link?.kind === 'staff' && link.user_id) await inviteNewcomer(svc, link.user_id, Number(req.tg_user_id));
+  } catch (e) {
+    console.warn('[test-shift] invite failed:', e instanceof Error ? e.message : 'unknown');
+  }
 }
