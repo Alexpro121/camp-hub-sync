@@ -12,11 +12,10 @@ import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross
 import { useMedicalNotes } from '@/hooks/useMedicalNotes';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useHaptics } from '@/hooks/useHaptics';
 import { outbox } from '@/lib/outboxEngine';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 
 
 interface Props {
@@ -42,6 +41,10 @@ const SORT_LABELS: Record<SortMode, string> = {
   has_notes: 'Спочатку з нотатками',
   present_first: 'Спочатку присутні',
 };
+
+/** Значення-дії в списку сортування: не стають режимом сортування. */
+const MARK_ALL_PRESENT = 'mark_all_present';
+const MARK_ALL_ABSENT = 'mark_all_absent';
 
 const TeamsView = ({
   myTeam,
@@ -272,7 +275,15 @@ const TeamsView = ({
 
       <div data-tour="step-sort-modes" className="flex items-center gap-2 mb-3 px-1">
         <ArrowUpDown className="w-4 h-4 text-muted-foreground shrink-0" />
-        <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+        {/* Дії переклички живуть у тому ж списку: вибір дії не міняє сортування (Select контрольований). */}
+        <Select
+          value={sortMode}
+          onValueChange={(v) => {
+            if (v === MARK_ALL_PRESENT) markMyTeam(true);
+            else if (v === MARK_ALL_ABSENT) markMyTeam(false);
+            else setSortMode(v as SortMode);
+          }}
+        >
           <SelectTrigger className="h-11 text-sm flex-1 bg-surface-1 border-border/50">
             <SelectValue />
           </SelectTrigger>
@@ -280,32 +291,23 @@ const TeamsView = ({
             {(Object.keys(SORT_LABELS) as SortMode[]).map((k) => (
               <SelectItem key={k} value={k} className="text-sm py-2.5">{SORT_LABELS[k]}</SelectItem>
             ))}
+            {myKids.length > 0 && (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="text-xs font-medium text-muted-foreground">Моя команда</SelectLabel>
+                  <SelectItem value={MARK_ALL_PRESENT} disabled={myPresent === myKids.length} className="text-sm py-2.5 text-success focus:text-success">
+                    <span className="inline-flex items-center gap-2"><CheckCheck className="w-4 h-4" /> Позначити всіх присутніми</span>
+                  </SelectItem>
+                  <SelectItem value={MARK_ALL_ABSENT} disabled={myPresent === 0} className="text-sm py-2.5">
+                    <span className="inline-flex items-center gap-2"><XCircle className="w-4 h-4" /> Позначити всіх відсутніми</span>
+                  </SelectItem>
+                </SelectGroup>
+              </>
+            )}
           </SelectContent>
         </Select>
       </div>
-
-      {myKids.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-3 px-1">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 text-sm border-success/40 text-success hover:bg-success/10 hover:text-success"
-            disabled={myPresent === myKids.length}
-            onClick={() => markMyTeam(true)}
-          >
-            <CheckCheck className="w-4 h-4" /> Усі присутні
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 text-sm"
-            disabled={myPresent === 0}
-            onClick={() => markMyTeam(false)}
-          >
-            <XCircle className="w-4 h-4" /> Усі відсутні
-          </Button>
-        </div>
-      )}
 
       <div className="space-y-3 stagger">
         {teams.map((tn) => {

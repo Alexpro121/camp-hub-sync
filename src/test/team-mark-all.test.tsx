@@ -1,4 +1,4 @@
-/** Перекличка одним дотиком: «Усі присутні / Усі відсутні» міняють лише свою команду й скасовуються з тосту. */
+/** Перекличка одним дотиком зі списку сортування: дії міняють лише свою команду, не сортування, і скасовуються з тосту. */
 import 'fake-indexeddb/auto';
 import { act, render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,18 +54,34 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+// Radix Select у jsdom: бракує pointer capture і scrollIntoView.
+Object.assign(Element.prototype, { hasPointerCapture: () => false, releasePointerCapture: () => {}, scrollIntoView: () => {} });
+
+/** Відкриває список сортування й вибирає пункт за назвою. */
+const pick = async (name: RegExp) => {
+  fireEvent.keyDown(await screen.findByRole('combobox'), { key: 'Enter' });
+  fireEvent.keyDown(await screen.findByRole('option', { name }), { key: 'Enter' });
+};
+const option = async (name: RegExp) => {
+  fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+  const el = await screen.findByRole('option', { name });
+  fireEvent.keyDown(el, { key: 'Escape' });
+  return el;
+};
+
 const presence = (id: string) => h.updates.filter((u) => u.table === 'children' && u.id === id && 'is_present' in u.payload).map((u) => u.payload.is_present);
 
-describe('позначити всю команду', () => {
+describe('позначити всю команду зі списку сортування', () => {
   it('ставить присутніми лише дітей своєї команди, яких ще не відмітили, і дає скасувати', async () => {
     render(<TeamsView myTeam={4} shiftId={SHIFT_ID} />);
-    const all = await screen.findByRole('button', { name: /Усі присутні/ });
-    fireEvent.click(all);
+    await pick(/всіх присутніми/);
 
     await waitFor(() => expect(presence(B)).toEqual([true]));
     expect(presence(A)).toEqual([]);
     expect(presence(OTHER)).toEqual([]);
-    expect((screen.getByRole('button', { name: /Усі присутні/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('combobox')).toHaveTextContent('За номером');
+    expect(localStorage.getItem('helpsuprov:team-sort')).toBe('default');
+    expect((await option(/всіх присутніми/)).getAttribute('aria-disabled')).toBe('true');
     expect(h.toast).toHaveBeenCalledWith('Присутні: позначено 1', expect.anything());
 
     act(() => h.toast.mock.calls[0][1].action.onClick());
@@ -74,9 +90,9 @@ describe('позначити всю команду', () => {
 
   it('«Усі відсутні» знімає присутність у своїй команді', async () => {
     render(<TeamsView myTeam={4} shiftId={SHIFT_ID} />);
-    fireEvent.click(await screen.findByRole('button', { name: /Усі відсутні/ }));
+    await pick(/всіх відсутніми/);
     await waitFor(() => expect(presence(A)).toEqual([false]));
     expect(presence(B)).toEqual([]);
-    expect((screen.getByRole('button', { name: /Усі відсутні/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((await option(/всіх відсутніми/)).getAttribute('aria-disabled')).toBe('true');
   });
 });
