@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
+import { BadgeCheck, CircleDot, Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import type { Child } from '@/types/app';
@@ -21,9 +21,18 @@ interface Props {
   open: boolean;
   onClose: () => void;
   medical?: MedicalNote;
+  /** «На зміні» (прибуття). Без нього рядок лише показує стан, без кнопки. */
+  onCheckInChange?: (next: boolean) => void;
 }
 
-const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
+const clock = (iso: string) => {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', hour12: false });
+  const day = (x: Date) => x.toLocaleDateString('uk-UA', { timeZone: 'Europe/Kyiv' });
+  return day(d) === day(new Date()) ? `о ${time}` : `${d.toLocaleDateString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit' })} о ${time}`;
+};
+
+const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Props) => {
   const [phone, setPhone] = useState(child.phone || '');
   const [telegram, setTelegram] = useState(child.telegram_username || '');
   const [notes, setNotes] = useState(child.supervisor_notes || '');
@@ -167,6 +176,37 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
           <p className="min-w-0 break-words pr-12 text-left text-xs text-slate-400">
             Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
           </p>
+          {/* «На зміні»: відмічається на реєстрації; супровід може виправити тут. Окремо від переклички. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-2 pr-12">
+            <span
+              data-testid="arrival-status"
+              className={`inline-flex min-h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${child.checked_in ? 'border-success/40 bg-success/15 text-success' : 'border-white/10 bg-white/5 text-slate-400'}`}
+            >
+              {child.checked_in
+                ? <><BadgeCheck className="h-3.5 w-3.5" aria-hidden />На зміні{child.checked_in_at ? ` · ${clock(child.checked_in_at)}` : ''}</>
+                : 'Ще не на зміні'}
+            </span>
+            {child.has_logged_in && (
+              <span className="inline-flex min-h-7 items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success">
+                <CircleDot className="h-3 w-3" aria-hidden />В акаунті
+              </span>
+            )}
+            {onCheckInChange && (
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !child.checked_in;
+                  onCheckInChange(next);
+                  toast.success(next ? 'Позначено: на зміні' : 'Знято позначку «на зміні»', {
+                    action: { label: 'Скасувати', onClick: () => onCheckInChange(!next) },
+                  });
+                }}
+                className="inline-flex min-h-7 items-center rounded-full border border-white/15 px-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-slate-100 active:scale-95"
+              >
+                {child.checked_in ? 'Зняти' : 'Позначити на зміні'}
+              </button>
+            )}
+          </div>
         </DialogHeader>
 
         <Tabs defaultValue="edit" className="w-full min-w-0 overflow-x-hidden">

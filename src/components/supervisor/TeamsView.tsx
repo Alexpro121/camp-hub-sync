@@ -8,7 +8,7 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross, CheckCheck, XCircle } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross, CheckCheck, XCircle, BadgeCheck } from 'lucide-react';
 import { useMedicalNotes } from '@/hooks/useMedicalNotes';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
@@ -32,7 +32,7 @@ interface Props {
   shiftId?: string | null;
 }
 
-type SortMode = 'default' | 'iron_desc' | 'iron_asc' | 'has_notes' | 'present_first';
+type SortMode = 'default' | 'iron_desc' | 'iron_asc' | 'has_notes' | 'present_first' | 'arrived_first' | 'not_arrived_first';
 
 const SORT_LABELS: Record<SortMode, string> = {
   default: 'За номером',
@@ -40,11 +40,35 @@ const SORT_LABELS: Record<SortMode, string> = {
   iron_asc: 'Айрон ↑ (менше)',
   has_notes: 'Спочатку з нотатками',
   present_first: 'Спочатку присутні',
+  arrived_first: 'Спочатку на зміні',
+  not_arrived_first: 'Спочатку ще не прибули',
 };
 
 /** Значення-дії в списку сортування: не стають режимом сортування. */
 const MARK_ALL_PRESENT = 'mark_all_present';
 const MARK_ALL_ABSENT = 'mark_all_absent';
+
+/**
+ * Позначка біля імені: ● — дитина увійшла у свій акаунт (вона точно на зміні), інакше ✓ — прибула й
+ * відмічена на реєстрації. Основний квадрат зліва — окрема перекличка супроводу.
+ */
+const ArrivalMark = ({ child }: { child: Child }) => {
+  if (child.has_logged_in) {
+    return <CircleDot role="img" aria-label="Увійшов(ла) в акаунт" className="w-3 h-3 text-success shrink-0 animate-pulse-glow rounded-full"><title>Увійшов(ла) в акаунт</title></CircleDot>;
+  }
+  if (child.checked_in) {
+    return <BadgeCheck role="img" aria-label="На зміні" className="w-3.5 h-3.5 text-success shrink-0"><title>На зміні — відмічено на реєстрації</title></BadgeCheck>;
+  }
+  return null;
+};
+
+const ArrivalLegend = () => (
+  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-0.5 text-[11px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded-[3px] border-2 border-success bg-success" aria-hidden /> перекличка</span>
+    <span className="inline-flex items-center gap-1"><BadgeCheck className="h-3.5 w-3.5 text-success" aria-hidden /> на зміні</span>
+    <span className="inline-flex items-center gap-1"><CircleDot className="h-3 w-3 text-success" aria-hidden /> в акаунті</span>
+  </p>
+);
 
 const TeamsView = ({
   myTeam,
@@ -72,9 +96,10 @@ const TeamsView = ({
   };
   const haptics = useHaptics();
   const medical = useMedicalNotes();
-  const [sortMode, setSortMode] = useState<SortMode>(() =>
-    (localStorage.getItem('helpsuprov:team-sort') as SortMode) || 'default'
-  );
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    const saved = localStorage.getItem('helpsuprov:team-sort') as SortMode | null;
+    return saved && saved in SORT_LABELS ? saved : 'default';
+  });
 
   useEffect(() => {
     localStorage.setItem('helpsuprov:team-sort', sortMode);
@@ -192,6 +217,21 @@ const TeamsView = ({
     outbox.enqueue('PRESENCE', c.id, { isPresent: next });
   };
 
+  /** «На зміні» (прибуття) зі сторінки дитини: 0 мс у UI, мережа — фоном через Outbox; час ставить база. */
+  const setCheckIn = (id: string, next: boolean) => {
+    // Найсвіжіший рядок: «Скасувати» з тосту викликається пізніше, ніж його створили.
+    const c = childrenRef.current.find((x) => x.id === id);
+    if (!c || c.team_number !== myTeam || !!c.checked_in === next) return;
+    haptics.selection();
+    const at = next ? new Date().toISOString() : null;
+    setChildren((prev) => {
+      const updated = prev.map((x) => (x.id === c.id ? { ...x, checked_in: next, checked_in_at: at } : x));
+      outbox.saveTeamsSnapshot(updated);
+      return updated;
+    });
+    outbox.enqueue('CHECK_IN', c.id, { checkedIn: next });
+  };
+
   /** Ставить присутність кільком дітям своєї команди (id → стан); у мережу — кожну окремо через Outbox. */
   const applyPresence = (states: Map<string, boolean>) => {
     if (!states.size) return;
@@ -233,13 +273,16 @@ const TeamsView = ({
 
   // Знімок присутності на момент вибору сортування — картка не «тікає» з-під пальця під час переклички.
   const presentSnap = useRef<Map<string, boolean>>(new Map());
+  const arrivedSnap = useRef<Map<string, boolean>>(new Map());
   // Snapshot only when the sort mode changes; read children through a ref so roll-call taps don't re-sort.
   const childrenRef = useRef(children);
   childrenRef.current = children;
   useEffect(() => {
     presentSnap.current = new Map(childrenRef.current.map((c) => [c.id, !!c.is_present]));
+    arrivedSnap.current = new Map(childrenRef.current.map((c) => [c.id, !!c.checked_in]));
   }, [sortMode]);
   const snapPresent = (c: Child) => presentSnap.current.get(c.id) ?? !!c.is_present;
+  const snapArrived = (c: Child) => arrivedSnap.current.get(c.id) ?? !!c.checked_in;
   const sortKids = (kids: Child[]): Child[] => {
     const arr = [...kids];
     const hasNote = (c: Child) => Boolean((c.supervisor_notes && c.supervisor_notes.trim()) || (c.note_from_table && c.note_from_table.trim()));
@@ -252,6 +295,10 @@ const TeamsView = ({
         return arr.sort((a, b) => Number(hasNote(b)) - Number(hasNote(a)) || (a.row_number ?? 0) - (b.row_number ?? 0));
       case 'present_first':
         return arr.sort((a, b) => Number(snapPresent(b)) - Number(snapPresent(a)) || (a.row_number ?? 0) - (b.row_number ?? 0));
+      case 'arrived_first':
+        return arr.sort((a, b) => Number(snapArrived(b)) - Number(snapArrived(a)) || (a.row_number ?? 0) - (b.row_number ?? 0));
+      case 'not_arrived_first':
+        return arr.sort((a, b) => Number(snapArrived(a)) - Number(snapArrived(b)) || (a.row_number ?? 0) - (b.row_number ?? 0));
       default:
         return arr.sort((a, b) => (a.row_number ?? 0) - (b.row_number ?? 0) || a.full_name.localeCompare(b.full_name));
     }
@@ -316,6 +363,7 @@ const TeamsView = ({
           const isMine = tn === myTeam;
           const loggedIn = teamKidsRaw.filter(c => c.has_logged_in).length;
           const present = teamKidsRaw.filter(c => c.is_present).length;
+          const arrived = teamKidsRaw.filter(c => c.checked_in).length;
 
           return (
             <div key={tn}>
@@ -339,7 +387,7 @@ const TeamsView = ({
                       {!isMine && <Lock className="w-3 h-3 text-muted-foreground" />}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {teamKids.length} дітей · {present} присутні · {loggedIn} увійшли
+                      {teamKids.length} дітей · {arrived} на зміні · {present} присутні · {loggedIn} увійшли
                     </p>
                   </div>
                   <ChevronRight className={`w-5 h-5 text-muted-foreground transition-smooth ${openTeam === tn ? 'rotate-90' : ''}`} />
@@ -350,6 +398,7 @@ const TeamsView = ({
                 <div className="min-h-0">
                  {openTeam === tn && (
                 <div className="mt-2 space-y-1.5 pl-2">
+                  {isMine && <ArrivalLegend />}
 
                   {teamKids.map((c, ci) => (
                     <Card
@@ -380,9 +429,7 @@ const TeamsView = ({
                           {medical[c.id]?.needs_attention && (
                             <span className="inline-flex shrink-0" title={medical[c.id].note || 'Медична помітка лікаря'}><Cross className="w-4 h-4 text-destructive" aria-label="Медична помітка лікаря" /></span>
                           )}
-                          {c.has_logged_in && (
-                            <CircleDot className="w-3 h-3 text-success shrink-0 animate-pulse-glow rounded-full" />
-                          )}
+                          <ArrivalMark child={c} />
                           {((c.supervisor_notes && c.supervisor_notes.trim()) || (c.note_from_table && c.note_from_table.trim())) && (
                             <MessageSquare className="w-3 h-3 text-primary shrink-0" aria-label="Є нотатки" />
                           )}
@@ -417,7 +464,8 @@ const TeamsView = ({
 
       {editChild && (
         <ChildEditDialog
-          child={editChild}
+          child={children.find((x) => x.id === editChild.id) ?? editChild}
+          onCheckInChange={(next) => setCheckIn(editChild.id, next)}
           medical={medical[editChild.id]}
           open={!!editChild}
           onClose={() => setEditChild(null)}

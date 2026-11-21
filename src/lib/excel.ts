@@ -72,6 +72,7 @@ export function exportToExcel(children: Child[]) {
   });
 
   const data = sorted.map((c) => ({
+    'На зміні': c.checked_in ? '✓' : '',
     'Наявність': c.is_present ? '✓' : '',
     '№': c.row_number ?? '',
     '№ Команди': c.team_number,
@@ -89,6 +90,7 @@ export function exportToExcel(children: Child[]) {
 
   // Налаштування оптимальної ширини колонок для друку та перегляду
   ws['!cols'] = [
+    { wch: 10 }, // На зміні
     { wch: 11 }, // Наявність
     { wch: 6 },  // №
     { wch: 12 }, // № Команди

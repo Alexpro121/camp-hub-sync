@@ -32,6 +32,9 @@ export interface Child {
   team_name: string | null;
   note_from_table: string | null;
   is_present: boolean;
+  /** «На зміні»: прибув(ла) й відмічений(а) на реєстрації (окремо від переклички is_present). */
+  checked_in?: boolean;
+  checked_in_at?: string | null;
   has_logged_in: boolean;
   iron_dollars: number;
   telegram_username: string | null;

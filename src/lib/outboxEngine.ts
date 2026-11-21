@@ -29,7 +29,7 @@ import {
   safeUUID,
 } from '@/lib/offlineStorage';
 
-export type OutboxType = 'PRESENCE' | 'NOTE' | 'AIR_CHARGE';
+export type OutboxType = 'PRESENCE' | 'CHECK_IN' | 'NOTE' | 'AIR_CHARGE';
 
 export interface OutboxItem {
   id: string;
@@ -225,7 +225,7 @@ class OutboxManager {
    * Миттєво повертає елемент і запускає фоновий скид.
    */
   enqueue(type: OutboxType, entityId: string, payload: Record<string, unknown>): OutboxItem {
-    const coalescable = type === 'PRESENCE' || type === 'NOTE';
+    const coalescable = type === 'PRESENCE' || type === 'CHECK_IN' || type === 'NOTE';
 
     if (coalescable) {
       const idx = this.queue.findIndex((i) => i.type === type && i.entityId === entityId);
@@ -269,6 +269,18 @@ class OutboxManager {
         supabase
           .from('children')
           .update({ is_present: Boolean(item.payload.isPresent) })
+          .eq('id', item.entityId)
+      );
+      if (error) throw error;
+      return;
+    }
+
+    // 1б. «На зміні» (прибуття); час відмітки ставить база
+    if (item.type === 'CHECK_IN') {
+      const { error } = await withTimeout(
+        supabase
+          .from('children')
+          .update({ checked_in: Boolean(item.payload.checkedIn) })
           .eq('id', item.entityId)
       );
       if (error) throw error;

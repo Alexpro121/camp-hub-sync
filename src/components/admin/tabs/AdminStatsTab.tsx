@@ -24,6 +24,7 @@ interface ShiftStats {
   shift: Shift;
   total: number;
   present: number;
+  arrived: number;
   loggedIn: number;
   ironTotal: number;
   teams: number;
@@ -41,7 +42,7 @@ const StatsTab = () => {
     if (!navigator.onLine) { setLoading(false); return; }
     const [{ data: shifts, error: shiftsError }, { data: kids, error: kidsError }, { data: trans, error: transError }] = await Promise.all([
       supabase.from('shifts').select('*').order('start_date', { ascending: false }),
-      fetchAllRows<any>(() => supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number').order('id')),
+      fetchAllRows<any>(() => supabase.from('children').select('id, shift_id, row_number, team_number, full_name, phone, team_name, note_from_table, is_present, checked_in, has_logged_in, iron_dollars, telegram_username, supervisor_notes, created_at, updated_at, deleted_at, gender').order('team_number').order('id')),
       fetchAllRows<{ child_id: string }>(() => supabase.from('transfers').select('child_id').order('id')),
     ]);
     // Слабкий інтернет: збій не перетворює статистику на нулі — лишаємо попередню.
@@ -60,6 +61,7 @@ const StatsTab = () => {
         shift: s as Shift,
         total: inShift.length,
         present: inShift.filter((c: any) => c.is_present).length,
+        arrived: inShift.filter((c: any) => c.checked_in).length,
         loggedIn: inShift.filter((c: any) => c.has_logged_in).length,
         ironTotal: inShift.reduce((sum: number, c: any) => sum + (c.iron_dollars || 0), 0),
         teams: new Set(inShift.map((c: any) => c.team_number)).size,
@@ -219,6 +221,7 @@ const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStat
     finished: { label: 'Завершена', cls: 'bg-white/5 text-slate-400 border-white/10' },
   };
   const presentPct = r.total ? Math.round((r.present / r.total) * 100) : 0;
+  const arrivedPct = r.total ? Math.round((r.arrived / r.total) * 100) : 0;
   const loggedPct = r.total ? Math.round((r.loggedIn / r.total) * 100) : 0;
 
   return (
@@ -242,12 +245,13 @@ const ShiftStatsCard = ({ stats: r, kids = [], onPickChild }: { stats: ShiftStat
 
       <div className="grid grid-cols-4 gap-2">
         <MiniStat label="Учасників" value={r.total} />
-        <MiniStat label="Команд" value={r.teams} />
+        <MiniStat label="На зміні" value={`${r.arrived}`} hint={`${arrivedPct}%`} />
         <MiniStat label="Присутні" value={`${r.present}`} hint={`${presentPct}%`} />
         <MiniStat label="Увійшли" value={`${r.loggedIn}`} hint={`${loggedPct}%`} />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat label="Команд" value={r.teams} />
         <MiniStat label="Баланс А$" value={`${r.ironTotal} А$`} accent />
         <MiniStat label="Трансферів" value={r.transfers} />
       </div>

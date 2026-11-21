@@ -154,6 +154,7 @@ function supersedeOutbox(action: Omit<QueuedAction, 'id' | 'created_at'>) {
   if (action.table !== 'children' || action.op !== 'update' || !action.matchId) return;
   if ('supervisor_notes' in action.values) outbox.dropPending('NOTE', action.matchId);
   if ('is_present' in action.values) outbox.dropPending('PRESENCE', action.matchId);
+  if ('checked_in' in action.values) outbox.dropPending('CHECK_IN', action.matchId);
 }
 
 function enqueue(action: Omit<QueuedAction, 'id' | 'created_at'>) {

@@ -1,6 +1,12 @@
 import { admin, corsHeaders, json, SERVICE_KEY } from '../_shared/accounts.ts';
 import { heuristicGender } from '../_shared/gender.ts';
 
+/** «На зміні» (checked_in). Старі версії стійки ще надсилають is_present — це той самий намір «прибув». */
+const arrival = (x: any): boolean | undefined =>
+  typeof x?.checked_in === 'boolean' ? x.checked_in : typeof x?.is_present === 'boolean' ? x.is_present : undefined;
+/** Старим версіям стійки віддаємо прибуття й під давньою назвою is_present. */
+const legacy = <T extends { checked_in?: boolean }>(row: T) => ({ ...row, is_present: row.checked_in });
+
 // Пароль реєстраційної стійки живе лише в секретах функції (REGISTRY_PASSWORD), не в коді.
 const REGISTRY_PASSWORD = (Deno.env.get('REGISTRY_PASSWORD') ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
 const TOKEN_TTL_MS = 14 * 3600_000;
@@ -86,10 +92,10 @@ Deno.serve(async (req) => {
       const { ids } = await scopeIds(body.shift_id);
       if (!ids.length) return json({ children: [] });
       const { data, error } = await svc.from('children')
-        .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at, deleted_at')
+        .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at, deleted_at')
         .in('shift_id', ids).gt('updated_at', body.since).order('updated_at').limit(500);
       if (error) throw error;
-      return json({ children: data ?? [] });
+      return json({ children: (data ?? []).map(legacy) });
     }
 
     if (body.action === 'list') {
@@ -98,13 +104,13 @@ Deno.serve(async (req) => {
       const all: any[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await svc.from('children')
-          .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at')
+          .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at')
           .in('shift_id', ids).is('deleted_at', null).order('full_name').order('id').range(from, from + 999);
         if (error) throw error;
         all.push(...(data ?? []));
         if (!data || data.length < 1000) break;
       }
-      return json({ shifts, children: all });
+      return json({ shifts, children: all.map(legacy) });
     }
 
     // Пакет дій одним запитом: менше обривів на поганому інтернеті.
@@ -124,7 +130,7 @@ Deno.serve(async (req) => {
         // Compare-and-swap retries protect genuinely simultaneous note edits.
         for (let attempt = 0; attempt < 5; attempt++) {
         const patch: Record<string, unknown> = {};
-        if (typeof it.is_present === 'boolean') patch.is_present = it.is_present;
+        if (typeof arrival(it) === 'boolean') patch.checked_in = arrival(it);
         if (typeof it.supervisor_notes === 'string') {
           let note = it.supervisor_notes.slice(0, 2000);
           const now = row.supervisor_notes ?? '';
@@ -138,9 +144,9 @@ Deno.serve(async (req) => {
         let update = svc.from('children').update(patch).eq('id', it.id).is('deleted_at', null);
         update = row.updated_at ? update.eq('updated_at', row.updated_at) : update.is('updated_at', null);
         const { data, error } = await update
-          .select('id, is_present, supervisor_notes, updated_at').maybeSingle();
+          .select('id, checked_in, checked_in_at, supervisor_notes, updated_at').maybeSingle();
         if (error) return { id: it.id, status: 'error' };
-        if (data) return { id: it.id, status: 'ok', child: data };
+        if (data) return { id: it.id, status: 'ok', child: legacy(data) };
         const { data: latest, error: readError } = await svc.from('children')
           .select('id, supervisor_notes, updated_at, shifts!inner(is_active, deleted_at)')
           .eq('id', it.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).is('deleted_at', null).maybeSingle();
@@ -153,7 +159,7 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
-    const ROW = 'id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, is_present, gender, telegram_username, updated_at, deleted_at';
+    const ROW = 'id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at, deleted_at';
     const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
     // Новий учасник прямо зі стійки: лише в активну зміну.
@@ -180,10 +186,10 @@ Deno.serve(async (req) => {
       }
       const { data, error } = await svc.from('children').insert({
         shift_id: shiftId, full_name: fullName, team_number: team, phone, telegram_username: telegram, gender,
-        supervisor_notes: note, notes_origin: note ? 'registry' : null, is_present: body.is_present === true,
+        supervisor_notes: note, notes_origin: note ? 'registry' : null, checked_in: arrival(body) === true,
       }).select(ROW).single();
       if (error) throw error;
-      return json({ child: data });
+      return json({ child: legacy(data) });
     }
 
     // М'яке видалення: зникає з команди одразу, 24 години можна відновити.
@@ -201,7 +207,7 @@ Deno.serve(async (req) => {
       const { data, error } = await q.select(ROW).maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: body.action === 'restore' ? 'expired' : 'not_found' });
-      return json({ child: data });
+      return json({ child: legacy(data) });
     }
 
     if (body.action === 'deleted') {
@@ -211,12 +217,12 @@ Deno.serve(async (req) => {
         .in('shift_id', ids).gt('deleted_at', new Date(Date.now() - DELETE_GRACE_MS).toISOString())
         .order('deleted_at', { ascending: false }).limit(500);
       if (error) throw error;
-      return json({ children: data ?? [] });
+      return json({ children: (data ?? []).map(legacy) });
     }
 
     if (body.action === 'update') {
       const patch: Record<string, unknown> = {};
-      if (typeof body.is_present === 'boolean') patch.is_present = body.is_present;
+      if (typeof arrival(body) === 'boolean') patch.checked_in = arrival(body);
       if (typeof body.supervisor_notes === 'string') {
         patch.supervisor_notes = body.supervisor_notes.slice(0, 2000);
         patch.notes_origin = 'registry';
@@ -226,10 +232,10 @@ Deno.serve(async (req) => {
         .eq('id', body.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).maybeSingle();
       if (!own) return json({ error: 'not_found' });
       const { data, error } = await svc.from('children').update(patch).eq('id', body.id).is('deleted_at', null)
-        .select('id, is_present, supervisor_notes, updated_at').maybeSingle();
+        .select('id, checked_in, checked_in_at, supervisor_notes, updated_at').maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: 'not_found' });
-      return json({ child: data });
+      return json({ child: legacy(data) });
     }
 
     return json({ error: 'unknown_action' });

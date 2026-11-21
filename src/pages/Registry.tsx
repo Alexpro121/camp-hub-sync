@@ -11,10 +11,11 @@ import TelegramGate from '@/components/telegram/TelegramGate';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
-  note_from_table: string | null; supervisor_notes: string | null; is_present: boolean;
+  note_from_table: string | null; supervisor_notes: string | null; checked_in: boolean; checked_in_at?: string | null;
   gender: string | null; telegram_username: string | null; updated_at?: string; deleted_at?: string | null;
 }
 const DELETE_GRACE_MS = 24 * 3600_000;
+const clock = (iso: string) => new Date(iso).toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', hour12: false });
 const timeLeft = (deletedAt: string) => {
   const ms = new Date(deletedAt).getTime() + DELETE_GRACE_MS - Date.now();
   if (ms <= 0) return 'зараз';
@@ -118,10 +119,10 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
 }) {
   return (
     <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both motion-reduce:animate-none">
-      <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${kid.is_present ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
-        <button onClick={() => onToggle(kid)} aria-label={kid.is_present ? 'Зняти присутність' : 'Позначити присутнім'}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90 [-webkit-tap-highlight-color:transparent] ${kid.is_present ? 'border-success bg-success text-success-foreground shadow-[0_0_0_4px_hsl(var(--success)/0.15)]' : 'border-muted-foreground/40 text-transparent'}`}>
-          <Check className={`h-6 w-6 transition-transform duration-300 ease-[cubic-bezier(.34,1.56,.64,1)] ${kid.is_present ? 'scale-100 rotate-0' : 'scale-50 -rotate-12'}`} />
+      <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${kid.checked_in ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
+        <button onClick={() => onToggle(kid)} aria-label={kid.checked_in ? 'Зняти відмітку «на зміні»' : 'Позначити, що прибув(ла)'}
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90 [-webkit-tap-highlight-color:transparent] ${kid.checked_in ? 'border-success bg-success text-success-foreground shadow-[0_0_0_4px_hsl(var(--success)/0.15)]' : 'border-muted-foreground/40 text-transparent'}`}>
+          <Check className={`h-6 w-6 transition-transform duration-300 ease-[cubic-bezier(.34,1.56,.64,1)] ${kid.checked_in ? 'scale-100 rotate-0' : 'scale-50 -rotate-12'}`} />
         </button>
         <button onClick={() => onOpen(kid)} className="min-w-0 flex-1 text-left">
           <div className="truncate font-semibold text-foreground"><Highlight text={kid.full_name} query={query} /></div>
@@ -174,8 +175,8 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
     >
       <div className="space-y-4">
         <button onClick={() => onToggle(kid)}
-          className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.is_present ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
-          <Check className="h-5 w-5" />{kid.is_present ? 'Присутній(я) — зареєстровано' : 'Позначити присутнім'}
+          className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.checked_in ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
+          <Check className="h-5 w-5" />{kid.checked_in ? `На зміні — зареєстровано${kid.checked_in_at ? ` о ${clock(kid.checked_in_at)}` : ''}` : 'Позначити, що прибув(ла)'}
         </button>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
           {kid.phone && <><dt className="text-muted-foreground">Телефон</dt><dd><a href={`tel:${kid.phone}`} className="inline-flex min-h-8 items-center gap-1 text-primary"><Phone className="h-3.5 w-3.5" />{kid.phone}</a></dd></>}
@@ -212,7 +213,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
   );
 }
 
-type NewKid = { full_name: string; team_number: number; shift_id: string; phone: string; telegram_username: string; gender: '' | 'boy' | 'girl'; note: string; is_present: boolean };
+type NewKid = { full_name: string; team_number: number; shift_id: string; phone: string; telegram_username: string; gender: '' | 'boy' | 'girl'; note: string; checked_in: boolean };
 type CreateResult = 'ok' | 'error' | { duplicate: string };
 
 function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate }: {
@@ -222,7 +223,7 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
   const shiftIds = Object.keys(shifts);
   const [v, setV] = useState<NewKid>({
     full_name: '', team_number: 0, shift_id: defaultShift ?? (shiftIds.length === 1 ? shiftIds[0] : ''),
-    phone: '', telegram_username: '', gender: '', note: '', is_present: true,
+    phone: '', telegram_username: '', gender: '', note: '', checked_in: true,
   });
   const [teamText, setTeamText] = useState(defaultTeam != null ? String(defaultTeam) : '');
   const [busy, setBusy] = useState(false);
@@ -308,8 +309,8 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
             className="mt-1 w-full resize-none rounded-xl border border-input bg-background p-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
         </label>
         <label className="flex min-h-11 items-center gap-2.5 text-sm text-foreground">
-          <input type="checkbox" checked={v.is_present} onChange={(e) => set('is_present', e.target.checked)} className="h-5 w-5" />
-          Одразу позначити присутнім
+          <input type="checkbox" checked={v.checked_in} onChange={(e) => set('checked_in', e.target.checked)} className="h-5 w-5" />
+          Одразу позначити, що прибув(ла)
         </label>
         {err && <p role="alert" className="text-sm text-destructive animate-in fade-in">{err}</p>}
         {dup && <p role="alert" className="rounded-xl bg-warning/10 p-3 text-sm text-warning animate-in fade-in">У цій зміні вже є «{dup}». Натисніть ще раз, щоб усе одно створити.</p>}
@@ -380,13 +381,25 @@ function DeletedList({ token, shiftId, team, shifts, refreshKey, onRestored, onL
 
 type Filter = 'all' | 'absent' | 'present' | 'deleted';
 const QUEUE_KEY = 'ironshift:registry-queue';
-type Pending = Record<string, { is_present?: boolean; supervisor_notes?: string; base_note?: string }>;
-const readQueue = (): Pending => { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}'); } catch { return {}; } };
+type Pending = Record<string, { checked_in?: boolean; supervisor_notes?: string; base_note?: string }>;
+/** Черга й кеш могли лишитися від версії, де прибуття звалося is_present. */
+const arrivalOf = <T extends object>(v: T): T => {
+  const old = v as T & { is_present?: boolean; checked_in?: boolean };
+  if (typeof old.is_present !== 'boolean' || typeof old.checked_in === 'boolean') return v;
+  const { is_present, ...rest } = old;
+  return { ...rest, checked_in: is_present } as T;
+};
+const readQueue = (): Pending => {
+  try {
+    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '{}') as Pending;
+    return Object.fromEntries(Object.entries(q).map(([id, p]) => [id, arrivalOf(p)]));
+  } catch { return {}; }
+};
 const writeQueue = (q: Pending) => localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
 // Кеш окремо для кожної зміни — офлайн-список не змішується між змінами.
 const listKey = (shiftId: string | null) => `ironshift:registry-list:${shiftId ?? 'all'}`;
 type CachedList = { at: number; children: Kid[]; shifts: Record<string, string> };
-const readList = (shiftId: string | null): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(listKey(shiftId)) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? v : null; } catch { return null; } };
+const readList = (shiftId: string | null): CachedList | null => { try { const v = JSON.parse(localStorage.getItem(listKey(shiftId)) || 'null'); return v && Date.now() - v.at < 3 * 86400_000 ? { ...v, children: (v.children ?? []).map(arrivalOf) } : null; } catch { return null; } };
 const writeList = (shiftId: string | null, v: CachedList) => { try { localStorage.setItem(listKey(shiftId), JSON.stringify(v)); } catch { /* quota */ } };
 const ago = (t: number) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'щойно' : m < 60 ? `${m} хв тому` : `${Math.round(m / 60)} год тому`; };
 
@@ -554,11 +567,11 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   const scoped = useMemo(() => (kids ?? []).filter((k) => !shiftId || k.shift_id === shiftId), [kids, shiftId]);
   const teams = useMemo(() => {
     const m = new Map<number, { total: number; present: number }>();
-    for (const k of scoped) { const t = m.get(k.team_number) ?? { total: 0, present: 0 }; t.total++; if (k.is_present) t.present++; m.set(k.team_number, t); }
+    for (const k of scoped) { const t = m.get(k.team_number) ?? { total: 0, present: 0 }; t.total++; if (k.checked_in) t.present++; m.set(k.team_number, t); }
     return [...m.entries()].sort((a, b) => a[0] - b[0]);
   }, [scoped]);
   const filtered = useMemo(() => scoped.filter((k) =>
-    (team === null || k.team_number === team) && (filter === 'all' || filter === 'deleted' || (filter === 'present') === k.is_present)), [scoped, team, filter]);
+    (team === null || k.team_number === team) && (filter === 'all' || filter === 'deleted' || (filter === 'present') === k.checked_in)), [scoped, team, filter]);
 
   // Пошук іде по всіх дітях (фільтр «хто не прийшов» не ховає знайдених), браузинг — по фільтру.
   const searching = dq.trim().length > 0;
@@ -568,12 +581,12 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   }, [searching, scoped, filtered, team, indexOf, dq]);
   useEffect(() => setLimit(60), [filter, team, shiftId, dq]);
 
-  const present = useMemo(() => scoped.filter((k) => k.is_present).length, [scoped]);
+  const present = useMemo(() => scoped.filter((k) => k.checked_in).length, [scoped]);
   const total = scoped.length;
 
   const patch = (id: string, p: Partial<Kid>) => setKids((ks) => ks?.map((k) => (k.id === id ? { ...k, ...p } : k)) ?? ks);
 
-  const send = useCallback(async (id: string, p: { is_present?: boolean; supervisor_notes?: string }, baseNote?: string) => {
+  const send = useCallback(async (id: string, p: { checked_in?: boolean; supervisor_notes?: string }, baseNote?: string) => {
     const pq = readQueue();
     const base = p.supervisor_notes !== undefined && pq[id]?.base_note === undefined
       ? (baseNote ?? '') : pq[id]?.base_note;
@@ -583,14 +596,14 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
   }, [flush]);
 
   const toggle = useCallback((k: Kid, fromSearch = false) => {
-    const next = !k.is_present;
-    patch(k.id, { is_present: next });
+    const next = !k.checked_in;
+    patch(k.id, { checked_in: next, checked_in_at: next ? new Date().toISOString() : null });
     navigator.vibrate?.(next ? 20 : [10, 40, 10]);
-    void send(k.id, { is_present: next });
+    void send(k.id, { checked_in: next });
     if (next) {
       toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} · команда ${k.team_number}`, {
         duration: 3000,
-        action: { label: 'Скасувати', onClick: () => { patch(k.id, { is_present: false }); void send(k.id, { is_present: false }); } },
+        action: { label: 'Скасувати', onClick: () => { patch(k.id, { checked_in: false, checked_in_at: null }); void send(k.id, { checked_in: false }); } },
       });
       // Швидкий потік: відмітив знайдену дитину — поле пошуку готове до наступної.
       if (fromSearch) { setQ(''); requestAnimationFrame(() => inputRef.current?.focus()); }
@@ -652,7 +665,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     try {
       const d = await call({
         action: 'create', token, force, shift_id: v.shift_id, full_name: v.full_name, team_number: v.team_number,
-        phone: v.phone, telegram_username: v.telegram_username, gender: v.gender || null, note: v.note, is_present: v.is_present,
+        phone: v.phone, telegram_username: v.telegram_username, gender: v.gender || null, note: v.note, checked_in: v.checked_in,
       });
       upsertKid(d.child);
       setCreating(false);
@@ -698,7 +711,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <input ref={inputRef} autoFocus={!coarse} inputMode="search" value={q} onChange={(e) => setQ(e.target.value)} enterKeyHint="search"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && results[0]) { e.shiftKey ? setOpenId(results[0].id) : (!results[0].is_present ? toggle(results[0], true) : setOpenId(results[0].id)); }
+                if (e.key === 'Enter' && results[0]) { e.shiftKey ? setOpenId(results[0].id) : (!results[0].checked_in ? toggle(results[0], true) : setOpenId(results[0].id)); }
                 if (e.key === 'Escape') setQ('');
               }}
               placeholder="Прізвище, ім'я або телефон…" aria-label="Пошук дитини" autoComplete="off" autoCorrect="off" spellCheck={false}
