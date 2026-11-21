@@ -19,7 +19,8 @@ import ForcePasswordChange from '@/components/staff/ForcePasswordChange';
 import TelegramGate from '@/components/telegram/TelegramGate';
 import TelegramRequests from '@/components/telegram/TelegramRequests';
 import TestShiftBanner from '@/components/staff/TestShiftBanner';
-import { takeEnterParam, testClosesLabel, testShiftOpen } from '@/lib/testShift';
+import TestTeamPicker from '@/components/staff/TestTeamPicker';
+import { readPickParam, takePickParam, testClosesLabel, testShiftOpen } from '@/lib/testShift';
 import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
@@ -55,6 +56,9 @@ const StaffPortal = () => {
 
   const inPanel = Boolean(cabinet && activeTeam !== null);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  // Кнопка запрошення в тестову зміну (?pick=<токен>): супровід сам обирає номер команди.
+  const [pickToken, setPickToken] = useState<string | null>(() => readPickParam());
+  useEffect(() => { takePickParam(); }, []);
 
   const loadCabinet = useCallback(async () => {
     const data = await call({ action: 'cabinet' });
@@ -73,7 +77,7 @@ const StaffPortal = () => {
           if (signedIn.state !== 'ok') { setTgBlock(signedIn.state); return; }
           // Дитина й адмін мають свої екрани на головній сторінці.
           // Адмін, який натиснув запрошення в тестову зміну, теж іде у свою команду, а не в адмінку.
-          const invited = signedIn.role === 'admin' && new URLSearchParams(window.location.search).has('enter');
+          const invited = signedIn.role === 'admin' && Boolean(pickToken);
           if (signedIn.role !== 'staff' && !invited) { navigate('/', { replace: true }); return; }
         }
         const { data } = await supabase.auth.getUser();
@@ -82,11 +86,6 @@ const StaffPortal = () => {
           if (controller.signal.aborted) return;
           if ('cabinet' in result) { if (tgMode) setTgBlock('revoked'); return; }
           setCabinet(result);
-          // Кнопка запрошення в тестову зміну (?enter=<призначення>): команда відкривається одразу.
-          const enterId = takeEnterParam();
-          const target = enterId ? result.assignments.find((a) => a.id === enterId) : undefined;
-          if (enterId && target) { await enterShift(target); return; }
-          if (enterId) toast.error('Тестова зміна вже закрита');
           const savedTeam = localStorage.getItem('helpsuprov:supervisor-team');
           const team = savedTeam ? Number(savedTeam) : null;
           const saved = team !== null && Number.isInteger(team) ? result.assignments.find((assignment) => assignment.team_number === team) : undefined;
@@ -205,6 +204,25 @@ const StaffPortal = () => {
 
   if (cabinet?.kind === 'doctor') {
     return <Suspense fallback={<FullScreenLoader label="Відкриваємо медичний список..." />}><DoctorDesk name={cabinet.full_name} theme={theme} toggleTheme={toggleTheme} onLogout={exit} /></Suspense>;
+  }
+
+  // Вибір команди тестової зміни: після вибору команда одразу відкривається.
+  if (cabinet && pickToken && !inPanel) {
+    const joined = async (shiftId: string) => {
+      const fresh = await call<Cabinet>({ action: 'cabinet' });
+      setCabinet(fresh);
+      const a = fresh.assignments.find((x) => x.shift.id === shiftId);
+      setPickToken(null);
+      if (a) await enterShift(a);
+    };
+    return (
+      <main className={cn('min-h-[100dvh] w-full bg-background text-foreground px-4 py-6 safe-top transition-colors', theme === 'light' && 'staff-light')}>
+        <div className="max-w-md mx-auto space-y-4">
+          <h1 className="text-2xl font-black tracking-tight">Оберіть команду</h1>
+          <TestTeamPicker token={pickToken} onJoined={joined} onClose={() => setPickToken(null)} />
+        </div>
+      </main>
+    );
   }
 
   if (inPanel) {

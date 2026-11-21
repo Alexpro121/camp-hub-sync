@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { takeEnterParam, testClosesLabel, testShiftOpen } from './testShift';
+import { takePickParam, testClosesLabel, testShiftOpen } from './testShift';
 
 describe('test shift', () => {
   it('shows the closing time in Kyiv time', () => {
@@ -13,11 +13,11 @@ describe('test shift', () => {
     expect(testShiftOpen(null)).toBe(false);
   });
 
-  it('takes the invite assignment from the URL once', () => {
-    const id = '0f8fad5b-d9cb-469f-a165-70867728950e';
-    window.history.replaceState(null, '', `/staff?enter=${id}`);
-    expect(takeEnterParam()).toBe(id);
+  it('takes the team-pick link from the URL once', () => {
+    const token = 'AbCdEf0123456789_test';
+    window.history.replaceState(null, '', `/staff?pick=${token}`);
+    expect(takePickParam()).toBe(token);
     expect(window.location.search).toBe('');
-    expect(takeEnterParam()).toBeNull();
+    expect(takePickParam()).toBeNull();
   });
 });

@@ -9,15 +9,25 @@ export function testClosesLabel(expiresAt: string): string {
 export const testShiftOpen = (expiresAt: string | null | undefined, now = Date.now()) =>
   Boolean(expiresAt) && Date.parse(String(expiresAt)) > now;
 
-/** Параметр ?enter=<призначення> з кнопки запрошення; одразу прибирається з адреси. */
-export function takeEnterParam(): string | null {
+/** Параметр ?pick=<токен посилання зміни> з кнопки запрошення; одразу прибирається з адреси. */
+export function takePickParam(): string | null {
   try {
     const url = new URL(window.location.href);
-    const id = url.searchParams.get('enter');
-    if (!id) return null;
-    url.searchParams.delete('enter');
+    const token = url.searchParams.get('pick');
+    if (!token) return null;
+    url.searchParams.delete('pick');
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-    return /^[0-9a-f-]{36}$/i.test(id) ? id : null;
+    return /^[A-Za-z0-9_-]{16,64}$/.test(token) ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Те саме без зміни адреси (для початкового стану: у StrictMode ініціалізатор викликається двічі). */
+export function readPickParam(): string | null {
+  try {
+    const token = new URL(window.location.href).searchParams.get('pick');
+    return token && /^[A-Za-z0-9_-]{16,64}$/.test(token) ? token : null;
   } catch {
     return null;
   }
