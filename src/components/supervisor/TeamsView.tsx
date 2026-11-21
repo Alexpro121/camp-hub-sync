@@ -8,13 +8,15 @@ import type { Child } from '@/types/app';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross } from 'lucide-react';
+import { Coins, ChevronRight, Lock, CircleDot, ArrowUpDown, MessageSquare, Cross, CheckCheck, XCircle } from 'lucide-react';
 import { useMedicalNotes } from '@/hooks/useMedicalNotes';
 import ChildEditDialog from './ChildEditDialog';
 import { InlineLoader } from '@/components/ui/loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useHaptics } from '@/hooks/useHaptics';
 import { outbox } from '@/lib/outboxEngine';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 
 
 interface Props {
@@ -187,8 +189,33 @@ const TeamsView = ({
     outbox.enqueue('PRESENCE', c.id, { isPresent: next });
   };
 
+  /** Ставить присутність кільком дітям своєї команди (id → стан); у мережу — кожну окремо через Outbox. */
+  const applyPresence = (states: Map<string, boolean>) => {
+    if (!states.size) return;
+    setChildren((prev) => {
+      const updated = prev.map((x) => (states.has(x.id) && x.team_number === myTeam ? { ...x, is_present: states.get(x.id)! } : x));
+      outbox.saveTeamsSnapshot(updated);
+      return updated;
+    });
+    states.forEach((isPresent, id) => outbox.enqueue('PRESENCE', id, { isPresent }));
+  };
+
+  /** «Позначити всіх» у своїй команді; тост дає скасувати, щоб випадковий дотик не стер перекличку. */
+  const markMyTeam = (isPresent: boolean) => {
+    const changed = children.filter((c) => c.team_number === myTeam && !!c.is_present !== isPresent);
+    if (!changed.length) return;
+    haptics.selection();
+    const before = new Map(changed.map((c) => [c.id, !!c.is_present]));
+    applyPresence(new Map(changed.map((c) => [c.id, isPresent])));
+    toast.success(`${isPresent ? 'Присутні' : 'Відсутні'}: позначено ${changed.length}`, {
+      action: { label: 'Скасувати', onClick: () => applyPresence(before) },
+    });
+  };
+
 
   const teams = Array.from(new Set(children.map((c) => c.team_number))).sort((a, b) => a - b);
+  const myKids = children.filter((c) => c.team_number === myTeam);
+  const myPresent = myKids.filter((c) => c.is_present).length;
 
   // Latest callback in a ref: a new inline prop each render must not re-fire the effect.
   const firstChildCb = useRef(onFirstTeamChild);
@@ -256,6 +283,29 @@ const TeamsView = ({
           </SelectContent>
         </Select>
       </div>
+
+      {myKids.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 mb-3 px-1">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 text-sm border-success/40 text-success hover:bg-success/10 hover:text-success"
+            disabled={myPresent === myKids.length}
+            onClick={() => markMyTeam(true)}
+          >
+            <CheckCheck className="w-4 h-4" /> Усі присутні
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 text-sm"
+            disabled={myPresent === 0}
+            onClick={() => markMyTeam(false)}
+          >
+            <XCircle className="w-4 h-4" /> Усі відсутні
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-3 stagger">
         {teams.map((tn) => {
