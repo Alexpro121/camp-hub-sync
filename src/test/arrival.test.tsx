@@ -1,6 +1,6 @@
 /**
  * «На зміні»: відмітка з реєстрації окремо від переклички. Біля імені ✓ (на зміні) або ● (в акаунті),
- * сортування за прибуттям і маленька кнопка в профілі, яку можна скасувати з тосту.
+ * сортування за прибуттям і маленька кнопка в профілі з підтвердженням (відмітку бачить стійка).
  */
 import 'fake-indexeddb/auto';
 import { act, render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
@@ -59,7 +59,7 @@ beforeEach(() => {
   h.tables.shifts = [{ id: SHIFT_ID, name: 'WOW', shift_type: 'long', start_date: '2026-11-21', end_date: '2026-11-21', is_active: true, team_offset: 0, deleted_at: null }];
   h.tables.children = [
     kid(A, 1),
-    kid(B, 2, { checked_in: true, checked_in_at: '2026-11-21T08:42:00.000Z' }),
+    kid(B, 2, { checked_in: true, checked_in_at: '2026-11-21T08:42:00.000Z', checked_in_by: 'registry' }),
     kid(C, 3, { checked_in: true, checked_in_at: '2026-11-21T08:30:00.000Z', has_logged_in: true }),
   ];
 });
@@ -95,21 +95,36 @@ describe('на зміні', () => {
     await waitFor(() => expect(order()[0]).toBe('Відкрити картку: Дитина 1'));
   });
 
-  it('у профілі маленька кнопка ставить і знімає «на зміні», а тост дає скасувати', async () => {
+  it('у профілі кнопка питає підтвердження, бо відмітку бачить стійка реєстрації', async () => {
     render(<TeamsView myTeam={4} shiftId={SHIFT_ID} />);
     fireEvent.click(await card(1));
-    const status = await screen.findByTestId('arrival-status');
-    expect(status).toHaveTextContent('Ще не на зміні');
+    expect(await screen.findByTestId('arrival-status')).toHaveTextContent('Ще не на зміні');
 
+    // Скасувати у вікні — нічого не змінюється.
     fireEvent.click(screen.getByRole('button', { name: 'Позначити на зміні' }));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(/Стійка реєстрації/);
+    fireEvent.click(screen.getByRole('button', { name: 'Скасувати' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(arrival(A)).toEqual([]);
+
+    // Підтвердили — на зміні, з позначкою «супровід».
+    fireEvent.click(screen.getByRole('button', { name: 'Позначити на зміні' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Так, позначити' }));
     await waitFor(() => expect(arrival(A)).toEqual([true]));
-    expect(screen.getByTestId('arrival-status')).toHaveTextContent(/На зміні · о \d\d:\d\d/);
-    expect(arrival(A)).toEqual([true]);
+    expect(screen.getByTestId('arrival-status')).toHaveTextContent(/На зміні · о \d\d:\d\d · супровід/);
     expect(h.updates.some((u) => u.id === A && 'is_present' in u.payload)).toBe(false);
 
-    act(() => h.toast.mock.calls.at(-1)![1].action.onClick());
+    // Зняти — теж через підтвердження.
+    fireEvent.click(screen.getByRole('button', { name: 'Зняти' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Так, зняти' }));
     await waitFor(() => expect(arrival(A)).toEqual([true, false]));
     expect(screen.getByTestId('arrival-status')).toHaveTextContent('Ще не на зміні');
+  });
+
+  it('показує, що відмітила реєстрація', async () => {
+    render(<TeamsView myTeam={4} shiftId={SHIFT_ID} />);
+    fireEvent.click(await card(2));
+    expect(await screen.findByTestId('arrival-status')).toHaveTextContent(/На зміні · .*о \d\d:\d\d · реєстрація/);
   });
 
   it('показує час відмітки з реєстрації і стан «в акаунті»', async () => {

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { BadgeCheck, CircleDot, Coins, Loader2, Save, Minus, Plus, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import TransactionHistory from '@/components/fair/TransactionHistory';
 import type { Child } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,6 +39,8 @@ const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Pro
   const [notes, setNotes] = useState(child.supervisor_notes || '');
   const [gender, setGender] = useState<Gender | ''>(((child as any).gender as Gender) || '');
   const [detecting, setDetecting] = useState(false);
+  /** Підтвердження зміни «на зміні»: відмітку одразу бачить стійка реєстрації. */
+  const [confirmArrival, setConfirmArrival] = useState(false);
   const [iron, setIron] = useState(String(child.iron_dollars));
   const [saving, setSaving] = useState(false);
   const haptics = useHaptics();
@@ -180,10 +183,10 @@ const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Pro
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-2 pr-12">
             <span
               data-testid="arrival-status"
-              className={`inline-flex min-h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${child.checked_in ? 'border-success/40 bg-success/15 text-success' : 'border-white/10 bg-white/5 text-slate-400'}`}
+              className={`inline-flex min-h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold ${!child.checked_in ? 'border-white/10 bg-white/5 text-slate-400' : child.checked_in_by === 'staff' ? 'border-warning/40 bg-warning/15 text-warning' : 'border-success/40 bg-success/15 text-success'}`}
             >
               {child.checked_in
-                ? <><BadgeCheck className="h-3.5 w-3.5" aria-hidden />На зміні{child.checked_in_at ? ` · ${clock(child.checked_in_at)}` : ''}</>
+                ? <><BadgeCheck className="h-3.5 w-3.5" aria-hidden />На зміні{child.checked_in_at ? ` · ${clock(child.checked_in_at)}` : ''}{child.checked_in_by === 'staff' ? ' · супровід' : child.checked_in_by === 'registry' ? ' · реєстрація' : ''}</>
                 : 'Ще не на зміні'}
             </span>
             {child.has_logged_in && (
@@ -194,19 +197,39 @@ const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Pro
             {onCheckInChange && (
               <button
                 type="button"
-                onClick={() => {
-                  const next = !child.checked_in;
-                  onCheckInChange(next);
-                  toast.success(next ? 'Позначено: на зміні' : 'Знято позначку «на зміні»', {
-                    action: { label: 'Скасувати', onClick: () => onCheckInChange(!next) },
-                  });
-                }}
+                onClick={() => setConfirmArrival(true)}
                 className="inline-flex min-h-7 items-center rounded-full border border-white/15 px-2.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-slate-100 active:scale-95"
               >
                 {child.checked_in ? 'Зняти' : 'Позначити на зміні'}
               </button>
             )}
           </div>
+          {onCheckInChange && (
+            <AlertDialog open={confirmArrival} onOpenChange={setConfirmArrival}>
+              <AlertDialogContent className="max-w-sm rounded-2xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{child.checked_in ? 'Зняти «на зміні»?' : 'Позначити «на зміні»?'}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {child.checked_in
+                      ? `${child.full_name} — буде позначено, що ще не прибув(ла). Стійка реєстрації одразу це побачить.`
+                      : `${child.full_name} — буде позначено, що прибув(ла) на зміну. Стійка реєстрації побачить це жовтою галочкою «відмітив супровід».`}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="gap-2">
+                  <AlertDialogCancel>Скасувати</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      const next = !child.checked_in;
+                      onCheckInChange(next);
+                      toast.success(next ? 'Позначено: на зміні' : 'Знято позначку «на зміні»');
+                    }}
+                  >
+                    {child.checked_in ? 'Так, зняти' : 'Так, позначити'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </DialogHeader>
 
         <Tabs defaultValue="edit" className="w-full min-w-0 overflow-x-hidden">

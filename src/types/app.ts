@@ -35,6 +35,8 @@ export interface Child {
   /** «На зміні»: прибув(ла) й відмічений(а) на реєстрації (окремо від переклички is_present). */
   checked_in?: boolean;
   checked_in_at?: string | null;
+  /** Хто відмітив: стійка реєстрації чи супровід (ставить база). */
+  checked_in_by?: string | null;
   has_logged_in: boolean;
   iron_dollars: number;
   telegram_username: string | null;

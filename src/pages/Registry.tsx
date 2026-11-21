@@ -11,10 +11,12 @@ import TelegramGate from '@/components/telegram/TelegramGate';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
-  note_from_table: string | null; supervisor_notes: string | null; checked_in: boolean; checked_in_at?: string | null;
+  note_from_table: string | null; supervisor_notes: string | null; checked_in: boolean; checked_in_at?: string | null; checked_in_by?: string | null;
   gender: string | null; telegram_username: string | null; updated_at?: string; deleted_at?: string | null;
 }
 const DELETE_GRACE_MS = 24 * 3600_000;
+/** «На зміні» поставив супровід, а не стійка — показуємо жовтим, щоб стійка могла перевірити. */
+const bySupervisor = (k: Kid) => k.checked_in && k.checked_in_by === 'staff';
 const clock = (iso: string) => new Date(iso).toLocaleTimeString('uk-UA', { timeZone: 'Europe/Kyiv', hour: '2-digit', minute: '2-digit', hour12: false });
 const timeLeft = (deletedAt: string) => {
   const ms = new Date(deletedAt).getTime() + DELETE_GRACE_MS - Date.now();
@@ -119,15 +121,16 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
 }) {
   return (
     <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both motion-reduce:animate-none">
-      <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${kid.checked_in ? 'border-success/50 bg-success/10' : 'border-border bg-card'}`}>
-        <button onClick={() => onToggle(kid)} aria-label={kid.checked_in ? 'Зняти відмітку «на зміні»' : 'Позначити, що прибув(ла)'}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90 [-webkit-tap-highlight-color:transparent] ${kid.checked_in ? 'border-success bg-success text-success-foreground shadow-[0_0_0_4px_hsl(var(--success)/0.15)]' : 'border-muted-foreground/40 text-transparent'}`}>
+      <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${!kid.checked_in ? 'border-border bg-card' : bySupervisor(kid) ? 'border-warning/50 bg-warning/10' : 'border-success/50 bg-success/10'}`}>
+        <button onClick={() => onToggle(kid)} aria-label={kid.checked_in ? `Зняти відмітку «на зміні»${bySupervisor(kid) ? ' (відмітив супровід)' : ''}` : 'Позначити, що прибув(ла)'}
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition-[background-color,border-color,transform] duration-200 active:scale-90 [-webkit-tap-highlight-color:transparent] ${!kid.checked_in ? 'border-muted-foreground/40 text-transparent' : bySupervisor(kid) ? 'border-warning bg-warning text-warning-foreground shadow-[0_0_0_4px_hsl(var(--warning)/0.15)]' : 'border-success bg-success text-success-foreground shadow-[0_0_0_4px_hsl(var(--success)/0.15)]'}`}>
           <Check className={`h-6 w-6 transition-transform duration-300 ease-[cubic-bezier(.34,1.56,.64,1)] ${kid.checked_in ? 'scale-100 rotate-0' : 'scale-50 -rotate-12'}`} />
         </button>
         <button onClick={() => onOpen(kid)} className="min-w-0 flex-1 text-left">
           <div className="truncate font-semibold text-foreground"><Highlight text={kid.full_name} query={query} /></div>
           <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <span>Команда {kid.team_number}</span>
+            {bySupervisor(kid) && <span className="font-medium text-warning">· відмітив супровід</span>}
             {shiftName && <span className="truncate">· {shiftName}</span>}
             {kid.phone && (
               <span className="inline-flex items-center gap-1 tracking-tight text-foreground/70">
@@ -175,8 +178,8 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
     >
       <div className="space-y-4">
         <button onClick={() => onToggle(kid)}
-          className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${kid.checked_in ? 'bg-success text-success-foreground' : 'border-2 border-dashed border-border text-foreground'}`}>
-          <Check className="h-5 w-5" />{kid.checked_in ? `На зміні — зареєстровано${kid.checked_in_at ? ` о ${clock(kid.checked_in_at)}` : ''}` : 'Позначити, що прибув(ла)'}
+          className={`flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-all active:scale-[0.98] ${!kid.checked_in ? 'border-2 border-dashed border-border text-foreground' : bySupervisor(kid) ? 'bg-warning text-warning-foreground' : 'bg-success text-success-foreground'}`}>
+          <Check className="h-5 w-5" />{kid.checked_in ? `На зміні — ${bySupervisor(kid) ? 'відмітив супровід' : 'зареєстровано'}${kid.checked_in_at ? ` о ${clock(kid.checked_in_at)}` : ''}` : 'Позначити, що прибув(ла)'}
         </button>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
           {kid.phone && <><dt className="text-muted-foreground">Телефон</dt><dd><a href={`tel:${kid.phone}`} className="inline-flex min-h-8 items-center gap-1 text-primary"><Phone className="h-3.5 w-3.5" />{kid.phone}</a></dd></>}
@@ -597,13 +600,13 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
 
   const toggle = useCallback((k: Kid, fromSearch = false) => {
     const next = !k.checked_in;
-    patch(k.id, { checked_in: next, checked_in_at: next ? new Date().toISOString() : null });
+    patch(k.id, { checked_in: next, checked_in_at: next ? new Date().toISOString() : null, checked_in_by: next ? 'registry' : null });
     navigator.vibrate?.(next ? 20 : [10, 40, 10]);
     void send(k.id, { checked_in: next });
     if (next) {
       toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} · команда ${k.team_number}`, {
         duration: 3000,
-        action: { label: 'Скасувати', onClick: () => { patch(k.id, { checked_in: false, checked_in_at: null }); void send(k.id, { checked_in: false }); } },
+        action: { label: 'Скасувати', onClick: () => { patch(k.id, { checked_in: false, checked_in_at: null, checked_in_by: null }); void send(k.id, { checked_in: false }); } },
       });
       // Швидкий потік: відмітив знайдену дитину — поле пошуку готове до наступної.
       if (fromSearch) { setQ(''); requestAnimationFrame(() => inputRef.current?.focus()); }

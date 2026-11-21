@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       const { ids } = await scopeIds(body.shift_id);
       if (!ids.length) return json({ children: [] });
       const { data, error } = await svc.from('children')
-        .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at, deleted_at')
+        .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, checked_in_by, gender, telegram_username, updated_at, deleted_at')
         .in('shift_id', ids).gt('updated_at', body.since).order('updated_at').limit(500);
       if (error) throw error;
       return json({ children: (data ?? []).map(legacy) });
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       const all: any[] = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await svc.from('children')
-          .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at')
+          .select('id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, checked_in_by, gender, telegram_username, updated_at')
           .in('shift_id', ids).is('deleted_at', null).order('full_name').order('id').range(from, from + 999);
         if (error) throw error;
         all.push(...(data ?? []));
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
         let update = svc.from('children').update(patch).eq('id', it.id).is('deleted_at', null);
         update = row.updated_at ? update.eq('updated_at', row.updated_at) : update.is('updated_at', null);
         const { data, error } = await update
-          .select('id, checked_in, checked_in_at, supervisor_notes, updated_at').maybeSingle();
+          .select('id, checked_in, checked_in_at, checked_in_by, supervisor_notes, updated_at').maybeSingle();
         if (error) return { id: it.id, status: 'error' };
         if (data) return { id: it.id, status: 'ok', child: legacy(data) };
         const { data: latest, error: readError } = await svc.from('children')
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
-    const ROW = 'id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, gender, telegram_username, updated_at, deleted_at';
+    const ROW = 'id, shift_id, full_name, team_number, phone, note_from_table, supervisor_notes, checked_in, checked_in_at, checked_in_by, gender, telegram_username, updated_at, deleted_at';
     const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
     // Новий учасник прямо зі стійки: лише в активну зміну.
@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
         .eq('id', body.id).eq('shifts.is_active', true).is('shifts.deleted_at', null).maybeSingle();
       if (!own) return json({ error: 'not_found' });
       const { data, error } = await svc.from('children').update(patch).eq('id', body.id).is('deleted_at', null)
-        .select('id, checked_in, checked_in_at, supervisor_notes, updated_at').maybeSingle();
+        .select('id, checked_in, checked_in_at, checked_in_by, supervisor_notes, updated_at').maybeSingle();
       if (error) throw error;
       if (!data) return json({ error: 'not_found' });
       return json({ child: legacy(data) });

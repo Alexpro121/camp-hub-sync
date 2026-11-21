@@ -141,6 +141,7 @@ export type Database = {
           iron_dollars: number
           checked_in: boolean
           checked_in_at: string | null
+          checked_in_by: string | null
           is_present: boolean
           note_from_table: string | null
           notes_origin: string | null
@@ -164,6 +165,7 @@ export type Database = {
           iron_dollars?: number
           checked_in?: boolean
           checked_in_at?: string | null
+          checked_in_by?: string | null
           is_present?: boolean
           note_from_table?: string | null
           notes_origin?: string | null
@@ -187,6 +189,7 @@ export type Database = {
           iron_dollars?: number
           checked_in?: boolean
           checked_in_at?: string | null
+          checked_in_by?: string | null
           is_present?: boolean
           note_from_table?: string | null
           notes_origin?: string | null

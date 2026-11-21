@@ -225,7 +225,7 @@ const TeamsView = ({
     haptics.selection();
     const at = next ? new Date().toISOString() : null;
     setChildren((prev) => {
-      const updated = prev.map((x) => (x.id === c.id ? { ...x, checked_in: next, checked_in_at: at } : x));
+      const updated = prev.map((x) => (x.id === c.id ? { ...x, checked_in: next, checked_in_at: at, checked_in_by: next ? 'staff' : null } : x));
       outbox.saveTeamsSnapshot(updated);
       return updated;
     });
