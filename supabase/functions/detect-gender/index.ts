@@ -1,23 +1,10 @@
 import { admin, json, corsHeaders, requireUser } from '../_shared/accounts.ts';
+import { heuristicGender, type Gender } from '../_shared/gender.ts';
 
-type Gender = 'boy' | 'girl' | 'unknown';
 const GATEWAY = 'https://ai.gateway.lovable.dev/v1/systemone';
 const MODEL = 'typesafe/jev-latest';
 const BATCH = 25;
 const MAX_PER_CALL = 200;
-
-/** Швидкий локальний фолбек: по батькові, потім прізвище. */
-export function heuristicGender(fullName: string): Gender {
-  const tokens = (fullName || '').toLowerCase().replace(/[’ʼ`']/g, "'").split(/\s+/).filter(Boolean);
-  for (const t of tokens) {
-    if (/(ович|евич|йович|ич)$/.test(t)) return 'boy';
-    if (/(івна|ївна|овна|евна|ична|інічна)$/.test(t)) return 'girl';
-  }
-  const s = tokens[0] ?? '';
-  if (/(ська|цька|зька|ова|ева|єва|іна|їна|ина)$/.test(s)) return 'girl';
-  if (/(ський|цький|зький|ов|ев|єв|ін|їн|ин)$/.test(s)) return 'boy';
-  return 'unknown';
-}
 
 let jevBlocked: number | null = null;
 
@@ -69,21 +56,27 @@ async function askJev(names: Record<string, string>): Promise<Record<string, Gen
   }
 }
 
-async function detectMany(rows: { id: string; full_name: string }[]): Promise<Record<string, Gender>> {
+/** Спершу правила за ПІБ (по батькові, ім'я); ШІ — лише для тих, кого правила не розпізнали. */
+async function detectMany(rows: { id: string; full_name: string }[], useAi: boolean): Promise<Record<string, Gender>> {
   const result: Record<string, Gender> = {};
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const chunk = rows.slice(i, i + BATCH);
+  const unsure: { id: string; full_name: string }[] = [];
+  for (const r of rows) {
+    result[r.id] = heuristicGender(r.full_name);
+    if (result[r.id] === 'unknown') unsure.push(r);
+  }
+  if (!useAi) return result;
+  for (let i = 0; i < unsure.length; i += BATCH) {
+    const chunk = unsure.slice(i, i + BATCH);
     const names: Record<string, string> = {};
     chunk.forEach((r, j) => { names[`c${j}`] = r.full_name; });
     const ai = await askJev(names);
-    chunk.forEach((r, j) => {
-      const g = ai?.[`c${j}`];
-      const h = heuristicGender(r.full_name);
-      result[r.id] = g && g !== 'unknown' ? g : h;
-    });
+    if (!ai) break;
+    chunk.forEach((r, j) => { const g = ai[`c${j}`]; if (g === 'boy' || g === 'girl') result[r.id] = g; });
   }
   return result;
 }
+
+type Row = { id: string; full_name: string; gender: Gender | null };
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -100,25 +93,49 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body?.action === 'detect' ? 'detect' : 'backfill';
+    const scoped = () => {
+      let q = svc.from('children').select('id, full_name, gender').is('deleted_at', null);
+      if (!isAdmin) q = q.eq('team_number', myTeam);
+      return q;
+    };
 
-    let q = svc.from('children').select('id, full_name, team_number').is('deleted_at', null);
-    if (!isAdmin) q = q.eq('team_number', myTeam);
+    // detect: одна дитина на прохання людини. backfill: порожні (з ШІ як запасом) і
+    // «не визначено» ще раз — лише правилами, щоб нові правила виправили старі результати без зайвих викликів ШІ.
+    let fresh: Row[] = [];
+    let retry: Row[] = [];
     if (action === 'detect') {
       const id = String(body?.childId ?? '');
       if (!/^[0-9a-f-]{36}$/i.test(id)) return json({ error: 'invalid_child' }, 400);
-      q = q.eq('id', id);
+      const { data, error } = await scoped().eq('id', id);
+      if (error) return json({ error: 'load_failed' }, 500);
+      fresh = (data ?? []) as Row[];
     } else {
-      q = q.is('gender', null).limit(MAX_PER_CALL);
+      const [empty, unsure] = await Promise.all([
+        scoped().is('gender', null).limit(MAX_PER_CALL),
+        scoped().eq('gender', 'unknown').limit(MAX_PER_CALL),
+      ]);
+      if (empty.error || unsure.error) return json({ error: 'load_failed' }, 500);
+      fresh = (empty.data ?? []) as Row[];
+      retry = (unsure.data ?? []) as Row[];
     }
-    const { data: rows, error } = await q;
-    if (error) return json({ error: 'load_failed' }, 500);
-    if (!rows?.length) return json({ updated: 0, results: {} });
+    if (!fresh.length && !retry.length) return json({ updated: 0, results: {} });
 
-    const results = await detectMany(rows as { id: string; full_name: string }[]);
-    await Promise.all(
-      Object.entries(results).map(([id, gender]) => svc.from('children').update({ gender }).eq('id', id)),
-    );
-    return json({ updated: Object.keys(results).length, results, ai: jevBlocked ? `unavailable_${jevBlocked}` : 'ok' });
+    const results = { ...(await detectMany(fresh, true)), ...(await detectMany(retry, false)) };
+
+    // Пишемо лише справжні зміни; «не визначено» ніколи не затирає вже відому стать.
+    const byGender: Record<Gender, string[]> = { boy: [], girl: [], unknown: [] };
+    for (const r of [...fresh, ...retry]) {
+      const g = results[r.id];
+      if (!g || g === r.gender || (g === 'unknown' && r.gender !== null)) continue;
+      byGender[g].push(r.id);
+    }
+    for (const g of Object.keys(byGender) as Gender[]) {
+      if (!byGender[g].length) continue;
+      const { error } = await svc.from('children').update({ gender: g }).in('id', byGender[g]);
+      if (error) return json({ error: 'save_failed' }, 500);
+    }
+    const updated = byGender.boy.length + byGender.girl.length + byGender.unknown.length;
+    return json({ updated, results, ai: jevBlocked ? `unavailable_${jevBlocked}` : 'ok' });
   } catch (e) {
     console.error('detect-gender failed', e instanceof Error ? e.message : e);
     return json({ error: 'detect_failed' }, 500);

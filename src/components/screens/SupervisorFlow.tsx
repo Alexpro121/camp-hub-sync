@@ -34,6 +34,9 @@ import { exportToExcel } from '@/lib/excel';
 import { useHaptics } from '@/hooks/useHaptics';
 import { FullScreenLoader } from '@/components/ui/loader';
 import ScheduleView from '@/components/schedule/ScheduleView';
+/** Скільки після входу видно кнопку експорту в Excel. */
+const EXPORT_BUTTON_MS = 10_000;
+
 const CoupeManager = lazyRetry(() => import('@/components/coupes/CoupeManager'));
 const TrainPublishStatus = lazyRetry(() => import('@/components/coupes/TrainPublishStatus'));
 import { TRAIN_TITLE, TRAIN_FEATURE_ENABLED } from '@/lib/trips';
@@ -74,6 +77,14 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
   const [openTeam, setOpenTeam] = useState<number | null>(null);
   const [editChild, setEditChild] = useState<any | null>(null);
   const [firstTeamChild, setFirstTeamChild] = useState<any | null>(null);
+  // Кнопка «Експорт в Excel» видна перші 10 с після входу, далі ховається, щоб не заважала. Тур її показує знову.
+  const [exportShown, setExportShown] = useState(true);
+  useEffect(() => {
+    if (authedTeam === null) return;
+    setExportShown(true);
+    const t = setTimeout(() => setExportShown(false), EXPORT_BUTTON_MS);
+    return () => clearTimeout(t);
+  }, [authedTeam]);
 
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
@@ -573,7 +584,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
               <Wallet className="w-5 h-5" />
             </Button>
 
-            <Button
+            {(exportShown || tourOpen) && <Button
               onClick={handleExport}
               data-tour="step-export-button"
               className={`h-11 w-11 rounded-2xl shadow-xl p-0 border active:scale-90 transition-all ${
@@ -584,7 +595,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
               title="Експорт списків в Excel"
             >
               <Download className="w-4 h-4 text-emerald-500" />
-            </Button>
+            </Button>}
           </div>
 
           <SupervisorTour

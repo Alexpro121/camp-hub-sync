@@ -1,4 +1,5 @@
 import { admin, corsHeaders, json, SERVICE_KEY } from '../_shared/accounts.ts';
+import { heuristicGender } from '../_shared/gender.ts';
 
 // Пароль реєстраційної стійки живе лише в секретах функції (REGISTRY_PASSWORD), не в коді.
 const REGISTRY_PASSWORD = (Deno.env.get('REGISTRY_PASSWORD') ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -166,7 +167,10 @@ Deno.serve(async (req) => {
       if (!Number.isInteger(team) || team < 1 || team > 999) return json({ error: 'bad_team' });
       const phone = str(body.phone, 40).replace(/[^\d+()\- ]/g, '') || null;
       const telegram = str(body.telegram_username, 64).replace(/^@+/, '').replace(/[^\w]/g, '') || null;
-      const gender = body.gender === 'male' || body.gender === 'female' ? body.gender : null;
+      // Стать у базі — boy/girl/unknown; не вказали — визначаємо за ПІБ (решту доробить фонове визначення).
+      const picked = body.gender === 'girl' || body.gender === 'female' ? 'girl' : body.gender === 'boy' || body.gender === 'male' ? 'boy' : null;
+      const guessed = picked ?? heuristicGender(fullName);
+      const gender = guessed === 'unknown' ? null : guessed;
       const note = str(body.note, 2000) || null;
       if (!body.force) {
         const { data: same, error } = await svc.from('children').select('id, full_name, team_number')

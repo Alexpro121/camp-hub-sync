@@ -285,8 +285,8 @@ const ChildEditDialog = ({ child, open, onClose, medical }: Props) => {
                     try {
                       const { data } = await supabase.functions.invoke('detect-gender', { body: { action: 'detect', childId: child.id } });
                       const g = data?.results?.[child.id] as Gender | undefined;
-                      if (g) { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
-                      else toast.error('Не вдалося визначити');
+                      if (g === 'boy' || g === 'girl') { setGender(g); toast.success(`Стать: ${GENDER_LABEL[g]}`); }
+                      else toast.error("За ім'ям не визначити — обери вручну");
                     } catch { toast.error('Не вдалося визначити'); }
                     setDetecting(false);
                   }}

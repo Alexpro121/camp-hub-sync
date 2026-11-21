@@ -180,7 +180,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
           {kid.phone && <><dt className="text-muted-foreground">Телефон</dt><dd><a href={`tel:${kid.phone}`} className="inline-flex min-h-8 items-center gap-1 text-primary"><Phone className="h-3.5 w-3.5" />{kid.phone}</a></dd></>}
           {kid.telegram_username && <><dt className="text-muted-foreground">Telegram</dt><dd className="break-all text-foreground">@{kid.telegram_username.replace(/^@/, '')}</dd></>}
-          {kid.gender && <><dt className="text-muted-foreground">Стать</dt><dd className="text-foreground">{kid.gender === 'female' ? 'дівчинка' : kid.gender === 'male' ? 'хлопчик' : '—'}</dd></>}
+          {kid.gender && <><dt className="text-muted-foreground">Стать</dt><dd className="text-foreground">{kid.gender === 'girl' ? 'дівчинка' : kid.gender === 'boy' ? 'хлопчик' : '—'}</dd></>}
           {kid.note_from_table && <><dt className="text-muted-foreground">Зі списку</dt><dd className="break-words text-foreground">{kid.note_from_table}</dd></>}
         </dl>
         <div>
@@ -212,7 +212,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
   );
 }
 
-type NewKid = { full_name: string; team_number: number; shift_id: string; phone: string; telegram_username: string; gender: '' | 'male' | 'female'; note: string; is_present: boolean };
+type NewKid = { full_name: string; team_number: number; shift_id: string; phone: string; telegram_username: string; gender: '' | 'boy' | 'girl'; note: string; is_present: boolean };
 type CreateResult = 'ok' | 'error' | { duplicate: string };
 
 function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate }: {
@@ -298,7 +298,7 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
         <div>
           <span className="mb-1 block text-sm font-medium text-foreground">Стать</span>
           <div className="grid grid-cols-3 gap-1.5">
-            {([['', 'Не вказано'], ['female', 'Дівчинка'], ['male', 'Хлопчик']] as const).map(([g, l]) => (
+            {([['', "Визначити за ім'ям"], ['girl', 'Дівчинка'], ['boy', 'Хлопчик']] as const).map(([g, l]) => (
               <button type="button" key={g} onClick={() => set('gender', g)} className={`${pill(v.gender === g)} h-11 px-1`}>{l}</button>
             ))}
           </div>
