@@ -341,6 +341,8 @@ export function normalizePhone(v: any): string | null {
   if (d.length === 9) return d.startsWith('0') ? `+38${d}` : `+380${d}`;
   if (d.length === 10 && d.startsWith('0')) return `+380${d.slice(1)}`;
   if (d.length === 12 && d.startsWith('380')) return `+${d}`;
+  // «+380 098 788 7810»: код країни і зайвий нуль оператора.
+  if (d.length === 13 && d.startsWith('3800')) return `+380${d.slice(4)}`;
   if (d.length === 11 && d.startsWith('80')) return `+3${d}`;
   return `+${d}`;
 }
@@ -365,14 +367,21 @@ function finalizeRows(rows: ImportRow[]): void {
   };
   for (const r of rows) if (isSuspiciousPhone(r.phone)) flag(r, `Перевірте телефон «${r.phone}» — схоже, бракує або зайва цифра`);
 
-  const byName = new Map<string, ImportRow[]>();
+  // Та сама дитина в іншій команді: повне ПІБ збігається, або прізвище й ім'я з тим самим телефоном
+  // («Ситнікова Валерія Ситнікова» і «Ситнікова Валерія Олегівна», один номер).
+  const shortName = (r: ImportRow) => normalizeName(r.full_name).split(' ').slice(0, 2).join(' ');
+  const same = (a: ImportRow, b: ImportRow) =>
+    normalizeName(a.full_name) === normalizeName(b.full_name)
+      ? !a.phone || !b.phone || a.phone === b.phone
+      : !!a.phone && a.phone === b.phone && shortName(a) === shortName(b);
+  const byShort = new Map<string, ImportRow[]>();
   for (const r of rows) {
-    const k = normalizeName(r.full_name);
-    if (k) byName.set(k, [...(byName.get(k) ?? []), r]);
+    const k = shortName(r);
+    if (k) byShort.set(k, [...(byShort.get(k) ?? []), r]);
   }
-  for (const group of byName.values()) {
+  for (const group of byShort.values()) {
     for (const a of group) {
-      const twin = group.find((b) => b !== a && b.team_number !== a.team_number && (!a.phone || !b.phone || a.phone === b.phone));
+      const twin = group.find((b) => b !== a && b.team_number !== a.team_number && same(a, b));
       if (twin) flag(a, `Та сама дитина є в команді ${twin.team_number} (рядок ${twin._sourceRow}) — залиште один запис`);
     }
   }
