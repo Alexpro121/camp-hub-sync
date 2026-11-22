@@ -32,7 +32,7 @@ interface Props {
 }
 
 const FIELD_LABELS: Record<StdKey, string> = {
-  is_present: 'Присутність',
+  is_present: 'Наявність (на зміні)',
   row_number: '№',
   team_number: '№ Команди',
   full_name: 'ПІБ дитини',

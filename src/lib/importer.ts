@@ -22,14 +22,15 @@ export const FIELD_DEFINITIONS: FieldDefinition[] = [
   { key: 'full_name', label: 'ПІБ дитини', required: true },
   { key: 'team_number', label: '№ Команди' },
   { key: 'phone', label: 'Телефон' },
-  { key: 'is_present', label: 'Присутність' },
-  { key: 'team_name', label: 'Назва команди / Проєкт' },
+  { key: 'is_present', label: 'Наявність (на зміні)' },
+  { key: 'team_name', label: 'Категорія / Проєкт' },
   { key: 'note_from_table', label: 'Примітка / Місто' },
   { key: 'row_number', label: '№ за списком' },
   { key: 'ignore', label: '— Пропустити колонку —' },
 ];
 
 export interface ImportRow {
+  /** «Наявність» з таблиці — дитина прибула (на зміні). У базу йде в checked_in, не в перекличку супроводу. */
   is_present: boolean;
   row_number: number | null;
   team_number: number;
@@ -99,7 +100,10 @@ const SYNONYMS: Record<StdKey, string[]> = {
     'номер телефону дитини', 'телефон дитини', 'номер телефону', 'телефон', 'мобільний', 'моб', 'phone', 'тел',
     'контактний телефон', 'мобільний телефон', 'телефон батьків', 'телефон мами', 'телефон тата', 'контакти', 'контакт', 'mobile', 'tel',
   ],
-  team_name: ['команда', 'назва команди', 'team name', 'назва загону', 'проєкт', 'проект', 'напрям'],
+  team_name: [
+    'команда', 'назва команди', 'team name', 'назва загону', 'проєкт', 'проект', 'напрям',
+    'категорія', 'категорії', 'категория', 'category', 'підрозділ', 'організація', 'джерело', 'квота',
+  ],
   note_from_table: [
     'примітка', 'примітки', 'нотатка', 'примечание', 'місто', 'коментар', 'note', 'notes', 'інфо', 'готель', 'пільга',
     'особливості', 'алергії', 'алергія', 'харчування', 'додатково', 'коментарі', 'city', 'comment', 'comments',
@@ -284,6 +288,8 @@ export function cleanPersonName(raw: string): string {
   let s = String(raw ?? '')
     .replace(/^[\s#№\d.)\-–—]+/, '')
     .replace(/[`’ʼʻ]/g, "'")
+    // «Білан.   Дмитро», «Іванова, Анна»: розділові знаки після слова — сміття; ініціали («І.») лишаємо.
+    .replace(/([А-Яа-яЄєІіЇїҐґA-Za-z']{2,})[.,;:]+(?=\s|$)/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -330,11 +336,46 @@ export function normalizePhone(v: any): string | null {
   const plus = s.startsWith('+');
   let d = s.replace(/\D/g, '');
   if (!d) return null;
-  if (d.length === 9) return `+380${d}`;
+  // 9 цифр без нуля («979114736») — номер без коду; з нулем («099554060») — бракує цифри:
+  // лишаємо як є (+38…), щоб імпорт позначив його для перевірки, а не вигадав неіснуючий +380099….
+  if (d.length === 9) return d.startsWith('0') ? `+38${d}` : `+380${d}`;
   if (d.length === 10 && d.startsWith('0')) return `+380${d.slice(1)}`;
   if (d.length === 12 && d.startsWith('380')) return `+${d}`;
   if (d.length === 11 && d.startsWith('80')) return `+3${d}`;
-  return plus ? `+${d}` : `+${d}`;
+  return `+${d}`;
+}
+
+/** Український номер, у якому бракує або забагато цифр (+38…, але не +380 і 9 цифр). */
+export function isSuspiciousPhone(phone: string | null): boolean {
+  return !!phone && phone.startsWith('+38') && !/^\+380\d{9}$/.test(phone);
+}
+
+/**
+ * Після розбору: порожні № отримують наступні після найбільшого (а не «кількість рядків + 1»,
+ * що після пропущених дублів збігалося з чужим №), підозрілі телефони й та сама дитина
+ * в різних командах позначаються для перевірки.
+ */
+function finalizeRows(rows: ImportRow[]): void {
+  let next = rows.reduce((m, r) => Math.max(m, r.row_number ?? 0), 0);
+  for (const r of rows) if (r.row_number == null) r.row_number = ++next;
+
+  const flag = (r: ImportRow, warning: string) => {
+    if (!r._duplicateWarning) r._duplicateWarning = warning;
+    if (!r._issues.includes('Потребує перевірки')) r._issues.push('Потребує перевірки');
+  };
+  for (const r of rows) if (isSuspiciousPhone(r.phone)) flag(r, `Перевірте телефон «${r.phone}» — схоже, бракує або зайва цифра`);
+
+  const byName = new Map<string, ImportRow[]>();
+  for (const r of rows) {
+    const k = normalizeName(r.full_name);
+    if (k) byName.set(k, [...(byName.get(k) ?? []), r]);
+  }
+  for (const group of byName.values()) {
+    for (const a of group) {
+      const twin = group.find((b) => b !== a && b.team_number !== a.team_number && (!a.phone || !b.phone || a.phone === b.phone));
+      if (twin) flag(a, `Та сама дитина є в команді ${twin.team_number} (рядок ${twin._sourceRow}) — залиште один запис`);
+    }
+  }
 }
 
 const TRUES = ['true', '1', 'да', 'так', '+', 'присутній', 'присутний', 'присутня', 'yes', 'y', 'є', 'v', '✓', 'x'];
@@ -590,7 +631,7 @@ export function parseWithCustomMapping(
 
     const row: ImportRow = {
       is_present: presence,
-      row_number: rowNumber ?? rows.length + 1,
+      row_number: rowNumber,
       team_number: finalTeam,
       full_name: fullName,
       phone,
@@ -605,6 +646,7 @@ export function parseWithCustomMapping(
     rows.push(row);
   }
 
+  finalizeRows(rows);
   const detectedTeams = detectTeams(rows);
   const headerMap: Record<string, StdKey> = {};
   Object.entries(mapping).forEach(([colIdx, key]) => {
@@ -629,12 +671,23 @@ export function parseWithCustomMapping(
 
 /* ---------- Інтелектуальний блоковий парсер ---------- */
 
+/**
+ * Рядок-заголовок блоку команди: «Команда 3», «2 загін» або голе число в рядку без інших даних.
+ * Голе число поруч з ПІБ — це № за списком, а не команда: інакше таблиця з першим стовпчиком «№»
+ * розбиралася як блоки й діти потрапляли в «команду 98».
+ */
+function blockTeamHeader(cells: string[]): number | null {
+  const n = extractTeamNumberFromText(cells[0] ?? '');
+  if (n === null) return null;
+  if (/команд|загін|загон|team|група/i.test(cells[0])) return n;
+  return cells.slice(1).every((c) => !c) ? n : null;
+}
+
 function parseBlockFormat(matrix: any[][]): ImportResult | null {
   let hasTeamHeaders = false;
   for (let i = 0; i < matrix.length; i++) {
     const r = matrix[i] || [];
-    const firstCell = String(r[0] ?? '').trim();
-    if (extractTeamNumberFromText(firstCell) !== null) {
+    if (blockTeamHeader(r.map((c: any) => String(c ?? '').trim())) !== null) {
       hasTeamHeaders = true;
       break;
     }
@@ -656,7 +709,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
     if (cells.every((c: string) => !c)) continue;
 
     const cell0 = cells[0] || '';
-    const teamNum = extractTeamNumberFromText(cell0);
+    const teamNum = blockTeamHeader(cells);
 
     if (teamNum !== null) {
       currentTeamNumber = teamNum;
@@ -749,6 +802,7 @@ function parseBlockFormat(matrix: any[][]): ImportResult | null {
   }
 
   if (rows.length === 0) return null;
+  finalizeRows(rows);
 
   return {
     rows,
@@ -912,7 +966,7 @@ function parseClassicTable(
 
     const row: ImportRow = {
       is_present: colOf.is_present !== undefined ? normalizePresence(r[colOf.is_present]) : false,
-      row_number: rowNumber ?? rows.length + 1,
+      row_number: rowNumber ?? null,
       team_number: teamNum,
       full_name: fullName,
       phone,
@@ -927,6 +981,7 @@ function parseClassicTable(
     rows.push(row);
   }
 
+  finalizeRows(rows);
   return { rows, skipped };
 }
 
@@ -987,7 +1042,8 @@ export function buildRows(
 export function toDbRow(r: ImportRow, shiftId: string) {
   return {
     shift_id: shiftId,
-    is_present: r.is_present,
+    // «Наявність» у таблиці реєстрації — прибуття; перекличку (is_present) веде лише супровід.
+    checked_in: r.is_present,
     row_number: r.row_number,
     team_number: r.team_number,
     full_name: r.full_name,

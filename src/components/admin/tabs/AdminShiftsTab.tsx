@@ -202,7 +202,7 @@ const ShiftsTab = () => {
         const id = map.get(`${r.team_number}|${normalizeName(r.full_name)}`);
         if (id) {
           toUpdate.push({ id, patch: {
-            is_present: r.is_present, row_number: r.row_number, phone: r.phone,
+            checked_in: r.checked_in, row_number: r.row_number, phone: r.phone,
             team_name: r.team_name, note_from_table: r.note_from_table, raw_data: r.raw_data,
           } });
         } else {
