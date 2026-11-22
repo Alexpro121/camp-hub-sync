@@ -36,3 +36,4 @@
 - Imported «Наявність» is arrival (children.checked_in, stamped registry for admin inserts), never the supervisor roll call; bare numbers beside a name are list numbers, not block team headers.
 - Sports shifts (shift_category or shift_type 'sports') label teams «N-СПОРТ» via src/lib/teamLabel.ts; kinds are cached locally, registry/staff-accounts return them and a child may read only its own shift row.
 - Shift invite links work in Telegram: bot /start join_<token> opens the Mini App at /staff/join/<token>; linked staff go to the team picker, new staff register there without admin approval (the invite is the authorization, one use, registered_via set).
+- Bot /adminlex grants the admin role to an active linked non-doctor staff member (other admins are notified); /swap «Я (супровід)» (telegram_role_swaps.role 'me') makes tg-auth return role staff for the same account, «Я (адмін)» returns to admin.

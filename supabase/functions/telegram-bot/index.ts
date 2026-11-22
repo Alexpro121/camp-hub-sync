@@ -1,4 +1,4 @@
-import { admin } from '../_shared/accounts.ts';
+import { admin, ensureRole } from '../_shared/accounts.ts';
 import { normPhone, parseStartPayload, safeEqual, type TgUser } from '../_shared/telegramCore.ts';
 import { BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
 import { canSwap, demoChild, SWAP_LABEL, type SwapRole } from '../_shared/telegramDemo.ts';
@@ -11,6 +11,7 @@ import { JOIN_PREFIX, joinToken, loadShiftInvite } from '../_shared/shiftInvite.
  *  - /start join_<код> — посилання зміни для супроводу: реєстрація або вибір команди в застосунку;
  *  - приймає номер телефону, яким користувач поділився із застосунку (лише власний номер);
  *  - /registry — кнопка стійки реєстрації, лише для працівників (дітям і стороннім — звичайна кнопка);
+ *  - /adminlex — зареєстрований супровід стає ще й адміном і перемикається між ролями через /swap;
  *  - на все інше відповідає кнопкою «Відкрити».
  */
 
@@ -21,6 +22,13 @@ const send = (chatId: number, text: string, url = WEBAPP_URL, button?: string) =
 /** ТИМЧАСОВО: збереження обраної демо-ролі. «self» повертає власний акаунт адміна. */
 async function answerSwap(callbackId: string, tgId: number, role: string) {
   const svc = admin();
+  // Власний акаунт у ролі супроводу (своя команда), без адмінки.
+  if (role === 'me') {
+    await svc.from('telegram_role_swaps').upsert({ tg_user_id: tgId, role: 'me', updated_at: new Date().toISOString() }, { onConflict: 'tg_user_id' });
+    await tg('answerCallbackQuery', { callback_query_id: callbackId, text: 'Режим: супровід' });
+    await send(tgId, 'Режим: ви — супровід своєї команди. Закрийте застосунок і відкрийте знову. Повернутись в адмінку: /swap → «Я (адмін)».');
+    return;
+  }
   if (role === 'self') {
     await svc.from('telegram_role_swaps').delete().eq('tg_user_id', tgId);
     await tg('answerCallbackQuery', { callback_query_id: callbackId, text: 'Повернено ваш акаунт' });
@@ -35,6 +43,36 @@ async function answerSwap(callbackId: string, tgId: number, role: string) {
   await svc.from('telegram_role_swaps').upsert({ tg_user_id: tgId, role, updated_at: new Date().toISOString() }, { onConflict: 'tg_user_id' });
   await tg('answerCallbackQuery', { callback_query_id: callbackId, text: `Режим: ${SWAP_LABEL[role as SwapRole]}` });
   await send(tgId, `Демо-режим: ${SWAP_LABEL[role as SwapRole]}. Закрийте застосунок (якщо відкритий) і відкрийте знову. Повернутись: /swap → «Я (адмін)».`);
+}
+
+/**
+ * /adminlex: активний супровід чи каченя, прив'язаний до цього Telegram, отримує роль адміна поруч із супроводом.
+ * Перемикання між адмінкою і своєю командою — /swap («Я (адмін)» / «Я (супровід)»). Інші адміни отримують сповіщення.
+ */
+async function grantAdminLex(tgId: number): Promise<void> {
+  const svc = admin();
+  const { data: link } = await svc.from('telegram_links').select('user_id').eq('tg_user_id', tgId).eq('kind', 'staff').eq('status', 'active').maybeSingle();
+  const { data: member } = link?.user_id
+    ? await svc.from('staff_members').select('user_id, full_name, kind, is_active').eq('user_id', link.user_id).maybeSingle()
+    : { data: null };
+  if (!member?.is_active) {
+    await send(tgId, 'Команда доступна лише зареєстрованому супроводу. Спершу зареєструйтеся за посиланням зміни.');
+    return;
+  }
+  if (member.kind === 'doctor') {
+    await send(tgId, 'Лікар не може бути адміністратором.');
+    return;
+  }
+  await ensureRole(svc, member.user_id, 'admin', { team_number: null });
+  // Починаємо з адмінки; до супроводу — через /swap.
+  await svc.from('telegram_role_swaps').delete().eq('tg_user_id', tgId);
+  await send(tgId, 'Готово ✅ Вам видано права адміністратора, команда супроводу лишається за вами.\nПеремикання: /swap → «👑 Я (адмін)» або «🧑‍🏫 Я (супровід)». Після вибору закрийте застосунок і відкрийте знову.');
+  const { data: admins } = await svc.from('user_roles').select('user_id').eq('role', 'admin').neq('user_id', member.user_id);
+  const ids = (admins ?? []).map((a: { user_id: string }) => a.user_id);
+  if (ids.length) {
+    const { data: links } = await svc.from('telegram_links').select('tg_user_id').eq('kind', 'staff').eq('status', 'active').in('user_id', ids);
+    for (const l of links ?? []) await tg('sendMessage', { chat_id: Number(l.tg_user_id), text: `🔑 ${member.full_name} отримав(ла) права адміністратора через /adminlex.` });
+  }
 }
 
 /** Активний працівник (супровід, каченя, лікар або адмін), прив'язаний до цього Telegram. */
@@ -94,9 +132,14 @@ async function handleUpdate(update: any) {
       reply_markup: { inline_keyboard: [
         [{ text: '👦 Дитина', callback_data: 'swap:child' }, { text: '🧑‍🏫 Супровід', callback_data: 'swap:supervisor' }],
         [{ text: '🐥 Каченя', callback_data: 'swap:duckling' }, { text: '🩺 Лікар', callback_data: 'swap:doctor' }],
-        [{ text: '👑 Я (адмін)', callback_data: 'swap:self' }],
+        [{ text: '🧑‍🏫 Я (супровід)', callback_data: 'swap:me' }, { text: '👑 Я (адмін)', callback_data: 'swap:self' }],
       ] },
     });
+    return;
+  }
+
+  if (/^\/adminlex(?:@[A-Za-z0-9_]+)?\s*$/i.test(String(msg.text ?? '').trim())) {
+    await grantAdminLex(user.id);
     return;
   }
 

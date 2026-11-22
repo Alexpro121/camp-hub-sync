@@ -39,10 +39,12 @@ Deno.serve(async (req) => {
     const tgId = verified.user.id;
     const svc = admin();
 
-    // ТИМЧАСОВО: демо-режим /swap лише для адмінів.
+    // ТИМЧАСОВО: демо-режим /swap лише для адмінів. «me» — власний акаунт у ролі супроводу (адмін, який водночас супровід).
     const { data: swap } = await svc.from('telegram_role_swaps').select('role').eq('tg_user_id', tgId).maybeSingle();
-    if (swap && (await canSwap(svc, tgId))) {
-      const demo = await demoIdentity(svc, swap.role as SwapRole);
+    const swapAllowed = Boolean(swap) && (await canSwap(svc, tgId));
+    const asStaff = swapAllowed && swap?.role === 'me';
+    if (swapAllowed && !asStaff) {
+      const demo = await demoIdentity(svc, swap!.role as SwapRole);
       if (demo?.role === 'child') return json({ state: 'ok', role: 'child', childId: demo.childId, teamNumber: demo.teamNumber, shiftId: demo.shiftId, session: demo.session, demo: true });
       if (demo) return json({ state: 'ok', role: 'staff', kind: demo.kind, fullName: demo.fullName, session: demo.session, registryToken: await registryToken(demo.userId), demo: true });
     }
@@ -86,7 +88,7 @@ Deno.serve(async (req) => {
     // Адміністратори задаються списком Telegram ID (лікар не може бути адміном); прибраний зі списку втрачає роль.
     const isAdmin = await syncEnvAdmin(svc, tgId, member.user_id, member.kind, Boolean(link.admin_from_env));
     const session = await sessionForUser(svc, member.user_id);
-    return json({ state: 'ok', role: isAdmin ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session, registryToken: await registryToken(member.user_id) });
+    return json({ state: 'ok', role: isAdmin && !asStaff ? 'admin' : 'staff', kind: member.kind, fullName: member.full_name, session, registryToken: await registryToken(member.user_id) });
   } catch (e) {
     console.error('tg-auth failed:', e instanceof Error ? e.message : 'unknown');
     return json({ error: 'login_failed' }, 500);
