@@ -7,6 +7,82 @@ const APP_SW_URL = '/sw.js';
 
 let swRegistration: ServiceWorkerRegistration | null = null;
 
+/* ----------------------------- оновлення застосунку ----------------------------- */
+
+/** Скільки після запуску вважаємо «щойно увійшли»: нова версія ставиться одразу, ще до роботи. */
+const STARTUP_WINDOW_MS = 10_000;
+/** Якщо service worker не перезавантажив сторінку сам — перезавантажуємо через цей час. */
+const RELOAD_FALLBACK_MS = 6_000;
+const loadedAt = Date.now();
+/** Позначка останнього автооновлення: якщо нова версія чомусь не стала, не крутимо перезавантаження по колу. */
+const AUTO_APPLY_KEY = 'ironshift:sw-auto-update-at';
+const recentlyAutoApplied = (): boolean => {
+  try { return Date.now() - Number(sessionStorage.getItem(AUTO_APPLY_KEY) || 0) < 60_000; } catch { return false; }
+};
+const markAutoApplied = () => { try { sessionStorage.setItem(AUTO_APPLY_KEY, String(Date.now())); } catch { /* приватний режим */ } };
+
+let pendingUpdate: (() => void) | null = null;
+let applying = false;
+
+export const hasPendingUpdate = (): boolean => pendingUpdate !== null;
+
+/**
+ * Ставить нову версію: активує новий service worker і перезавантажує сторінку.
+ * Дані (сесія, профіль, черга стійки, чернетки) лежать на пристрої й переживають перезавантаження.
+ */
+export function applyPendingUpdate(): void {
+  if (applying) return;
+  applying = true;
+  try { pendingUpdate?.(); } catch { /* перезавантажимо нижче */ }
+  setTimeout(() => window.location.reload(), RELOAD_FALLBACK_MS);
+}
+
+/** Автооновлення без натискання (вхід, вихід, згортання). Повертає false, якщо його щойно пробували. */
+function autoApply(): boolean {
+  if (!pendingUpdate || recentlyAutoApplied()) return false;
+  markAutoApplied();
+  applyPendingUpdate();
+  return true;
+}
+
+/** Нова версія готова: ставимо одразу, якщо зараз зручний момент, інакше — обов'язкове вікно «Оновити». */
+function onUpdateReady(update: () => void) {
+  pendingUpdate = update;
+  // Вхід у застосунок: щойно відкрили (або сторінка у фоні) — оновлюємо без питань.
+  const startup = Date.now() - loadedAt < STARTUP_WINDOW_MS;
+  if ((startup || document.visibilityState === 'hidden') && autoApply()) return;
+  window.dispatchEvent(new CustomEvent('pwa-need-refresh', { detail: { update: applyPendingUpdate } }));
+}
+
+let lifecycleHooked = false;
+/** Вихід/повернення в застосунок: оновлюємося, поки людина не працює з екраном. */
+function hookUpdateLifecycle(registration: ServiceWorkerRegistration) {
+  if (lifecycleHooked) return;
+  lifecycleHooked = true;
+  const check = () => { if (navigator.onLine) registration.update().catch(() => {}); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      // Згорнули застосунок або закрили Mini App — найкращий момент поставити нову версію.
+      autoApply();
+    } else {
+      // Повернулися — одразу питаємо сервер, чи нема нової версії.
+      check();
+    }
+  });
+  window.addEventListener('pagehide', () => { autoApply(); });
+  window.addEventListener('online', check);
+  setInterval(check, 10 * 60 * 1000);
+}
+
+/**
+ * Вхід або вихід з акаунта: якщо чекає нова версія — ставимо її зараз.
+ * Невелика пауза, щоб застосунок встиг зберегти сесію і роль на пристрої.
+ */
+export function applyUpdateOnAuthChange(): void {
+  if (!pendingUpdate) return;
+  setTimeout(() => { autoApply(); }, 1500);
+}
+
 /**
  * Перевіряє, чи не запущено додаток у тестовому або заблокованому середовищі
  */
@@ -78,15 +154,7 @@ export async function registerAppServiceWorker(): Promise<void> {
     const updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
-        // Сповіщаємо додаток про нову версію через CustomEvent
-        // Замість раптового window.location.reload() даємо можливість зберегти форму
-        window.dispatchEvent(
-          new CustomEvent('pwa-need-refresh', {
-            detail: {
-              update: () => updateSW(true),
-            },
-          })
-        );
+        onUpdateReady(() => { void updateSW(true); });
       },
       onOfflineReady() {
         window.dispatchEvent(new CustomEvent('pwa-offline-ready'));
@@ -94,19 +162,8 @@ export async function registerAppServiceWorker(): Promise<void> {
       onRegisteredSW(swUrl, registration) {
         swRegistration = registration || null;
 
-        if (registration) {
-          // Автоматична перевірка оновлень на станціях, коли з'являється інтернет
-          window.addEventListener('online', () => {
-            registration.update().catch(() => {});
-          });
-
-          // Періодична м'яка перевірка раз на 30 хвилин
-          setInterval(() => {
-            if (navigator.onLine) {
-              registration.update().catch(() => {});
-            }
-          }, 30 * 60 * 1000);
-        }
+        // Перевірка нових версій: при поверненні в застосунок, появі інтернету і раз на 10 хвилин.
+        if (registration) hookUpdateLifecycle(registration);
       },
       onRegisterError(error) {
         console.warn('[PWA] Registration error:', error);
@@ -117,22 +174,17 @@ export async function registerAppServiceWorker(): Promise<void> {
     try {
       const reg = await navigator.serviceWorker.register(APP_SW_URL, { scope: '/' });
       swRegistration = reg;
+      hookUpdateLifecycle(reg);
 
       reg.addEventListener('updatefound', () => {
         const installingWorker = reg.installing;
         if (installingWorker) {
           installingWorker.addEventListener('statechange', () => {
             if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              window.dispatchEvent(
-                new CustomEvent('pwa-need-refresh', {
-                  detail: {
-                    update: () => {
-                      installingWorker.postMessage({ type: 'SKIP_WAITING' });
-                      window.location.reload();
-                    },
-                  },
-                })
-              );
+              onUpdateReady(() => {
+                installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                window.location.reload();
+              });
             }
           });
         }
