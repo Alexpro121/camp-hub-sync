@@ -46,7 +46,10 @@ const TransfersView = ({ myTeam }: Props) => {
     // зміна однієї дитини оновлює лише її, а не весь список зміни.
     let alive = true;
     let lastLoadAt = 0;
-    const cacheKey = `ironshift:transfers:${myTeam}`;
+    // Зміна, на яку увійшов супровід. Коли кілька змін ідуть одночасно (наприклад, звичайна і спортивна
+    // з однаковими датами), «поточна за датою» може бути чужою — і в списку з'являються чужі діти.
+    const sessionShiftId = getSessionMeta()?.shiftId ?? null;
+    const cacheKey = `ironshift:transfers:${sessionShiftId ?? 'auto'}:${myTeam}`;
     const cached = readCache<{ shiftId: string | null; children: Child[]; teams: number[] }>(cacheKey);
     if (cached) {
       setShiftId(cached.data.shiftId);
@@ -59,7 +62,7 @@ const TransfersView = ({ myTeam }: Props) => {
       if (!navigator.onLine) { if (alive) setInitialLoading(false); return; }
       const { data: shifts, error: shiftsError } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       if (shiftsError || !shifts) { if (alive) setInitialLoading(false); return; }
-      const active = pickActiveShift(shifts as Shift[]);
+      const active = (sessionShiftId ? (shifts as Shift[]).find((s) => s.id === sessionShiftId) : undefined) ?? pickActiveShift(shifts as Shift[]);
       const { data, error } = await fetchAllRows<Child>(() => {
         let q = supabase.from('children').select('*').is('deleted_at', null).order('team_number').order('full_name').order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
@@ -82,7 +85,7 @@ const TransfersView = ({ myTeam }: Props) => {
     void load();
 
     const reload = signalReload(load, () => signalWindowMs(networkPulse.state.quality));
-    const shift = getSessionMeta()?.shiftId;
+    const shift = sessionShiftId;
     const ch = supabase.channel('transfers-children')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'children', ...(shift ? { filter: `shift_id=eq.${shift}` } : {}) }, (payload: any) => {
         const n = payload.new;

@@ -46,7 +46,9 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
       if (!navigator.onLine) return;
       const { data: shifts, error: shiftsError } = await supabase.from('shifts').select('*').order('start_date', { ascending: false });
       if (shiftsError || !shifts) return;
-      const active = pickActiveShift(shifts as any);
+      // Зміна, на яку увійшов супровід; без неї — поточна за датою (кілька змін можуть іти одночасно).
+      const sessionShiftId = getSessionMeta()?.shiftId ?? null;
+      const active = (sessionShiftId ? (shifts as any[]).find((s) => s.id === sessionShiftId) : undefined) ?? pickActiveShift(shifts as any);
       const { data, error } = await fetchAllRows<{ iron_dollars: number | null }>(() => {
         let q = supabase.from('children').select('iron_dollars').eq('team_number', myTeam).is('deleted_at', null).order('id');
         if (active?.id) q = q.eq('shift_id', active.id);
