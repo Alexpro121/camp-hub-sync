@@ -4,9 +4,10 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { staffCall, staffErr } from '@/lib/staffApi';
 import { cn } from '@/lib/utils';
+import { isSportsShift, teamLabel } from '@/lib/teamLabel';
 
 interface TeamInfo { team: number; children: number; staff: string[] }
-interface ShiftInfo { id: string; name: string }
+interface ShiftInfo { id: string; name: string; shift_type?: string; shift_category?: string | null }
 
 /**
  * Вибір команди за кнопкою запрошення в тестову зміну (?pick=<токен посилання зміни>).
@@ -74,7 +75,7 @@ const TestTeamPicker = ({ token, onJoined, onClose }: {
               return (
                 <button key={t.team} type="button" role="radio" aria-checked={on} onClick={() => setTeam(t.team)}
                   className={cn('rounded-2xl border p-3 text-left transition-all active:scale-[0.97]', on ? 'border-primary bg-primary/10 ring-2 ring-primary/40' : 'border-border bg-card hover:border-primary/40')}>
-                  <div className="text-lg font-black">№{t.team}</div>
+                  <div className="text-lg font-black">№{teamLabel(t.team, isSportsShift(shift))}</div>
                   <div className="text-[11px] text-muted-foreground">{t.children} дітей</div>
                   <div className={cn('mt-1 truncate text-[11px]', t.staff.length ? 'text-primary' : 'text-muted-foreground')} title={t.staff.join(', ')}>
                     {t.staff.length ? `Супровід: ${t.staff.join(', ')}` : 'Поки без супроводу'}
@@ -87,7 +88,7 @@ const TestTeamPicker = ({ token, onJoined, onClose }: {
             <Users className="mt-0.5 size-4 shrink-0 text-primary" />В одній команді може бути кілька людей. Змінити команду потім не вийде — оберіть уважно.
           </div>
           <Button onClick={join} disabled={team === null || busy} className="h-12 w-full rounded-xl font-bold">
-            {busy ? <Loader2 className="size-5 animate-spin" /> : team === null ? 'Оберіть команду' : `Увійти в команду №${team}`}
+            {busy ? <Loader2 className="size-5 animate-spin" /> : team === null ? 'Оберіть команду' : `Увійти в команду №${teamLabel(team, isSportsShift(shift))}`}
           </Button>
           <Button variant="ghost" className="w-full" onClick={onClose}>Пізніше</Button>
         </>

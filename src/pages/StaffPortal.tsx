@@ -22,6 +22,7 @@ import TestShiftBanner from '@/components/staff/TestShiftBanner';
 import TestTeamPicker from '@/components/staff/TestTeamPicker';
 import { readPickParam, takePickParam, testClosesLabel, testShiftOpen } from '@/lib/testShift';
 import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
+import { rememberShiftKinds, teamLabelFor } from '@/lib/teamLabel';
 
 const SupervisorFlow = lazyRetry(() => import('@/components/screens/SupervisorFlow'));
 const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
@@ -29,7 +30,7 @@ const DoctorDesk = lazyRetry(() => import('@/components/staff/DoctorDesk'));
 interface Assignment {
   id: string;
   team_number: number;
-  shift: { id: string; name: string; shift_type: string; start_date: string; end_date: string; is_test?: boolean; expires_at?: string | null };
+  shift: { id: string; name: string; shift_type: string; shift_category?: string | null; start_date: string; end_date: string; is_test?: boolean; expires_at?: string | null };
   stats: { children: number; iron_total: number; transfers: number; talents: number };
 }
 interface Cabinet { full_name: string; login: string; kind: StaffKind; phone: string | null; telegram: string | null; avatar_url: string | null; must_change_password?: boolean; assignments: Assignment[] }
@@ -63,6 +64,7 @@ const StaffPortal = () => {
   const loadCabinet = useCallback(async () => {
     const data = await call({ action: 'cabinet' });
     setCabinet(data as Cabinet);
+    rememberShiftKinds((data as Cabinet).assignments?.map((x) => x.shift));
   }, []);
 
   useEffect(() => {
@@ -86,6 +88,7 @@ const StaffPortal = () => {
           if (controller.signal.aborted) return;
           if ('cabinet' in result) { if (tgMode) setTgBlock('revoked'); return; }
           setCabinet(result);
+          rememberShiftKinds(result.assignments.map((x) => x.shift));
           const savedTeam = localStorage.getItem('helpsuprov:supervisor-team');
           const team = savedTeam ? Number(savedTeam) : null;
           const saved = team !== null && Number.isInteger(team) ? result.assignments.find((assignment) => assignment.team_number === team) : undefined;
@@ -393,7 +396,7 @@ const Section = ({ title, items, onEnter, busy, tone }: {
               </p>
             </div>
             <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap',
-              tone === 'live' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>Команда №{a.team_number}</span>
+              tone === 'live' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>Команда №{teamLabelFor(a.team_number, a.shift.id)}</span>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <Stat icon={<Users className="w-3.5 h-3.5" />} label="Дітей" value={a.stats.children} />

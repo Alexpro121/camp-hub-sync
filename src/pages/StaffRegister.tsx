@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { KIND_LABEL, StaffKind, staffCall, isAbortError, staffErr } from '@/lib/staffApi';
 import { useStaffTheme } from '@/lib/staffTheme';
 import { cn } from '@/lib/utils';
+import { isSportsShift, teamLabel } from '@/lib/teamLabel';
 
 const translit: Record<string, string> = { а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ie', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia', "'": '', 'ʼ': '' };
 const suggestLogin = (full: string) => {
@@ -25,7 +26,7 @@ const StaffRegister = () => {
   const [state, setState] = useState<'loading' | 'ok' | 'invalid'>('loading');
   const [mode, setMode] = useState<'register' | 'login' | 'team'>('register');
   const [kind, setKind] = useState<StaffKind>('supervisor');
-  const [shift, setShift] = useState<{ id: string; name: string; start_date: string; end_date: string; assigned_teams: number[] } | null>(null);
+  const [shift, setShift] = useState<{ id: string; name: string; shift_type?: string; shift_category?: string | null; start_date: string; end_date: string; assigned_teams: number[] } | null>(null);
   const [f, setF] = useState({ full_name: '', phone: '', telegram: '', login: '', password: '' });
   const [loginTouched, setLoginTouched] = useState(false);
   const [show, setShow] = useState(false);
@@ -122,7 +123,7 @@ const StaffRegister = () => {
     setBusy(true); setError(null);
     try {
       await staffCall({ action: 'join_shift', token, team_number: Number(team) });
-      toast.success(`Вас додано до команди №${team}`);
+      toast.success(`Вас додано до команди №${teamLabel(team, isSportsShift(shift))}`);
       navigate('/staff', { replace: true });
     } catch (e) { setError(staffErr(e)); }
     setBusy(false);
@@ -184,7 +185,7 @@ const StaffRegister = () => {
                   return (
                     <button key={t.team} type="button" role="radio" aria-checked={on} onClick={() => { setError(null); setTeam(String(t.team)); }}
                       className={cn('rounded-2xl border p-3 text-left transition-all active:scale-[0.97]', on ? 'border-primary bg-primary/10 ring-2 ring-primary/40' : 'border-border bg-background hover:border-primary/40')}>
-                      <div className="text-lg font-black">№{t.team}</div>
+                      <div className="text-lg font-black">№{teamLabel(t.team, isSportsShift(shift))}</div>
                       <div className="text-[11px] text-muted-foreground">{t.children ? `${t.children} дітей` : 'Діти ще не додані'}</div>
                       {t.staff.length > 0 && <div className="mt-1 truncate text-[11px] text-primary" title={t.staff.join(', ')}>Супровід: {t.staff.join(', ')}</div>}
                     </button>

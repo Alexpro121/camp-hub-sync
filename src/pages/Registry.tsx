@@ -8,6 +8,7 @@ import FormSheet from '@/components/ui/form-sheet';
 import { mergeRegistryRows, patchRegistryRows, persistRegistryPatches, readRegistryScope } from '@/lib/registrySync';
 import { isTelegramMiniApp, resetTelegramSignIn, telegramSignIn } from '@/lib/telegramAuth';
 import TelegramGate from '@/components/telegram/TelegramGate';
+import { rememberShiftKinds, teamLabelFor, useTeamLabel } from '@/lib/teamLabel';
 
 interface Kid {
   id: string; shift_id: string; full_name: string; team_number: number; phone: string | null;
@@ -119,6 +120,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
   kid: Kid; query: string; shiftName?: string; i: number; onToggle: (k: Kid) => void; onOpen: (k: Kid) => void;
 }) {
+  const teamLabel = useTeamLabel();
   return (
     <li style={{ contentVisibility: 'auto', containIntrinsicSize: '70px', animationDelay: `${Math.min(i, 10) * 25}ms` }} className="animate-in fade-in slide-in-from-bottom-1 duration-200 fill-mode-both motion-reduce:animate-none">
       <div className={`flex items-center gap-3 rounded-2xl border p-2.5 sm:p-3 transition-colors duration-300 ${!kid.checked_in ? 'border-border bg-card' : bySupervisor(kid) ? 'border-warning/50 bg-warning/10' : 'border-success/50 bg-success/10'}`}>
@@ -129,7 +131,7 @@ const Row = memo(function Row({ kid, query, shiftName, onToggle, onOpen, i }: {
         <button onClick={() => onOpen(kid)} className="min-w-0 flex-1 text-left">
           <div className="truncate font-semibold text-foreground"><Highlight text={kid.full_name} query={query} /></div>
           <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <span>Команда {kid.team_number}</span>
+            <span>Команда {teamLabel(kid.team_number, kid.shift_id)}</span>
             {bySupervisor(kid) && <span className="font-medium text-warning">· відмітив супровід</span>}
             {shiftName && <span className="truncate">· {shiftName}</span>}
             {kid.phone && (
@@ -149,6 +151,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
   kid: Kid; shiftName?: string; onClose: () => void; onToggle: (k: Kid) => void; onSaveNote: (k: Kid, note: string) => Promise<void>;
   onDelete: (k: Kid) => Promise<boolean>;
 }) {
+  const teamLabel = useTeamLabel();
   const [note, setNote] = useState(kid.supervisor_notes ?? '');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -168,7 +171,7 @@ function Profile({ kid, shiftName, onClose, onToggle, onSaveNote, onDelete }: {
       onOpenChange={(open) => { if (!open) void close(); }}
       className="sm:max-w-md"
       title={<span className="break-words">{kid.full_name}</span>}
-      description={`Команда ${kid.team_number}${shiftName ? ` · ${shiftName}` : ''}`}
+      description={`Команда ${teamLabel(kid.team_number, kid.shift_id)}${shiftName ? ` · ${shiftName}` : ''}`}
       footer={(
         <button onClick={dirty ? save : onClose} disabled={saving}
           className="h-12 w-full rounded-xl font-semibold text-primary-foreground transition-transform active:scale-[0.98] disabled:opacity-60" style={{ background: 'var(--gradient-primary)' }}>
@@ -276,7 +279,7 @@ function CreateKid({ shifts, defaultShift, defaultTeam, teams, onClose, onCreate
           <span className="mb-1 block text-sm font-medium text-foreground">Команда</span>
           <div className="flex flex-wrap gap-1.5">
             {teams.map((t) => (
-              <button type="button" key={t} onClick={() => { setTeamText(String(t)); touch(); }} className={`${pill(teamText === String(t))} min-w-11 tabular-nums`}>{t}</button>
+              <button type="button" key={t} onClick={() => { setTeamText(String(t)); touch(); }} className={`${pill(teamText === String(t))} min-w-11 tabular-nums`}>{teamLabelFor(t, v.shift_id || null)}</button>
             ))}
             <input inputMode="numeric" enterKeyHint="next" value={teamText} onChange={(e) => { setTeamText(e.target.value.replace(/\D/g, '').slice(0, 3)); touch(); }}
               aria-label="Номер команди" placeholder="№" className="h-11 w-16 rounded-xl border border-input bg-background px-2 text-center text-base tabular-nums text-foreground outline-none focus:ring-2 focus:ring-ring" />
@@ -345,7 +348,7 @@ function DeletedList({ token, shiftId, team, shifts, refreshKey, onRestored, onL
       const d = await call({ action: 'restore', token, id: k.id });
       setList((l) => l?.filter((x) => x.id !== k.id) ?? l);
       onRestored(d.child);
-      toast.success(`${k.full_name} повернуто в команду ${k.team_number}`);
+      toast.success(`${k.full_name} повернуто в команду ${teamLabelFor(k.team_number, k.shift_id)}`);
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
       else if (e.message === 'expired') { setList((l) => l?.filter((x) => x.id !== k.id) ?? l); toast.error('Минуло 24 години — відновити вже не можна'); }
@@ -366,7 +369,7 @@ function DeletedList({ token, shiftId, team, shifts, refreshKey, onRestored, onL
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold text-foreground">{k.full_name}</div>
               <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-                <span>Команда {k.team_number}</span>
+                <span>Команда {teamLabelFor(k.team_number, k.shift_id)}</span>
                 {!shiftId && shifts[k.shift_id] && <span className="truncate">· {shifts[k.shift_id]}</span>}
                 <span className="text-destructive">· зникне через {timeLeft(k.deleted_at!)}</span>
               </div>
@@ -516,6 +519,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       await flush();
       acknowledgedDuringLoad.current = [];
       const d = await call({ action: 'list', token, ...(shiftId ? { shift_id: shiftId } : {}) });
+      rememberShiftKinds(d.shifts);
       const sh = Object.fromEntries((d.shifts ?? []).map((s: any) => [s.id, s.name]));
       const children: Kid[] = patchRegistryRows<Kid>(d.children ?? [], acknowledgedDuringLoad.current);
       setShifts(sh);
@@ -604,7 +608,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     navigator.vibrate?.(next ? 20 : [10, 40, 10]);
     void send(k.id, { checked_in: next });
     if (next) {
-      toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} · команда ${k.team_number}`, {
+      toast.success(`${k.full_name.split(' ').slice(0, 2).join(' ')} · команда ${teamLabelFor(k.team_number, k.shift_id)}`, {
         duration: 3000,
         action: { label: 'Скасувати', onClick: () => { patch(k.id, { checked_in: false, checked_in_at: null, checked_in_by: null }); void send(k.id, { checked_in: false }); } },
       });
@@ -634,7 +638,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
     try {
       const d = await call({ action: 'restore', token, id: k.id });
       upsertKid(d.child); setDeletedKey((n) => n + 1);
-      toast.success(`${k.full_name} повернуто в команду ${k.team_number}`);
+      toast.success(`${k.full_name} повернуто в команду ${teamLabelFor(k.team_number, k.shift_id)}`);
     } catch (e: any) {
       if (e.message === 'unauthorized') onLogout();
       else toast.error(e.message === 'expired' ? 'Відновити вже не можна' : 'Немає зв\'язку. Відновіть у вкладці «Видалені».');
@@ -650,7 +654,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       upsertKid({ ...k, ...d.child });
       setOpenId(null); setDeletedKey((n) => n + 1);
       navigator.vibrate?.([10, 40, 10]);
-      toast(`${k.full_name} видалено з команди ${k.team_number}`, {
+      toast(`${k.full_name} видалено з команди ${teamLabelFor(k.team_number, k.shift_id)}`, {
         description: '24 години можна відновити у вкладці «Видалені»',
         duration: 6000,
         action: { label: 'Відновити', onClick: () => { void restoreKid(k); } },
@@ -673,7 +677,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
       upsertKid(d.child);
       setCreating(false);
       navigator.vibrate?.(20);
-      toast.success(`${d.child.full_name} · команда ${d.child.team_number} — створено`);
+      toast.success(`${d.child.full_name} · команда ${teamLabelFor(d.child.team_number, d.child.shift_id ?? null)} — створено`);
       return 'ok';
     } catch (e: any) {
       if (e.message === 'unauthorized') { onLogout(); return 'error'; }
@@ -729,7 +733,7 @@ function Desk({ token, shiftId, onChangeShift, onLogout }: { token: string; shif
             <button onClick={() => setTeam(null)} className={chip(team === null)}>Усі команди</button>
             {teams.map(([t, s]) => (
               <button key={t} onClick={() => setTeam(team === t ? null : t)} className={chip(team === t)}>
-                {t} <span className="opacity-70 tabular-nums">{s.present}/{s.total}</span>
+                {teamLabelFor(t, shiftId)} <span className="opacity-70 tabular-nums">{s.present}/{s.total}</span>
               </button>
             ))}
           </div>
@@ -786,6 +790,7 @@ function ShiftPick({ token, onPick, onLogout }: { token: string; onPick: (id: st
       .then((d) => {
         if (dead) return;
         const s: { id: string; name: string }[] = d.shifts ?? [];
+        rememberShiftKinds(d.shifts);
         if (s.length === 1) onPick(s[0].id); // одна зміна — одразу до роботи
         else setShifts(s);
       })

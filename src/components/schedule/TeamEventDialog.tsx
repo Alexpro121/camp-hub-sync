@@ -12,6 +12,7 @@ import { broadcastScheduleUpdated } from '@/lib/schedule';
 import { audiencePayload, sameAudience, visibleToShift } from '@/lib/scheduleAudience';
 import { findOverlaps } from '@/lib/scheduleOverlap';
 import type { Schedule, ScheduleItem } from '@/types/app';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 interface Props {
   open: boolean;
@@ -115,7 +116,7 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
         if (error) throw error;
       }
       await broadcastScheduleUpdated({ date: day, action: item ? 'update' : 'create' });
-      toast.success(item ? 'Подію оновлено' : `Подію додано для команди №${team}`);
+      toast.success(item ? 'Подію оновлено' : `Подію додано для команди №${teamLabelFor(team, shiftId)}`);
       onOpenChange(false);
       onSaved(day);
     } catch (e: any) {
@@ -189,7 +190,7 @@ const TeamEventDialog = ({ open, onOpenChange, team, shiftId, date, item, onSave
       open={open}
       onOpenChange={onOpenChange}
       dirty={dirty}
-      title={item ? 'Моя подія' : `Подія для команди №${team}`}
+      title={item ? 'Моя подія' : `Подія для команди №${teamLabelFor(team, shiftId)}`}
       description="Бачать лише учасники та супровід вашої команди."
       footer={footer}
     >

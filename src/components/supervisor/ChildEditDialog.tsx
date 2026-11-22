@@ -16,6 +16,7 @@ import { useDynamicIsland } from '@/context/DynamicIslandContext';
 import { queuedIronDollarChange, queuedWrite } from '@/lib/offline';
 import { GENDER_LABEL, type Gender } from '@/lib/gender';
 import type { MedicalNote } from '@/lib/medical';
+import { useTeamLabel } from '@/lib/teamLabel';
 
 interface Props {
   child: Child;
@@ -34,6 +35,7 @@ const clock = (iso: string) => {
 };
 
 const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Props) => {
+  const teamLabel = useTeamLabel();
   const [phone, setPhone] = useState(child.phone || '');
   const [telegram, setTelegram] = useState(child.telegram_username || '');
   const [notes, setNotes] = useState(child.supervisor_notes || '');
@@ -177,7 +179,7 @@ const ChildEditDialog = ({ child, open, onClose, medical, onCheckInChange }: Pro
             {child.full_name}
           </DialogTitle>
           <p className="min-w-0 break-words pr-12 text-left text-xs text-slate-400">
-            Команда №{child.team_number} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
+            Команда №{teamLabel(child.team_number, child.shift_id ?? undefined)} · № {child.row_number ?? '—'} {child.team_name && `· Категорія: ${child.team_name}`}
           </p>
           {/* «На зміні»: відмічається на реєстрації; супровід може виправити тут. Окремо від переклички. */}
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-2 pr-12">

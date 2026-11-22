@@ -50,6 +50,7 @@ import { FAIR_FEATURE_ENABLED } from '@/lib/fair';
 const SupervisorFairView = lazyRetry(() => import('@/components/fair/SupervisorFairView'));
 import { clearSavedSession, getSavedRole, getSavedTeam, getSessionMeta, saveSession } from '@/lib/session';
 import SupervisorTour, { tourStorageKey } from '@/components/supervisor/SupervisorTour';
+import { useTeamLabel } from '@/lib/teamLabel';
 
 interface Props {
   onBack: () => void;
@@ -63,6 +64,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [authedTeam, setAuthedTeam] = useState<number | null>(null);
+  const teamLabel = useTeamLabel();
   const [showAdminAnim, setShowAdminAnim] = useState(false);
 
   const [activeTab, setActiveTab] = useState('teams');
@@ -491,7 +493,7 @@ const SupervisorFlow = ({ onBack, onAdminUnlock, cabinetMode = false }: Props) =
                     Команда
                   </p>
                   <p className="text-base sm:text-lg font-black text-[#FA5A15] leading-none font-mono">
-                    #{authedTeam}
+                    #{teamLabel(authedTeam)}
                   </p>
                 </div>
               </div>

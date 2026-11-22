@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSepa
 import { useHaptics } from '@/hooks/useHaptics';
 import { outbox } from '@/lib/outboxEngine';
 import { toast } from 'sonner';
+import { useTeamLabel } from '@/lib/teamLabel';
 
 
 interface Props {
@@ -79,6 +80,7 @@ const TeamsView = ({
   onFirstTeamChild,
   shiftId: forcedShiftId = null,
 }: Props) => {
+  const teamLabel = useTeamLabel();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTeamLocal, setOpenTeamLocal] = useState<number | null>(myTeam);
@@ -382,7 +384,7 @@ const TeamsView = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold">Команда {tn}</h3>
+                      <h3 className="font-bold">Команда {teamLabel(tn, forcedShiftId ?? undefined)}</h3>
                       {isMine && <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] px-1.5 py-0">МОЯ</Badge>}
                       {!isMine && <Lock className="w-3 h-3 text-muted-foreground" />}
                     </div>

@@ -32,6 +32,7 @@ import {
 import { InlineLoader } from '@/components/ui/loader';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useDynamicIsland } from '@/context/DynamicIslandContext';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 interface Props {
   myTeam: number;
@@ -228,7 +229,7 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
     setClearedBefore(now);
     setSeenBefore(now);
     emitBadgeSync();
-    island.showSuccess('Стрічку очищено', `Для команди №${myTeam}`);
+    island.showSuccess('Стрічку очищено', `Для команди №${teamLabelFor(myTeam)}`);
   };
 
   if (loading) {
@@ -335,7 +336,7 @@ const NotificationsView = ({ myTeam, onRestartTour }: Props) => {
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-xs text-slate-400 space-y-2 pt-1 leading-relaxed">
                   <span>
-                    Будуть приховані всі поточні повідомлення для команди <strong className="text-white">№{myTeam}</strong>.
+                    Будуть приховані всі поточні повідомлення для команди <strong className="text-white">№{teamLabelFor(myTeam)}</strong>.
                   </span>
                   <span className="block text-slate-500 text-[11px]">
                     Нові оголошення штабу з'являтимуться в звичному режимі.

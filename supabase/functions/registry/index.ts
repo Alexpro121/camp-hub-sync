@@ -75,9 +75,10 @@ Deno.serve(async (req) => {
 
     // Активні зміни; якщо передано shift_id — працюємо лише в її межах.
     const activeShifts = async () => {
-      const { data, error } = await svc.from('shifts').select('id, name').eq('is_active', true).is('deleted_at', null);
+      // Тип зміни — щоб стійка підписувала команди спортивної зміни «1-СПОРТ».
+      const { data, error } = await svc.from('shifts').select('id, name, shift_type, shift_category').eq('is_active', true).is('deleted_at', null);
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      return (data ?? []) as { id: string; name: string; shift_type: string; shift_category: string | null }[];
     };
     const scopeIds = async (shiftId: unknown) => {
       const shifts = await activeShifts();

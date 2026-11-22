@@ -16,6 +16,7 @@ import { shiftStatus } from '@/lib/shift';
 import { teamsOf } from '@/lib/shift-resolver';
 
 import { SHIFT_LABELS } from '@/components/admin/tabs/shared';
+import { teamLabelFor, useTeamLabel } from '@/lib/teamLabel';
 
 /* =========================================================================
    ВКЛАДКА 3: СТАТИСТИКА ЗМІН
@@ -32,6 +33,7 @@ interface ShiftStats {
 }
 
 const StatsTab = () => {
+  useTeamLabel();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ShiftStats[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
@@ -178,7 +180,7 @@ const ChildPickList = ({ kids, onPick }: { kids: Child[]; onPick: (c: Child) => 
           onClick={() => onPick(c)}
           className="w-full flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/5 px-3 py-2 text-left hover:border-[#FA5A15]/40 active:scale-[0.99] transition-all"
         >
-          <span className="text-[10px] font-black font-mono tabular-nums w-8 shrink-0 text-slate-400">#{c.team_number}</span>
+          <span className="text-[10px] font-black font-mono tabular-nums w-8 shrink-0 text-slate-400">#{teamLabelFor(c.team_number, c.shift_id)}</span>
           <span className="text-xs font-semibold truncate flex-1 text-slate-200">{c.full_name}</span>
           <span className="text-xs font-mono font-bold text-[#FA5A15] shrink-0">{c.iron_dollars} А$</span>
           <Pencil className="w-3.5 h-3.5 text-slate-400 shrink-0" />

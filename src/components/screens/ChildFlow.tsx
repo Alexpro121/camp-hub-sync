@@ -64,6 +64,7 @@ import {
 const loadCertificate = () => import('@/components/certificate/CertificateModal');
 const CertificateModal = lazyRetry(() => loadCertificate().then((m) => ({ default: m.CertificateModal })));
 import { warmWhenFast } from '@/lib/warmCache';
+import { useTeamLabel } from '@/lib/teamLabel';
 
 interface Props {
   onBack: () => void;
@@ -92,6 +93,7 @@ async function invokeLogin(body: Record<string, unknown>) {
 }
 
 const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
+  const teamLabel = useTeamLabel();
   const [step, setStep] = useState<'login' | 'profile'>('login');
   const [restoreDone, setRestoreDone] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -397,6 +399,7 @@ const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
         <ChildPass
           name={child.full_name}
           teamNumber={child.team_number}
+          teamLabel={teamLabel(child.team_number, child.shift_id ?? null)}
           teamName={child.team_name}
           balance={child.iron_dollars}
           shortId={shortId}
@@ -468,6 +471,7 @@ const ChildFlow = ({ onBack, telegramMode = false }: Props) => {
           <TabsContent value="schedule" className="mt-4 space-y-3">
               <ScheduleView
                 myTeam={child.team_number}
+                shiftId={child.shift_id ?? null}
                 lockTeam
                 onFairAction={() => {
                   if (FAIR_FEATURE_ENABLED && fair.isLiveFairRunning) setActiveTab('fair');

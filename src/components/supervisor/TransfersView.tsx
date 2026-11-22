@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { pickActiveShift } from '@/lib/shift';
 import { InlineLoader } from '@/components/ui/loader';
 import { pushIsland } from '@/lib/islandBus';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 interface Props { myTeam: number; }
 
@@ -228,7 +229,7 @@ const TransfersView = ({ myTeam }: Props) => {
               <div className="p-3 rounded-lg bg-surface-1 border border-primary/30 flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate">{selected.full_name}</p>
-                  <p className="text-xs text-muted-foreground">Зараз: команда #{selected.team_number}</p>
+                  <p className="text-xs text-muted-foreground">Зараз: команда #{teamLabelFor(selected.team_number)}</p>
                 </div>
                 <Button size="icon" variant="ghost" onClick={() => setSelected(null)}>
                   <X className="w-4 h-4" />
@@ -299,7 +300,7 @@ const TransfersView = ({ myTeam }: Props) => {
               <div className="p-3 rounded-lg bg-surface-1 border border-primary/30 flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate">{swapA.full_name}</p>
-                  <p className="text-xs text-muted-foreground">Команда #{swapA.team_number}</p>
+                  <p className="text-xs text-muted-foreground">Команда #{teamLabelFor(swapA.team_number)}</p>
                 </div>
                 <Button size="icon" variant="ghost" onClick={() => setSwapA(null)}>
                   <X className="w-4 h-4" />
@@ -332,7 +333,7 @@ const TransfersView = ({ myTeam }: Props) => {
                           className="w-full min-h-[52px] p-3 rounded-lg bg-surface-1 hover:bg-surface-2 active:scale-[0.99] text-left transition-smooth border border-border/40"
                         >
                           <p className="font-medium text-sm">{c.full_name}</p>
-                          <p className="text-xs text-muted-foreground">Команда #{c.team_number}</p>
+                          <p className="text-xs text-muted-foreground">Команда #{teamLabelFor(c.team_number)}</p>
                         </button>
                       ))}
                     </div>
@@ -342,7 +343,7 @@ const TransfersView = ({ myTeam }: Props) => {
                 <div className="p-3 rounded-lg bg-surface-1 border border-primary/30 flex items-center gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">{swapB.full_name}</p>
-                    <p className="text-xs text-muted-foreground">Команда #{swapB.team_number}</p>
+                    <p className="text-xs text-muted-foreground">Команда #{teamLabelFor(swapB.team_number)}</p>
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => setSwapB(null)}>
                     <X className="w-4 h-4" />

@@ -28,6 +28,8 @@ function useCountUp(target: number, duration = 1100) {
 interface Props {
   name: string;
   teamNumber: number;
+  /** Підпис команди («3» або «3-СПОРТ»); за замовчуванням — номер. */
+  teamLabel?: string;
   teamName?: string | null;
   balance: number;
   shortId: string;
@@ -36,7 +38,7 @@ interface Props {
   onCopyId: () => void;
 }
 
-export default function ChildPass({ name, teamNumber, teamName, balance, shortId, isDark, onCertificate, onCopyId }: Props) {
+export default function ChildPass({ name, teamNumber, teamLabel, teamName, balance, shortId, isDark, onCertificate, onCopyId }: Props) {
   const shown = useCountUp(balance);
   const firstName = name.trim().split(/\s+/)[1] || name.trim().split(/\s+/)[0];
   const hour = new Date().getHours();
@@ -102,7 +104,7 @@ export default function ChildPass({ name, teamNumber, teamName, balance, shortId
             </div>
             <div className="text-right">
               <p className="cp-muted text-[12px]">Команда</p>
-              <p className="mt-1 text-[28px] leading-none font-semibold tabular-nums">№{teamNumber}</p>
+              <p className="mt-1 text-[28px] leading-none font-semibold tabular-nums">№{teamLabel ?? teamNumber}</p>
             </div>
           </div>
 

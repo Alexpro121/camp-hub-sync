@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import type { Child } from '@/types/app';
 import { pickActiveShift } from '@/lib/shift';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 interface Props {
   myTeam: number;
@@ -93,7 +94,7 @@ const IronBank = ({ myTeam, open, onClose }: Props) => {
             <Wallet className="w-5 h-5 text-primary" /> Банк Айрон Доларів
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Команда #{myTeam} · персональний рахунок супроводу
+            Команда #{teamLabelFor(myTeam)} · персональний рахунок супроводу
           </p>
         </DialogHeader>
 

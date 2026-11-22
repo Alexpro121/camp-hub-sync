@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import StaffAvatar from '@/components/staff/StaffAvatar';
 import { KIND_LABEL, StaffKind, staffCall, staffErr } from '@/lib/staffApi';
 import { cn } from '@/lib/utils';
+import { teamLabelFor, useTeamLabel } from '@/lib/teamLabel';
 
 interface Member { user_id: string; full_name: string; login: string; is_active: boolean; kind: StaffKind; phone: string | null; telegram: string | null; avatar_url: string | null }
 interface Asg { id: string; staff_user_id: string; shift_id: string; team_number: number }
@@ -47,6 +48,7 @@ const KindBadge = ({ kind }: { kind: StaffKind }) => (
 );
 
 const AdminStaffAccounts = () => {
+  useTeamLabel();
   const [members, setMembers] = useState<Member[]>([]);
   const [asg, setAsg] = useState<Asg[]>([]);
   const [shifts, setShifts] = useState<ShiftLite[]>([]);
@@ -385,7 +387,7 @@ const MemberSheet = ({ member, onClose, asg, shifts, shiftName, run }: {
               {asg.length === 0 && <p className="text-xs text-muted-foreground">Ще не призначено</p>}
               {asg.map((a) => (
                 <span key={a.id} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/10 border border-primary/25 text-primary">
-                  {shiftName(a.shift_id)}, №{a.team_number}
+                  {shiftName(a.shift_id)}, №{teamLabelFor(a.team_number, a.shift_id)}
                   <button aria-label="Зняти" onClick={() => run({ action: 'unassign', assignment_id: a.id }, 'Знято')}><X className="w-3 h-3" /></button>
                 </span>
               ))}

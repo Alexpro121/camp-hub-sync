@@ -27,6 +27,7 @@ import {
 } from '@/lib/halls';
 import NewBookingDialog from '@/components/schedule/NewBookingDialog';
 import { useHaptics } from '@/hooks/useHaptics';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 interface Props {
   open: boolean;
@@ -269,7 +270,7 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
               </DialogTitle>
 
               <span className="text-xs font-mono font-bold text-primary px-3 py-1 rounded-full bg-primary/10 border border-primary/20 shrink-0">
-                Команда №{myTeam}
+                Команда №{teamLabelFor(myTeam, shiftId)}
               </span>
             </div>
           </DialogHeader>
@@ -428,7 +429,7 @@ const HallBookingModal = ({ open, onOpenChange, days, initialDate, myTeam, shift
                             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-xs ${
                               isMine ? 'bg-[#FA5A15] text-white' : 'bg-surface-1 border border-border/50 text-foreground'
                             }`}>
-                              Команда #{b.team_number}
+                              Команда #{teamLabelFor(b.team_number, shiftId)}
                             </span>
                             <p className="text-xs sm:text-sm font-bold truncate">
                               {b.title || 'Репетиція'}

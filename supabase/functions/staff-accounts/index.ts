@@ -73,7 +73,7 @@ async function loadInvite(svc: any, token: string, ignoreUses = false) {
 
 async function loadInviteShift(svc: any, shiftId: string | null) {
   if (!shiftId) return null;
-  const { data } = await svc.from('shifts').select('id, name, start_date, end_date, assigned_teams, deleted_at').eq('id', shiftId).maybeSingle();
+  const { data } = await svc.from('shifts').select('id, name, shift_type, shift_category, start_date, end_date, assigned_teams, deleted_at').eq('id', shiftId).maybeSingle();
   return data && !data.deleted_at ? data : null;
 }
 
@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
       }
       const { data: asg } = await svc
         .from('staff_assignments')
-        .select('id, team_number, shift_id, shifts(id, name, shift_type, start_date, end_date, deleted_at)')
+        .select('id, team_number, shift_id, shifts(id, name, shift_type, shift_category, start_date, end_date, deleted_at)')
         .eq('staff_user_id', user.id);
 
       const items = await Promise.all((asg ?? []).filter((a: any) => a.shifts && !a.shifts.deleted_at).map(async (a: any) => {
@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
         return {
           id: a.id,
           team_number: a.team_number,
-          shift: { id: a.shifts.id, name: a.shifts.name, shift_type: a.shifts.shift_type, start_date: a.shifts.start_date, end_date: a.shifts.end_date },
+          shift: { id: a.shifts.id, name: a.shifts.name, shift_type: a.shifts.shift_type, shift_category: a.shifts.shift_category, start_date: a.shifts.start_date, end_date: a.shifts.end_date },
           stats: {
             children: list.length,
             iron_total: list.reduce((s: number, c: any) => s + (c.iron_dollars ?? 0), 0),

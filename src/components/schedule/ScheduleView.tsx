@@ -28,6 +28,7 @@ import HallBookingModal from '@/components/schedule/HallBookingModal';
 import { type HallBooking } from '@/types/halls';
 import { toMinutes } from '@/lib/halls';
 import { useHaptics } from '@/hooks/useHaptics';
+import { teamLabelFor } from '@/lib/teamLabel';
 
 const HALL_FEATURE_ENABLED = false;
 
@@ -39,6 +40,8 @@ interface Props {
   isStaff?: boolean;
   /** Дія переходу на касу/оплату ярмарку */
   onFairAction?: () => void;
+  /** Зміна учасника (для підпису «1-СПОРТ»); супровід — зміна сесії. */
+  shiftId?: string | null;
 }
 
 const todayISO = () => kyivISO();
@@ -69,7 +72,8 @@ const ScheduleView = ({
   myTeam = null, 
   lockTeam = false, 
   isStaff = false, 
-  onFairAction 
+  onFairAction,
+  shiftId,
 }: Props) => {
   // Супровід бачить лише команди своєї зміни: у паралельних змін номери різні.
   const { data: TEAMS } = useAllTeams(!lockTeam, [getSessionMeta()?.shiftId]);
@@ -460,7 +464,7 @@ const ScheduleView = ({
         <div data-tour="step-schedule-filters-teams" className="w-full flex items-center gap-2 border-b border-border pb-3">
           <Users className="h-4 w-4 text-primary shrink-0" strokeWidth={2} />
           <p className="text-xs font-semibold text-foreground">
-            Розклад твоєї команди{myTeam != null ? ` №${myTeam}` : ''}
+            Розклад твоєї команди{myTeam != null ? ` №${teamLabelFor(myTeam, shiftId)}` : ''}
           </p>
         </div>
       ) : (
@@ -494,7 +498,7 @@ const ScheduleView = ({
                     : 'border border-border/50 bg-card/80 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Моя команда (№{myTeam})
+                Моя команда (№{teamLabelFor(myTeam, shiftId)})
               </Button>
             )}
 
