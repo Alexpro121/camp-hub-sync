@@ -140,11 +140,14 @@ const KINDS = [
 const REG_ERRORS: Record<string, string> = {
   invalid_name: 'Напишіть прізвище та імʼя повністю, наприклад: Коваль Олена.',
   invalid_code: 'Посилання для реєстрації недійсне. Попросіть у адміністратора нове.',
+  invalid_join: 'Це посилання на зміну вже недійсне. Попросіть у адміністратора нове.',
   already_pending: 'Ваша заявка вже на розгляді.',
   error: 'Не вдалося надіслати заявку. Спробуйте ще раз.',
 };
 
-const StaffRegister = ({ code, adminCandidate }: { code: string | null; adminCandidate: boolean }) => {
+type JoinInfo = { token: string; shift: string };
+
+const StaffRegister = ({ code, adminCandidate, join }: { code: string | null; adminCandidate: boolean; join?: JoinInfo | null }) => {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<string>('supervisor');
   const [phoneShared, setPhoneShared] = useState(false);
@@ -167,14 +170,14 @@ const StaffRegister = ({ code, adminCandidate }: { code: string | null; adminCan
     try {
       // Контакт доходить до бота за мить після згоди — кілька спроб із паузою.
       for (let i = 0; i < 5; i++) {
-        const res = await tgApp<{ state: string }>('reg_submit', { code, fullName: name, kind });
+        const res = await tgApp<{ state: string }>('reg_submit', { code, fullName: name, kind, ...(join ? { join: join.token } : {}) });
         if (res.state === 'approved' || res.state === 'linked') { reload(); return; }
         if (res.state === 'pending') { setDone(true); break; }
         if (res.state === 'need_phone') {
           if (i < 4) { await new Promise((r) => setTimeout(r, 1500)); continue; }
           setPhoneShared(false); setNote('Номер ще не надійшов. Натисніть «Поділитися номером» ще раз.'); break;
         }
-        setNote(REG_ERRORS[res.state] ?? REG_ERRORS.error); break;
+        setNote((join && res.state === 'invalid_code' ? REG_ERRORS.invalid_join : REG_ERRORS[res.state]) ?? REG_ERRORS.error); break;
       }
     } catch { setNote(REG_ERRORS.error); }
     setBusy(false);
@@ -191,9 +194,11 @@ const StaffRegister = ({ code, adminCandidate }: { code: string | null; adminCan
 
   return (
     <div className={card}>
-      <Title sub="Для супроводу, каченят і лікарів. Доступ відкриється після підтвердження адміністратором.">Реєстрація</Title>
+      {join
+        ? <Title sub="Вкажіть прізвище, імʼя і номер телефону — після цього оберете свою команду.">Супровід зміни «{join.shift}»</Title>
+        : <Title sub="Для супроводу, каченят і лікарів. Доступ відкриється після підтвердження адміністратором.">Реєстрація</Title>}
       <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Прізвище та імʼя" autoComplete="name" />
-      {!adminCandidate && (
+      {!adminCandidate && !join && (
         <div className="grid grid-cols-3 gap-2">
           {KINDS.map((k) => (
             <button key={k.value} type="button" onClick={() => setKind(k.value)}
@@ -206,7 +211,7 @@ const StaffRegister = ({ code, adminCandidate }: { code: string | null; adminCan
       </button>
       {note && <Note text={note} />}
       <button type="button" className={primary} disabled={busy || !phoneShared || name.trim().length < 3} onClick={submit}>
-        {busy ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Надіслати заявку'}
+        {busy ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : join ? 'Зареєструватися' : 'Надіслати заявку'}
       </button>
     </div>
   );
@@ -214,22 +219,40 @@ const StaffRegister = ({ code, adminCandidate }: { code: string | null; adminCan
 
 /* --------------------------------- вибір режиму --------------------------------- */
 
-const TelegramOnboarding = () => {
-  const [mode, setMode] = useState<{ staff: boolean; adminCandidate: boolean } | null>(null);
+const TelegramOnboarding = ({ join }: { join?: string } = {}) => {
+  const [mode, setMode] = useState<{ staff: boolean; adminCandidate: boolean; join: JoinInfo | null; joinInvalid: boolean } | null>(null);
   const code = registrationCode();
 
   useEffect(() => {
     let cancelled = false;
-    tgApp<{ allowed: boolean; adminCandidate: boolean }>('reg_status', { code })
-      .then((res) => { if (!cancelled) setMode({ staff: res.allowed, adminCandidate: res.adminCandidate }); })
-      .catch(() => { if (!cancelled) setMode({ staff: false, adminCandidate: false }); });
+    tgApp<{ allowed: boolean; adminCandidate: boolean; join?: { shift: string } | null; joinInvalid?: boolean }>('reg_status', { code, ...(join ? { join } : {}) })
+      .then((res) => {
+        if (cancelled) return;
+        setMode({
+          staff: res.allowed, adminCandidate: res.adminCandidate,
+          join: join && res.join ? { token: join, shift: res.join.shift } : null, joinInvalid: Boolean(res.joinInvalid),
+        });
+      })
+      .catch(() => { if (!cancelled) setMode({ staff: false, adminCandidate: false, join: null, joinInvalid: Boolean(join) }); });
     return () => { cancelled = true; };
-  }, [code]);
+  }, [code, join]);
+
+  // Посилання зміни для дитини не підходить — замість входу дитини показуємо, що посилання недійсне.
+  if (mode && join && !mode.staff) {
+    return (
+      <main className={page}>
+        <div className={card}>
+          <Title sub={mode.joinInvalid ? REG_ERRORS.invalid_join : REG_ERRORS.error}>Посилання на зміну</Title>
+          <button type="button" className={secondary} onClick={closeMiniApp}>Закрити</button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className={page}>
       {!mode ? <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-        : mode.staff ? <StaffRegister code={code} adminCandidate={mode.adminCandidate} />
+        : mode.staff ? <StaffRegister code={code} adminCandidate={mode.adminCandidate} join={mode.join} />
         : <ChildBind />}
     </main>
   );

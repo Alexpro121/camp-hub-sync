@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { staffInviteText } from '@/lib/staffInvite';
 import { CheckCircle2, Link2, Loader2, Save, Trash2, Upload, UserPlus, Users, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { staffCall, staffErr, KIND_LABEL, type StaffKind } from '@/lib/staffApi';
@@ -148,9 +149,9 @@ function StaffTab({ shift, teamCounts }: { shift: Shift; teamCounts: Map<number,
 
   const copyInvite = async () => {
     try {
-      const { invite } = await staffCall<{ invite: { token: string } }>({ action: 'shift_invite_create', shift_id: shift.id });
-      await navigator.clipboard.writeText(`${window.location.origin}/staff/join/${invite.token}`);
-      toast.success('Посилання скопійовано');
+      const { invite, bot_link } = await staffCall<{ invite: { token: string }; bot_link?: string | null }>({ action: 'shift_invite_create', shift_id: shift.id });
+      await navigator.clipboard.writeText(staffInviteText(shift.name, invite.token, bot_link));
+      toast.success(bot_link ? 'Посилання для сайту й Telegram скопійовано' : 'Посилання скопійовано');
     } catch (e) { toast.error(staffErr(e)); }
   };
 

@@ -3,6 +3,7 @@ import { admin, ANON_KEY, corsHeaders, ensureRole, json, SUPABASE_URL } from '..
 import { clientKey, peek, recordFailure, resetFailures, sleep } from '../_shared/ratelimit.ts';
 import { z } from 'npm:zod@3';
 import { canUseDoctorActions, DoctorSaveSchema, readAllPages } from './doctor-contract.ts';
+import { botJoinLink } from '../_shared/shiftInvite.ts';
 
 /** Логін: латиниця/цифри/._- , 3..40 символів, нижній регістр */
 function normLogin(s: unknown): string | null {
@@ -73,7 +74,7 @@ async function loadInvite(svc: any, token: string, ignoreUses = false) {
 
 async function loadInviteShift(svc: any, shiftId: string | null) {
   if (!shiftId) return null;
-  const { data } = await svc.from('shifts').select('id, name, shift_type, shift_category, start_date, end_date, assigned_teams, deleted_at').eq('id', shiftId).maybeSingle();
+  const { data } = await svc.from('shifts').select('id, name, shift_type, shift_category, is_test, start_date, end_date, assigned_teams, deleted_at').eq('id', shiftId).maybeSingle();
   return data && !data.deleted_at ? data : null;
 }
 
@@ -180,7 +181,9 @@ Deno.serve(async (req) => {
       const shift = await loadInviteShift(svc, inv.shift_id ?? null);
       if (inv.shift_id && !shift) return json({ error: 'invite_invalid' });
       const teams = shift ? await shiftTeams(svc, shift) : [];
-      return json({ ok: true, kind: inv.kind, label: inv.label, shift, teams });
+      // Те саме запрошення в Telegram: бот відкриває Mini App на реєстрацію чи вибір команди.
+      const bot_link = shift ? await botJoinLink(inv.token) : null;
+      return json({ ok: true, kind: inv.kind, label: inv.label, shift, teams, bot_link });
     }
 
     if (action === 'register') {
@@ -525,7 +528,7 @@ Deno.serve(async (req) => {
       }
       const { data: current } = await svc.from('staff_invites').select('*')
         .eq('shift_id', shiftId).eq('revoked', false).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (current && (current.max_uses == null || current.uses < current.max_uses)) return json({ invite: current });
+      if (current && (current.max_uses == null || current.uses < current.max_uses)) return json({ invite: current, bot_link: await botJoinLink(current.token) });
       const bytes = crypto.getRandomValues(new Uint8Array(18));
       const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       const expiresAt = new Date(`${shift.end_date}T23:59:59+03:00`);
@@ -534,7 +537,7 @@ Deno.serve(async (req) => {
         token, kind: 'supervisor', shift_id: shiftId, max_uses: 500,
         label: `Супровід · ${shift.name}`, created_by: user.id, expires_at: expiresAt.toISOString(),
       }).select('*').single();
-      return error ? json({ error: 'failed' }, 500) : json({ invite: data });
+      return error ? json({ error: 'failed' }, 500) : json({ invite: data, bot_link: await botJoinLink(data.token) });
     }
 
     if (action === 'invite_revoke') {

@@ -7,7 +7,7 @@ import TelegramGate from '@/components/telegram/TelegramGate';
 import TelegramOnboarding from '@/components/telegram/TelegramOnboarding';
 import { supabase } from '@/integrations/supabase/client';
 import { clearSavedSession, getSavedRole, hasChildArchiveSnapshot } from '@/lib/session';
-import { closeMiniApp, isTelegramMiniApp, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
+import { closeMiniApp, isTelegramMiniApp, telegramJoinToken, telegramSignIn, type TelegramBlockState } from '@/lib/telegramAuth';
 import { FullScreenLoader } from '@/components/ui/loader';
 import IntroSplash, { shouldShowIntro } from '@/components/ui/IntroSplash';
 import ExitConfirm from '@/components/ExitConfirm';
@@ -52,6 +52,8 @@ const Index = () => {
       try {
         // 0. Telegram Mini App: хто це — вирішує сервер (tg-auth), а не збережена роль.
         if (tgMode) {
+          const join = telegramJoinToken();
+          if (join) { navigate(`/staff/join/${encodeURIComponent(join)}`, { replace: true }); return; }
           const result = await telegramSignIn();
           if (cancelled) return;
           if (result.state === 'ok') {

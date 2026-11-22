@@ -15,6 +15,7 @@ import {
   registerStaff,
   verifiedPhone,
 } from '../_shared/telegramActions.ts';
+import { joinToken, loadShiftInvite } from '../_shared/shiftInvite.ts';
 
 /**
  * Дії Mini App у Telegram: прив'язка дитини, реєстрація працівників, заявки й переприв'язки.
@@ -42,6 +43,11 @@ Deno.serve(async (req) => {
       return Boolean(expected && given && safeEqual(given, expected));
     };
 
+    // Посилання зміни (/staff/join/<код> або startapp=join_<код>): саме посилання і є дозволом на реєстрацію, як на сайті.
+    const start = verified.startParam?.startsWith('join_') ? verified.startParam : '';
+    const joinGiven = Boolean(body?.join || start);
+    const shiftInvite = () => loadShiftInvite(svc, joinToken(body?.join || start));
+
     switch (action) {
       /* ---------- дитина ---------- */
       case 'child_teams':
@@ -56,16 +62,23 @@ Deno.serve(async (req) => {
 
       /* ---------- реєстрація працівників ---------- */
       case 'reg_status': {
-        const allowed = ADMIN_TG_IDS.has(user.id) || (await regOk());
+        const invite = joinGiven ? await shiftInvite() : null;
         const linked = Boolean(await activeLink(svc, user.id));
-        return json({ allowed, linked, adminCandidate: ADMIN_TG_IDS.has(user.id), hasPhone: Boolean(await verifiedPhone(svc, user.id)) });
+        if (joinGiven && !invite) return json({ allowed: false, joinInvalid: true, linked, adminCandidate: false, hasPhone: false, join: null });
+        const allowed = Boolean(invite) || ADMIN_TG_IDS.has(user.id) || (await regOk());
+        return json({
+          allowed, linked, adminCandidate: !invite && ADMIN_TG_IDS.has(user.id), hasPhone: Boolean(await verifiedPhone(svc, user.id)),
+          join: invite ? { shift: invite.shift.name, kind: invite.inv.kind } : null,
+        });
       }
       case 'reg_submit': {
-        if (!ADMIN_TG_IDS.has(user.id) && !(await regOk())) return json({ state: 'invalid_code' });
+        const invite = joinGiven ? await shiftInvite() : null;
+        if (joinGiven && !invite) return json({ state: 'invalid_code' });
+        if (!invite && !ADMIN_TG_IDS.has(user.id) && !(await regOk())) return json({ state: 'invalid_code' });
         const name = cleanFullName(body?.fullName);
         if (!name) return json({ state: 'invalid_name' });
-        const kind = KINDS.includes(body?.kind) ? body.kind as StaffKind : 'supervisor';
-        return json(await registerStaff(svc, user, name, kind));
+        const kind = invite ? invite.inv.kind as StaffKind : KINDS.includes(body?.kind) ? body.kind as StaffKind : 'supervisor';
+        return json(await registerStaff(svc, user, name, kind, invite?.inv));
       }
 
       /* ---------- адмін ---------- */

@@ -1,5 +1,5 @@
 import { lazyRetry } from '@/lib/lazyRetry';
-import { lazy, Suspense, type ReactElement } from "react";
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -13,16 +13,15 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { FullScreenLoader } from "@/components/ui/loader";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
-import TelegramGate from "@/components/telegram/TelegramGate";
 import { isTelegramMiniApp } from "@/lib/telegramAuth";
 
-/** Сторінки, яких у Telegram-боті немає: реєстрація супроводу там — лише за посиланням від адміна. */
-const WebOnly = ({ children, text }: { children: ReactElement; text: string }) =>
-  isTelegramMiniApp() ? <TelegramGate state="unlinked" text={text} /> : children;
+/** Посилання зміни: на сайті — реєстрація з логіном, у Telegram — реєстрація через бота й вибір команди. */
+const StaffJoin = () => (isTelegramMiniApp() ? <TelegramJoin /> : <StaffRegister />);
 
 const StaffPortal = lazyRetry(() => import("./pages/StaffPortal.tsx"));
 const Registry = lazyRetry(() => import("./pages/Registry.tsx"));
 const StaffRegister = lazyRetry(() => import("./pages/StaffRegister.tsx"));
+const TelegramJoin = lazyRetry(() => import("@/components/telegram/TelegramJoin"));
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 2, refetchOnWindowFocus: false } } });
 
@@ -45,7 +44,7 @@ const App = () => (
           <AppErrorBoundary><Suspense fallback={<FullScreenLoader label="Завантаження..." />}><Routes>
             <Route path="/" element={<Index />} />
             <Route path="/staff" element={<StaffPortal />} />
-            <Route path="/staff/join/:token" element={<WebOnly text="У боті реєстрація супроводу — за посиланням від адміністратора."><StaffRegister /></WebOnly>} />
+            <Route path="/staff/join/:token" element={<StaffJoin />} />
             <Route path="/registry" element={<Registry />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

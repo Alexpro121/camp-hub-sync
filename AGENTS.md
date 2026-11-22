@@ -35,3 +35,4 @@
 - children.checked_in_by is set by the same trigger from auth.uid(): no JWT (the registry function) gives 'registry', a signed-in user gives 'staff'. The desk shows staff check-ins in yellow; supervisors confirm every on-shift change because the desk sees it immediately.
 - Imported «Наявність» is arrival (children.checked_in, stamped registry for admin inserts), never the supervisor roll call; bare numbers beside a name are list numbers, not block team headers.
 - Sports shifts (shift_category or shift_type 'sports') label teams «N-СПОРТ» via src/lib/teamLabel.ts; kinds are cached locally, registry/staff-accounts return them and a child may read only its own shift row.
+- Shift invite links work in Telegram: bot /start join_<token> opens the Mini App at /staff/join/<token>; linked staff go to the team picker, new staff register there without admin approval (the invite is the authorization, one use, registered_via set).

@@ -39,3 +39,28 @@ it('falls back to the child flow when the registration code is rejected', async 
   expect(await screen.findByRole('heading', { name: 'Привіт! 👋' })).toBeVisible();
   expect(screen.queryByRole('heading', { name: 'Реєстрація' })).not.toBeInTheDocument();
 });
+
+it('registers by a shift invite link without choosing a kind and sends the link along', async () => {
+  tgApp.mockImplementation(async (action: string) => {
+    if (action === 'reg_status') return { allowed: true, adminCandidate: false, join: { shift: 'Коротка зміна 22.11–27.11' } };
+    if (action === 'reg_submit') return { state: 'pending' };
+    return {};
+  });
+  const tg = { requestContact: (cb: (ok: boolean) => void) => cb(true) };
+  (window as unknown as { Telegram: unknown }).Telegram = { WebApp: tg };
+  render(<TelegramOnboarding join="idEBtTlYFtu4JX07oZ0Voa4P" />);
+  expect(await screen.findByRole('heading', { name: 'Супровід зміни «Коротка зміна 22.11–27.11»' })).toBeVisible();
+  expect(tgApp).toHaveBeenCalledWith('reg_status', { code: null, join: 'idEBtTlYFtu4JX07oZ0Voa4P' });
+  expect(screen.queryByRole('button', { name: 'Каченя' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByPlaceholderText('Прізвище та імʼя'), { target: { value: 'Коваль Олена' } });
+  fireEvent.click(screen.getByRole('button', { name: '📱 Поділитися номером' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Зареєструватися' }));
+  await waitFor(() => expect(tgApp).toHaveBeenCalledWith('reg_submit', { code: null, fullName: 'Коваль Олена', kind: 'supervisor', join: 'idEBtTlYFtu4JX07oZ0Voa4P' }));
+});
+
+it('says the shift link is invalid instead of offering the child login', async () => {
+  tgApp.mockResolvedValue({ allowed: false, adminCandidate: false, joinInvalid: true, join: null });
+  render(<TelegramOnboarding join="idEBtTlYFtu4JX07oZ0Voa4P" />);
+  expect(await screen.findByText(/посилання на зміну вже недійсне/)).toBeVisible();
+  expect(screen.queryByRole('heading', { name: 'Привіт! 👋' })).not.toBeInTheDocument();
+});

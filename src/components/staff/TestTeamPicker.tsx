@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlaskConical, Loader2, Users } from 'lucide-react';
+import { CalendarDays, FlaskConical, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { staffCall, staffErr } from '@/lib/staffApi';
@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { isSportsShift, teamLabel } from '@/lib/teamLabel';
 
 interface TeamInfo { team: number; children: number; staff: string[] }
-interface ShiftInfo { id: string; name: string; shift_type?: string; shift_category?: string | null }
+interface ShiftInfo { id: string; name: string; shift_type?: string; shift_category?: string | null; is_test?: boolean | null }
 
 /**
  * Вибір команди за кнопкою запрошення в тестову зміну (?pick=<токен посилання зміни>).
@@ -53,8 +53,10 @@ const TestTeamPicker = ({ token, onJoined, onClose }: {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-amber-400/60 bg-amber-400/10 p-4">
-        <div className="flex items-center gap-2 text-sm font-bold"><FlaskConical className="size-4 text-amber-500" />{shift?.name ?? 'Тестова зміна'}</div>
+      <div className={cn('rounded-2xl border p-4', shift?.is_test ? 'border-amber-400/60 bg-amber-400/10' : 'border-primary/40 bg-primary/10')}>
+        <div className="flex items-center gap-2 text-sm font-bold">
+          {shift?.is_test ? <FlaskConical className="size-4 text-amber-500" /> : <CalendarDays className="size-4 text-primary" />}{shift?.name ?? 'Зміна'}
+        </div>
         <p className="mt-1 text-xs text-muted-foreground">Оберіть номер своєї команди — після цього вона одразу відкриється.</p>
       </div>
 
@@ -62,7 +64,7 @@ const TestTeamPicker = ({ token, onJoined, onClose }: {
 
       {state === 'invalid' && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-          <p className="font-semibold">Тестова зміна вже закрита</p>
+          <p className="font-semibold">Посилання на зміну недійсне або зміна вже закрита</p>
           <Button variant="secondary" className="w-full rounded-xl" onClick={onClose}>До кабінету</Button>
         </div>
       )}

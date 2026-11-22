@@ -105,6 +105,14 @@ export async function tgApp<T = Record<string, unknown>>(action: string, body: R
   return data;
 }
 
+/** Код посилання зміни зі start_param прямого посилання на Mini App (startapp=join_<код>). */
+export function telegramJoinToken(): string | null {
+  const start = getTg()?.initDataUnsafe?.start_param;
+  if (typeof start !== 'string' || !start.startsWith('join_')) return null;
+  const token = start.slice(5);
+  return /^[A-Za-z0-9_-]{16,59}$/.test(token) ? token : null;
+}
+
 /** Код реєстрації працівника: з посилання бота (?reg=) або з start_param прямого посилання на Mini App. */
 export function registrationCode(): string | null {
   try {

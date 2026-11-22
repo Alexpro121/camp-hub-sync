@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { staffInviteText } from '@/lib/staffInvite';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import type { Shift, ShiftType } from '@/types/app';
@@ -472,9 +473,9 @@ const ShiftRow = ({ shift: s, onDelete, onChanged }: { shift: Shift; onDelete: (
   const copyStaffInvite = async () => {
     setCopyingInvite(true);
     try {
-      const { invite } = await staffCall<{ invite: { token: string } }>({ action: 'shift_invite_create', shift_id: s.id });
-      await copyText(`${window.location.origin}/staff/join/${invite.token}`);
-      toast.success('Посилання для супроводу скопійовано');
+      const { invite, bot_link } = await staffCall<{ invite: { token: string }; bot_link?: string | null }>({ action: 'shift_invite_create', shift_id: s.id });
+      await copyText(staffInviteText(s.name, invite.token, bot_link));
+      toast.success(bot_link ? 'Посилання для супроводу (сайт і Telegram) скопійовано' : 'Посилання для супроводу скопійовано');
     } catch (error) {
       toast.error(staffErr(error));
     } finally {

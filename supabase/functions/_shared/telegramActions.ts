@@ -329,17 +329,42 @@ export async function approveRequest(svc: Svc, id: string, kind: StaffKind, appr
 export type RegisterResult = { state: 'pending' | 'approved' | 'need_phone' | 'invalid_name' | 'already_pending' | 'linked' | 'error' };
 
 /** Заявка з Mini App: ПІБ і тип з форми, телефон — лише підтверджений Telegram. */
-export async function registerStaff(svc: Svc, user: TgUser, fullName: string, kind: StaffKind): Promise<RegisterResult> {
+export async function registerStaff(
+  svc: Svc, user: TgUser, fullName: string, kind: StaffKind,
+  invite?: { id: string; uses: number },
+): Promise<RegisterResult> {
   if (await activeLink(svc, user.id)) return { state: 'linked' };
   const phone = await verifiedPhone(svc, user.id);
   if (!phone) return { state: 'need_phone' };
-  const isEnvAdmin = ADMIN_TG_IDS.has(user.id);
+  const isEnvAdmin = !invite && ADMIN_TG_IDS.has(user.id);
   const { data: req, error } = await svc.from('telegram_staff_requests').insert({
     tg_user_id: user.id, tg_username: normTgUsername(user.username), tg_name: tgDisplayName(user),
     full_name: fullName, phone, kind: isEnvAdmin ? 'supervisor' : kind,
   }).select('*').single();
   if (error || !req) return { state: 'already_pending' };
   await svc.from('telegram_bot_state').delete().eq('tg_user_id', user.id);
+
+  // Посилання зміни від адміна — те саме, що реєстрація на сайті: без окремого підтвердження, одне місце посилання.
+  if (invite) {
+    const { data: claimed } = await svc.from('staff_invites').update({ uses: invite.uses + 1 }).eq('id', invite.id).eq('uses', invite.uses).select('id');
+    if (!claimed?.length) {
+      await svc.from('telegram_staff_requests').delete().eq('id', req.id).eq('status', 'pending');
+      return { state: 'error' };
+    }
+    const res = await approveRequest(svc, req.id, kind, user.id, false);
+    if (!res.ok) {
+      await svc.from('staff_invites').update({ uses: invite.uses }).eq('id', invite.id).eq('uses', invite.uses + 1);
+      await svc.from('telegram_staff_requests').delete().eq('id', req.id).eq('status', 'pending');
+      return { state: 'error' };
+    }
+    // Вибір команди за цим же посиланням уже не списує ще одне місце (staff-accounts join_shift).
+    const link = await activeLink(svc, user.id);
+    if (link?.user_id) await svc.from('staff_members').update({ registered_via: invite.id }).eq('user_id', link.user_id);
+    for (const id of await adminRecipients(svc)) {
+      await notify(id, `🆕 За посиланням зміни зареєструвався(лась): <b>${escapeHtml(fullName)}</b> (${KIND_LABEL[kind]}).`);
+    }
+    return { state: 'approved' };
+  }
 
   if (isEnvAdmin) {
     const res = await approveRequest(svc, req.id, 'supervisor', user.id, true);

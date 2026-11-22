@@ -2,11 +2,13 @@ import { admin } from '../_shared/accounts.ts';
 import { normPhone, parseStartPayload, safeEqual, type TgUser } from '../_shared/telegramCore.ts';
 import { BOT_TOKEN, registrationPayload, tg, WEBAPP_URL, WEBHOOK_SECRET } from '../_shared/telegramServer.ts';
 import { canSwap, demoChild, SWAP_LABEL, type SwapRole } from '../_shared/telegramDemo.ts';
+import { JOIN_PREFIX, joinToken, loadShiftInvite } from '../_shared/shiftInvite.ts';
 
 /**
  * Бот — лише оболонка для Mini App. Уся логіка (вхід дитини, реєстрація, підтвердження) — у застосунку (функція tg-app).
  * Бот уміє:
  *  - /start (і посилання реєстрації /start reg_<код>) — кнопка відкриття застосунку;
+ *  - /start join_<код> — посилання зміни для супроводу: реєстрація або вибір команди в застосунку;
  *  - приймає номер телефону, яким користувач поділився із застосунку (лише власний номер);
  *  - /registry — кнопка стійки реєстрації, лише для працівників (дітям і стороннім — звичайна кнопка);
  *  - на все інше відповідає кнопкою «Відкрити».
@@ -108,6 +110,18 @@ async function handleUpdate(update: any) {
 
   // Посилання реєстрації працівників веде в застосунок з кодом; усе інше — звичайне відкриття.
   const payload = parseStartPayload(msg.text);
+  // Посилання зміни (те саме, що на сайті /staff/join/<код>): застосунок сам вирішить — реєстрація чи вибір команди.
+  if (payload?.startsWith(JOIN_PREFIX)) {
+    const token = joinToken(payload);
+    const invite = await loadShiftInvite(admin(), token);
+    if (!invite || !token) {
+      await send(user.id, 'Це посилання на зміну вже недійсне. Попросіть у адміністратора нове.');
+      return;
+    }
+    await send(user.id, `Супровід зміни «${invite.shift.name}» 👋\nНатисніть кнопку нижче: якщо ви ще не зареєстровані — заповните коротку анкету, далі оберете свою команду.`,
+      `${WEBAPP_URL}/staff/join/${encodeURIComponent(token)}`, 'Відкрити зміну');
+    return;
+  }
   const expected = await registrationPayload();
   if (payload && expected && safeEqual(payload, expected)) {
     await send(user.id, 'Реєстрація для супроводу, каченят і лікарів. Натисніть кнопку нижче.', `${WEBAPP_URL}/?reg=${encodeURIComponent(payload)}`, 'Зареєструватися');
